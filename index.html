@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Algorithm Studio — Animations TikTok</title>
+  <meta name="description" content="Studio de creation video TikTok pour algorithmes de tri et simulations. Enregistrez des animations satisfaisantes en 4K format 9:16.">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Algorithm Studio — Animations TikTok">
+  <meta property="og:description" content="Creez des videos TikTok virales avec des algorithmes de tri visuels et sonores. Anxiety Sort, Stalin Sort, Thanos Sort et plus.">
+  <meta property="og:type" content="website">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Algorithm Studio">
+  <meta name="twitter:description" content="Sorting algorithms visualized in 4K for TikTok. Record and export.">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <div class="app-layout">
+
+    <!-- Main Studio Area -->
+    <main class="content">
+      <div class="studio-header">
+        <h1>Algorithm Studio</h1>
+        <button id="recBtn" class="rec-btn">&#9210; REC</button>
+      </div>
+
+      <div id="studio-wrapper">
+        <!-- Floating REC Indicator -->
+        <div id="rec-status" class="hidden">&#9679; REC 00:00</div>
+
+        <!-- The Core Engine: 1080x1920 scaled to 4K -->
+        <canvas id="studio-canvas" width="1080" height="1920"></canvas>
+      </div>
+
+      <!-- Controls -->
+      <div class="controls">
+        <button id="startBtn">&#9654; Demarrer l'Animation</button>
+      </div>
+
+      <!-- TikTok Meta Data -->
+      <div id="tiktok-meta">
+        <h3>TikTok Ready</h3>
+        <p class="meta-row">
+          <strong>Description :</strong> <span id="meta-desc"></span>
+        </p>
+        <p class="meta-row meta-tags">
+          <strong>Hashtags :</strong> <span id="meta-tags"></span>
+        </p>
+      </div>
+    </main>
+
+    <!-- Right Sidebar -->
+    <nav class="sidebar">
+      <div class="sidebar-header">
+        <h2>Gallery</h2>
+        <button id="themeToggle" class="theme-btn" title="Toggle Mode">&#127769;</button>
+      </div>
+      <p class="sidebar-desc">Selectionnez une animation TikTok-ready. Enregistrez en 4K 9:16 60fps.</p>
+
+      <h3 class="category-title">Tri &amp; Donnees</h3>
+      <ul id="nav-list" class="nav-category"></ul>
+    </nav>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

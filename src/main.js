@@ -12,11 +12,9 @@ const metaBox = document.getElementById('tiktok-meta');
 const metaDesc = document.getElementById('meta-desc');
 const metaTags = document.getElementById('meta-tags');
 
-// --- CANVAS METRICS (9:16 -> 4K) ---
-const LOGICAL_WIDTH = 1080;
-const LOGICAL_HEIGHT = 1920;
-const WIDTH = LOGICAL_WIDTH * 2;
-const HEIGHT = LOGICAL_HEIGHT * 2;
+// --- CANVAS METRICS (9:16 TikTok native) ---
+const WIDTH = 1080;
+const HEIGHT = 1920;
 canvas.width = WIDTH;
 canvas.height = HEIGHT;
 
@@ -233,28 +231,24 @@ function drawLoop() {
   ctx.fillStyle = Theme.bg;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-  ctx.save();
-  ctx.scale(2, 2); // 4K
-
   const algo = ALGORITHMS[currentAlgoId];
   if (!algo) {
-    ctx.restore();
     return requestAnimationFrame(drawLoop);
   }
 
   // 2. Title — safe zone: 200px top, 100px sides
   const SAFE_TOP = 200;
   const SAFE_X = 100;
-  const contentWidth = LOGICAL_WIDTH - SAFE_X * 2; // 880px
+  const contentWidth = WIDTH - SAFE_X * 2; // 880px
 
   ctx.fillStyle = Theme.primaryText;
   ctx.textAlign = 'center';
   ctx.font = 'bold 72px Inter, sans-serif';
-  ctx.fillText(algo.title, LOGICAL_WIDTH / 2, SAFE_TOP);
+  ctx.fillText(algo.title, WIDTH / 2, SAFE_TOP);
 
   ctx.font = 'bold 40px Inter, sans-serif';
   ctx.fillStyle = Theme.barActive;
-  ctx.fillText(`Badges: ${algo.badge}`, LOGICAL_WIDTH / 2, SAFE_TOP + 80);
+  ctx.fillText(`Badges: ${algo.badge}`, WIDTH / 2, SAFE_TOP + 80);
 
   ctx.font = '32px Inter, sans-serif';
   ctx.fillStyle = Theme.secondaryText;
@@ -263,21 +257,21 @@ function drawLoop() {
   let yText = SAFE_TOP + 160;
   for (let i = 0; i < words.length; i++) {
     if (ctx.measureText(line + words[i]).width > contentWidth - 40) {
-      ctx.fillText(line, LOGICAL_WIDTH / 2, yText);
+      ctx.fillText(line, WIDTH / 2, yText);
       line = words[i] + ' ';
       yText += 42;
     } else line += words[i] + ' ';
   }
-  ctx.fillText(line, LOGICAL_WIDTH / 2, yText);
+  ctx.fillText(line, WIDTH / 2, yText);
 
   // 3. Code panel position
   const codeBoxHeight = algo.codeLines.length * 45 + 50;
-  const panelY = LOGICAL_HEIGHT - 350 - codeBoxHeight;
+  const panelY = HEIGHT - 350 - codeBoxHeight;
 
   // 4. Bars
   ctx.save();
   const barBaseline = panelY - 50;
-  ctx.translate(LOGICAL_WIDTH / 2, barBaseline);
+  ctx.translate(WIDTH / 2, barBaseline);
 
   const barWidth = contentWidth / Math.max(20, arr.length) - 5;
   const gap = 5;
@@ -364,8 +358,6 @@ function drawLoop() {
     ctx.fillStyle = isAct ? Theme.barActive : Theme.codeText;
     ctx.fillText(codeLine, panelX + 80, panelY + 30 + ix * 45);
   });
-
-  ctx.restore();
 
   // Recording timer
   if (isRecording) {

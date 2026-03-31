@@ -23,7 +23,8 @@ let audioCtx = null;
 let masterGain = null;
 let recorderDest = null;
 let silenceNode = null;
-let recVideoTrack = null; // reference to the video track for requestFrame
+let recVideoTrack = null;
+let recAudioDelay = null;
 let mediaRecorder = null;
 let recordedChunks = [];
 let isRecording = false;
@@ -184,14 +185,23 @@ async function startRecording() {
   recStatus.classList.remove('hidden');
   startBtn.disabled = true;
 
-  // TOUT demarre au meme instant : recorder, audio, algo
+  // Demarrer le recorder
   mediaRecorder.start();
-  masterGain.connect(recorderDest);
+
+  // Retarder l'audio de ~50ms vers le recorder pour compenser le fait que
+  // Web Audio joue instantanement mais la frame video arrive au prochain
+  // requestAnimationFrame (~16ms) + encodage (~30ms)
+  recAudioDelay = audioCtx.createDelay(0.1);
+  recAudioDelay.delayTime.value = 0.05; // 50ms
+  masterGain.connect(recAudioDelay);
+  recAudioDelay.connect(recorderDest);
+
+  // Silence inaudible pour garder la piste audio vivante
   silenceNode = audioCtx.createOscillator();
   const silenceGain = audioCtx.createGain();
   silenceGain.gain.value = 0.0001;
   silenceNode.connect(silenceGain);
-  silenceGain.connect(masterGain);
+  silenceGain.connect(recAudioDelay);
   silenceNode.start();
 
   activeRunId++;
@@ -229,10 +239,11 @@ async function stopRecording() {
     try { silenceNode.stop(); } catch {}
     silenceNode = null;
   }
-  if (recorderDest) {
-    try { masterGain.disconnect(recorderDest); } catch {}
-    recorderDest = null;
+  if (recAudioDelay) {
+    try { masterGain.disconnect(recAudioDelay); } catch {}
+    recAudioDelay = null;
   }
+  recorderDest = null;
   recVideoTrack = null;
 
   recBtn.textContent = '\u23FA REC';

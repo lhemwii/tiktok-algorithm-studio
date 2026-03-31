@@ -140,9 +140,13 @@ async function startRecording() {
   const audioStream = audioDest.stream;
   const combined = new MediaStream([...videoStream.getTracks(), ...audioStream.getTracks()]);
 
-  // Chrome 125+ supporte nativement video/mp4 dans MediaRecorder
-  const canMP4 = MediaRecorder.isTypeSupported('video/mp4');
-  const mimeType = canMP4 ? 'video/mp4' : 'video/webm;codecs=vp9';
+  // Chrome 125+ : MP4 natif avec H.264 + AAC (compatible TikTok)
+  const mp4Aac = 'video/mp4;codecs=avc1.42E01E,mp4a.40.2';
+  const mp4Any = 'video/mp4';
+  const canMP4 = MediaRecorder.isTypeSupported(mp4Aac) || MediaRecorder.isTypeSupported(mp4Any);
+  const mimeType = MediaRecorder.isTypeSupported(mp4Aac) ? mp4Aac
+    : MediaRecorder.isTypeSupported(mp4Any) ? mp4Any
+    : 'video/webm;codecs=vp9';
 
   recordedChunks = [];
   mediaRecorder = new MediaRecorder(combined, {
@@ -240,26 +244,30 @@ function drawLoop() {
     return requestAnimationFrame(drawLoop);
   }
 
-  // 2. Title
+  // 2. Title — safe zone: 200px top, 100px sides
+  const SAFE_TOP = 200;
+  const SAFE_X = 100;
+  const contentWidth = LOGICAL_WIDTH - SAFE_X * 2; // 880px
+
   ctx.fillStyle = Theme.primaryText;
   ctx.textAlign = 'center';
-  ctx.font = 'bold 80px Inter, sans-serif';
-  ctx.fillText(algo.title, LOGICAL_WIDTH / 2, 140);
+  ctx.font = 'bold 72px Inter, sans-serif';
+  ctx.fillText(algo.title, LOGICAL_WIDTH / 2, SAFE_TOP);
 
-  ctx.font = 'bold 45px Inter, sans-serif';
+  ctx.font = 'bold 40px Inter, sans-serif';
   ctx.fillStyle = Theme.barActive;
-  ctx.fillText(`Badges: ${algo.badge}`, LOGICAL_WIDTH / 2, 230);
+  ctx.fillText(`Badges: ${algo.badge}`, LOGICAL_WIDTH / 2, SAFE_TOP + 80);
 
-  ctx.font = '35px Inter, sans-serif';
+  ctx.font = '32px Inter, sans-serif';
   ctx.fillStyle = Theme.secondaryText;
   const words = algo.desc.split(' ');
   let line = '';
-  let yText = 310;
+  let yText = SAFE_TOP + 160;
   for (let i = 0; i < words.length; i++) {
-    if (ctx.measureText(line + words[i]).width > 800) {
+    if (ctx.measureText(line + words[i]).width > contentWidth - 40) {
       ctx.fillText(line, LOGICAL_WIDTH / 2, yText);
       line = words[i] + ' ';
-      yText += 45;
+      yText += 42;
     } else line += words[i] + ' ';
   }
   ctx.fillText(line, LOGICAL_WIDTH / 2, yText);
@@ -273,7 +281,7 @@ function drawLoop() {
   const barBaseline = panelY - 50;
   ctx.translate(LOGICAL_WIDTH / 2, barBaseline);
 
-  const barWidth = 1000 / Math.max(20, arr.length) - 5;
+  const barWidth = contentWidth / Math.max(20, arr.length) - 5;
   const gap = 5;
   const validBars = arr.filter(i => !i.eliminated);
   const totalW = validBars.length * (barWidth + gap);
@@ -320,14 +328,17 @@ function drawLoop() {
   });
   ctx.restore();
 
-  // 5. Code block
+  // 5. Code block — respects safe zone margins
+  const panelX = SAFE_X;
+  const panelWidth = contentWidth;
+
   ctx.shadowColor = 'rgba(0,0,0,0.1)';
   ctx.shadowBlur = 10;
   ctx.shadowOffsetY = 5;
 
   ctx.fillStyle = Theme.codeBg;
   ctx.beginPath();
-  if (ctx.roundRect) ctx.roundRect(40, panelY, 1000, codeBoxHeight, 20);
+  if (ctx.roundRect) ctx.roundRect(panelX, panelY, panelWidth, codeBoxHeight, 20);
   ctx.fill();
 
   ctx.shadowBlur = 0;
@@ -335,25 +346,25 @@ function drawLoop() {
   ctx.strokeStyle = Theme.codeBorder;
   if (ctx.roundRect) {
     ctx.beginPath();
-    ctx.roundRect(40, panelY, 1000, codeBoxHeight, 20);
+    ctx.roundRect(panelX, panelY, panelWidth, codeBoxHeight, 20);
     ctx.stroke();
   }
 
-  ctx.font = 'bold 30px Fira Code, monospace';
+  ctx.font = 'bold 28px Fira Code, monospace';
   algo.codeLines.forEach((codeLine, ix) => {
     const isAct = ix + 1 === activeLine;
     if (isAct) {
       ctx.fillStyle = Theme.codeHighlight;
-      ctx.fillRect(40, panelY + 30 + ix * 45 - 35, 1000, 45);
+      ctx.fillRect(panelX, panelY + 30 + ix * 45 - 35, panelWidth, 45);
     }
 
     ctx.textAlign = 'right';
     ctx.fillStyle = Theme.codeTextMuted;
-    ctx.fillText(`${ix + 1}`, 100, panelY + 30 + ix * 45);
+    ctx.fillText(`${ix + 1}`, panelX + 50, panelY + 30 + ix * 45);
 
     ctx.textAlign = 'left';
     ctx.fillStyle = isAct ? Theme.barActive : Theme.codeText;
-    ctx.fillText(codeLine, 140, panelY + 30 + ix * 45);
+    ctx.fillText(codeLine, panelX + 80, panelY + 30 + ix * 45);
   });
 
   ctx.restore();

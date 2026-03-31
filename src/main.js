@@ -1,6 +1,5 @@
 import './style.css';
-import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
+import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 
 // --- DOM ---
 const canvas = document.getElementById('studio-canvas');
@@ -53,26 +52,9 @@ const Theme = {
   codeTextMuted: '#94A3B8',
 };
 
-// --- FFMPEG (lazy-loaded) ---
-let ffmpeg = null;
-let ffmpegLoaded = false;
-
-async function loadFFmpeg() {
-  if (ffmpegLoaded) return true;
-  try {
-    ffmpeg = new FFmpeg();
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-    });
-    ffmpegLoaded = true;
-    return true;
-  } catch (e) {
-    console.warn('FFmpeg WASM unavailable, will fallback to WebM:', e);
-    return false;
-  }
-}
+// --- MP4 RECORDING ---
+let isMP4Recording = false;
+let mp4State = null; // WebCodecs state when using mp4-muxer path
 
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -159,14 +141,38 @@ async function startRecording() {
 
   const videoStream = canvas.captureStream(60);
   const audioStream = audioDest.stream;
-  const combinedStream = new MediaStream([...videoStream.getTracks(), ...audioStream.getTracks()]);
+  const combined = new MediaStream([...videoStream.getTracks(), ...audioStream.getTracks()]);
 
-  recordedChunks = [];
-  mediaRecorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm;codecs=vp9' });
+  // Tier 1: Native MP4 via MediaRecorder (Chrome 125+, Edge 125+)
+  const mp4Mime = 'video/mp4;codecs=avc1.42E01E,mp4a.40.2';
+  const canNativeMP4 = MediaRecorder.isTypeSupported(mp4Mime);
 
-  mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+  // Tier 2: WebCodecs + mp4-muxer (Chrome 94+)
+  const canWebCodecs = !canNativeMP4 && typeof VideoEncoder !== 'undefined';
 
-  mediaRecorder.start(100);
+  if (canNativeMP4) {
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(combined, {
+      mimeType: mp4Mime,
+      videoBitsPerSecond: 10_000_000,
+    });
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.start(100);
+    isMP4Recording = true;
+  } else if (canWebCodecs) {
+    try {
+      await startWebCodecsRecording();
+      isMP4Recording = true;
+    } catch (e) {
+      console.warn('WebCodecs MP4 failed, falling back to WebM:', e);
+      startWebMFallback(combined);
+      isMP4Recording = false;
+    }
+  } else {
+    startWebMFallback(combined);
+    isMP4Recording = false;
+  }
+
   isRecording = true;
   startTime = Date.now();
 
@@ -183,49 +189,132 @@ async function startRecording() {
   stopRecording();
 }
 
+function startWebMFallback(stream) {
+  recordedChunks = [];
+  mediaRecorder = new MediaRecorder(stream, {
+    mimeType: 'video/webm;codecs=vp9',
+    videoBitsPerSecond: 10_000_000,
+  });
+  mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+  mediaRecorder.start(100);
+}
+
+async function startWebCodecsRecording() {
+  const W = 1080;
+  const H = 1920;
+  const offscreen = new OffscreenCanvas(W, H);
+  const offCtx = offscreen.getContext('2d');
+
+  let firstVideoTs = null;
+  let firstAudioTs = null;
+
+  const muxer = new Muxer({
+    target: new ArrayBufferTarget(),
+    video: { codec: 'avc', width: W, height: H },
+    audio: { codec: 'aac', numberOfChannels: 2, sampleRate: audioCtx.sampleRate },
+    fastStart: 'in-memory',
+  });
+
+  const videoEncoder = new VideoEncoder({
+    output: (chunk, meta) => {
+      if (firstVideoTs === null) firstVideoTs = chunk.timestamp;
+      muxer.addVideoChunk(chunk, meta, chunk.timestamp - firstVideoTs);
+    },
+    error: e => console.error('VideoEncoder:', e),
+  });
+  videoEncoder.configure({
+    codec: 'avc1.42001f',
+    width: W,
+    height: H,
+    bitrate: 10_000_000,
+    framerate: 60,
+  });
+
+  const audioEncoder = new AudioEncoder({
+    output: (chunk, meta) => {
+      if (firstAudioTs === null) firstAudioTs = chunk.timestamp;
+      muxer.addAudioChunk(chunk, meta, chunk.timestamp - firstAudioTs);
+    },
+    error: e => console.error('AudioEncoder:', e),
+  });
+  audioEncoder.configure({
+    codec: 'mp4a.40.2',
+    numberOfChannels: 2,
+    sampleRate: audioCtx.sampleRate,
+    bitrate: 128_000,
+  });
+
+  // Audio capture via MediaStreamTrackProcessor
+  const audioTrack = audioDest.stream.getAudioTracks()[0];
+  let audioReader = null;
+  if (audioTrack && typeof MediaStreamTrackProcessor !== 'undefined') {
+    const processor = new MediaStreamTrackProcessor({ track: audioTrack });
+    audioReader = processor.readable.getReader();
+    (async () => {
+      try {
+        while (isRecording) {
+          const { value, done } = await audioReader.read();
+          if (done) break;
+          if (value) {
+            audioEncoder.encode(value);
+            value.close();
+          }
+        }
+      } catch (e) {
+        if (e.name !== 'AbortError') console.warn('Audio capture:', e);
+      }
+    })();
+  }
+
+  mp4State = { muxer, videoEncoder, audioEncoder, audioReader, offscreen, offCtx, frameCount: 0, W, H };
+}
+
+// Called from drawLoop when recording with WebCodecs path
+function captureVideoFrame() {
+  if (!mp4State) return;
+  const { offscreen, offCtx, videoEncoder, W, H } = mp4State;
+  offCtx.drawImage(canvas, 0, 0, W, H);
+  const timestamp = mp4State.frameCount * (1_000_000 / 60);
+  const frame = new VideoFrame(offscreen, { timestamp });
+  videoEncoder.encode(frame, { keyFrame: mp4State.frameCount % 120 === 0 });
+  frame.close();
+  mp4State.frameCount++;
+}
+
 async function stopRecording() {
-  if (!mediaRecorder) return;
-  mediaRecorder.stop();
+  if (!isRecording) return;
   isRecording = false;
 
-  recBtn.textContent = 'Encoding MP4...';
+  recBtn.textContent = 'Encoding...';
   recBtn.classList.remove('recording');
   recStatus.classList.add('hidden');
 
-  await sleep(500);
-  await exportVideoToMP4();
-}
-
-async function exportVideoToMP4() {
-  const webmBlob = new Blob(recordedChunks, { type: 'video/webm' });
-
-  const loaded = await loadFFmpeg();
-  if (loaded) {
-    try {
-      await ffmpeg.writeFile('input.webm', await fetchFile(webmBlob));
-      await ffmpeg.exec([
-        '-i', 'input.webm',
-        '-c:v', 'libx264',
-        '-preset', 'ultrafast',
-        '-c:a', 'aac',
-        '-strict', 'experimental',
-        'output.mp4',
-      ]);
-      const data = await ffmpeg.readFile('output.mp4');
-      const mp4Blob = new Blob([data.buffer], { type: 'video/mp4' });
-      downloadBlob(mp4Blob, `tiktok_${currentAlgoId}_viral.mp4`);
-
-      recBtn.textContent = '\u23FA REC';
-      recBtn.disabled = false;
-      startBtn.disabled = false;
-      return;
-    } catch (err) {
-      console.error('FFmpeg conversion failed:', err);
+  if (mp4State) {
+    // WebCodecs path: finalize encoders + muxer
+    if (mp4State.audioReader) {
+      try { await mp4State.audioReader.cancel(); } catch {}
     }
+    await mp4State.videoEncoder.flush();
+    try { await mp4State.audioEncoder.flush(); } catch {}
+    mp4State.videoEncoder.close();
+    mp4State.audioEncoder.close();
+    mp4State.muxer.finalize();
+
+    const buffer = mp4State.muxer.target.buffer;
+    downloadBlob(new Blob([buffer], { type: 'video/mp4' }), `tiktok_${currentAlgoId}_viral.mp4`);
+    mp4State = null;
+  } else if (mediaRecorder) {
+    // MediaRecorder path (native MP4 or WebM fallback)
+    const stopped = new Promise(resolve => { mediaRecorder.onstop = resolve; });
+    mediaRecorder.stop();
+    await stopped;
+
+    const type = isMP4Recording ? 'video/mp4' : 'video/webm';
+    const ext = isMP4Recording ? 'mp4' : 'webm';
+    downloadBlob(new Blob(recordedChunks, { type }), `tiktok_${currentAlgoId}_viral.${ext}`);
+    mediaRecorder = null;
   }
 
-  // Fallback: raw WebM download
-  downloadBlob(webmBlob, `tiktok_${currentAlgoId}_raw.webm`);
   recBtn.textContent = '\u23FA REC';
   recBtn.disabled = false;
   startBtn.disabled = false;
@@ -396,6 +485,11 @@ function drawLoop() {
   // Recording timer
   if (isRecording) {
     recStatus.innerText = `\u25CF REC ${formatTime(Date.now() - startTime)}`;
+  }
+
+  // WebCodecs video frame capture (Tier 2 path)
+  if (isRecording && mp4State) {
+    captureVideoFrame();
   }
 
   requestAnimationFrame(drawLoop);

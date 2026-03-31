@@ -160,7 +160,8 @@ async function startRecording() {
   // Create a fresh audio destination so audio and video start at the same time
   audioDest = audioCtx.createMediaStreamDestination();
 
-  const videoStream = canvas.captureStream(60);
+  // 30fps = standard TikTok, plus fiable que 60fps pour l'encodeur Chrome
+  const videoStream = canvas.captureStream(30);
   const audioStream = audioDest.stream;
   const combined = new MediaStream([...videoStream.getTracks(), ...audioStream.getTracks()]);
 

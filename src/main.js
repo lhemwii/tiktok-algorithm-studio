@@ -157,23 +157,11 @@ async function startRecording() {
   if (algo.type === 'sort') generateArray();
   else if (algo.type === 'simulation' && algo.init) algo.init();
 
-  // Creer le recorderDest AU MEME MOMENT que le captureStream
+  // Creer recorderDest, videoStream et MediaRecorder ensemble
   recorderDest = audioCtx.createMediaStreamDestination();
-  masterGain.connect(recorderDest);
-
-  // Silence continu inaudible pour garder la piste audio vivante
-  // Sans ca, Chrome coupe la piste audio apres quelques secondes de silence
-  silenceNode = audioCtx.createOscillator();
-  const silenceGain = audioCtx.createGain();
-  silenceGain.gain.value = 0.0001; // -80dB, inaudible
-  silenceNode.connect(silenceGain);
-  silenceGain.connect(masterGain);
-  silenceNode.start();
-
   const videoStream = canvas.captureStream(30);
   const combined = new MediaStream([...videoStream.getTracks(), ...recorderDest.stream.getTracks()]);
 
-  // Forcer H.264 + AAC (compatible TikTok). Opus n'est pas supporte par TikTok.
   const mp4Aac = 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"';
   const mp4Plain = 'video/mp4';
   const mimeType = MediaRecorder.isTypeSupported(mp4Aac) ? mp4Aac
@@ -193,8 +181,16 @@ async function startRecording() {
   recStatus.classList.remove('hidden');
   startBtn.disabled = true;
 
-  // Demarrer le recorder ET l'algo au meme instant — pas de sleep entre les deux
+  // TOUT demarre au meme instant : recorder, audio, algo
   mediaRecorder.start();
+  masterGain.connect(recorderDest);
+  silenceNode = audioCtx.createOscillator();
+  const silenceGain = audioCtx.createGain();
+  silenceGain.gain.value = 0.0001;
+  silenceNode.connect(silenceGain);
+  silenceGain.connect(masterGain);
+  silenceNode.start();
+
   activeRunId++;
   await algo.run(activeRunId);
 
@@ -448,7 +444,7 @@ function drawSortView(algo) {
     } else {
       ctx.globalAlpha = 1;
       ctx.shadowColor = ctx.fillStyle;
-      ctx.shadowBlur = item.state === 'default' ? 0 : 20;
+      ctx.shadowBlur = item.state === 'default' ? 0 : 8;
       ctx.shadowOffsetX = 0;
       ctx.shadowOffsetY = 0;
       ctx.beginPath();
@@ -467,9 +463,9 @@ function drawSortView(algo) {
   const panelX = SAFE_X;
   const panelWidth = contentWidth;
 
-  ctx.shadowColor = 'rgba(0,0,0,0.1)';
-  ctx.shadowBlur = 10;
-  ctx.shadowOffsetY = 5;
+  ctx.shadowColor = 'rgba(0,0,0,0.05)';
+  ctx.shadowBlur = 4;
+  ctx.shadowOffsetY = 2;
   ctx.fillStyle = Theme.codeBg;
   ctx.beginPath();
   if (ctx.roundRect) ctx.roundRect(panelX, panelY, panelWidth, codeBoxHeight, 20);
@@ -1302,7 +1298,7 @@ const ALGORITHMS = {
 
         c.fillStyle = car.braking ? Theme.barActive : car.color;
         c.shadowColor = car.braking ? Theme.barActive : 'transparent';
-        c.shadowBlur = car.braking ? 15 : 0;
+        c.shadowBlur = car.braking ? 6 : 0;
         c.beginPath();
         c.arc(x, y, 10, 0, Math.PI * 2);
         c.fill();

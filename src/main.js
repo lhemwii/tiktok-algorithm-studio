@@ -22,7 +22,8 @@ canvas.height = HEIGHT;
 let audioCtx = null;
 let masterGain = null;
 let recorderDest = null;
-let silenceNode = null; // keeps audio track alive during recording
+let silenceNode = null;
+let recVideoTrack = null; // reference to the video track for requestFrame
 let mediaRecorder = null;
 let recordedChunks = [];
 let isRecording = false;
@@ -157,9 +158,11 @@ async function startRecording() {
   if (algo.type === 'sort') generateArray();
   else if (algo.type === 'simulation' && algo.init) algo.init();
 
-  // Creer recorderDest, videoStream et MediaRecorder ensemble
+  // captureStream(0) = mode manuel : on pousse une frame dans drawLoop
+  // exactement au moment du rendu = parfaitement synchro avec le son
   recorderDest = audioCtx.createMediaStreamDestination();
-  const videoStream = canvas.captureStream(30);
+  const videoStream = canvas.captureStream(0);
+  recVideoTrack = videoStream.getVideoTracks()[0];
   const combined = new MediaStream([...videoStream.getTracks(), ...recorderDest.stream.getTracks()]);
 
   const mp4Aac = 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"';
@@ -230,6 +233,7 @@ async function stopRecording() {
     try { masterGain.disconnect(recorderDest); } catch {}
     recorderDest = null;
   }
+  recVideoTrack = null;
 
   recBtn.textContent = '\u23FA REC';
   recBtn.disabled = false;
@@ -380,6 +384,10 @@ function drawLoop() {
 
   if (isRecording) {
     recStatus.innerText = `\u25CF REC ${formatTime(Date.now() - startTime)}`;
+    // Pousser cette frame au recorder au moment exact du rendu
+    if (recVideoTrack && recVideoTrack.requestFrame) {
+      recVideoTrack.requestFrame();
+    }
   }
 
   requestAnimationFrame(drawLoop);

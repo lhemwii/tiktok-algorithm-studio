@@ -157,6 +157,9 @@ async function startRecording() {
   if (algo.type === 'sort') generateArray();
   else if (algo.type === 'simulation' && algo.init) algo.init();
 
+  // Create a fresh audio destination so audio and video start at the same time
+  audioDest = audioCtx.createMediaStreamDestination();
+
   const videoStream = canvas.captureStream(60);
   const audioStream = audioDest.stream;
   const combined = new MediaStream([...videoStream.getTracks(), ...audioStream.getTracks()]);
@@ -168,6 +171,9 @@ async function startRecording() {
   mediaRecorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: 10_000_000 });
   mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
   mediaRecorder.start();
+
+  // Wait for recorder to actually start capturing both streams
+  await sleep(200);
 
   isRecording = true;
   startTime = Date.now();

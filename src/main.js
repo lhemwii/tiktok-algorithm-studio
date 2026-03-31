@@ -141,12 +141,8 @@ async function startRecording() {
   const combined = new MediaStream([...videoStream.getTracks(), ...audioStream.getTracks()]);
 
   // Chrome 125+ : MP4 natif avec H.264 + AAC (compatible TikTok)
-  const mp4Aac = 'video/mp4;codecs=avc1.42E01E,mp4a.40.2';
-  const mp4Any = 'video/mp4';
-  const canMP4 = MediaRecorder.isTypeSupported(mp4Aac) || MediaRecorder.isTypeSupported(mp4Any);
-  const mimeType = MediaRecorder.isTypeSupported(mp4Aac) ? mp4Aac
-    : MediaRecorder.isTypeSupported(mp4Any) ? mp4Any
-    : 'video/webm;codecs=vp9';
+  const canMP4 = MediaRecorder.isTypeSupported('video/mp4');
+  const mimeType = canMP4 ? 'video/mp4' : 'video/webm;codecs=vp9';
 
   recordedChunks = [];
   mediaRecorder = new MediaRecorder(combined, {
@@ -154,7 +150,9 @@ async function startRecording() {
     videoBitsPerSecond: 10_000_000,
   });
   mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
-  mediaRecorder.start(100);
+  // start() SANS timeslice → produit un MP4 d'un seul bloc avec
+  // duree, framerate, et audio corrects dans les metadonnees
+  mediaRecorder.start();
 
   isRecording = true;
   startTime = Date.now();

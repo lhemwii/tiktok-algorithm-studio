@@ -157,10 +157,7 @@ async function startRecording() {
   if (algo.type === 'sort') generateArray();
   else if (algo.type === 'simulation' && algo.init) algo.init();
 
-  // Create a fresh audio destination so audio and video start at the same time
-  audioDest = audioCtx.createMediaStreamDestination();
-
-  // 30fps = standard TikTok, plus fiable que 60fps pour l'encodeur Chrome
+  // 30fps = standard TikTok
   const videoStream = canvas.captureStream(30);
   const audioStream = audioDest.stream;
   const combined = new MediaStream([...videoStream.getTracks(), ...audioStream.getTracks()]);
@@ -175,10 +172,6 @@ async function startRecording() {
   recordedChunks = [];
   mediaRecorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: 10_000_000, audioBitsPerSecond: 128_000 });
   mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
-  mediaRecorder.start();
-
-  // Wait for recorder to actually start capturing both streams
-  await sleep(200);
 
   isRecording = true;
   startTime = Date.now();
@@ -187,8 +180,10 @@ async function startRecording() {
   recBtn.classList.add('recording');
   recBtn.disabled = true;
   recStatus.classList.remove('hidden');
-
   startBtn.disabled = true;
+
+  // Demarrer le recorder ET l'algo au meme instant — pas de sleep entre les deux
+  mediaRecorder.start();
   activeRunId++;
   await algo.run(activeRunId);
 

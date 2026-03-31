@@ -716,6 +716,172 @@ const ALGORITHMS = {
     },
   },
 
+  miracle: {
+    type: 'sort',
+    title: 'Miracle Sort',
+    badge: 'O(???)',
+    desc: 'Does absolutely nothing. Hopes that cosmic rays will flip bits in memory and sort the array.',
+    tiktokDesc: 'This algorithm literally does NOTHING and waits for a miracle. Still more reliable than my code in production #miraclesort',
+    tiktokTags: '#developer #coding #algorithm #miracle #programming #techhumor #faith',
+    codeLines: [
+      'function miracleSort(arr) {',
+      '  while (!isSorted(arr)) {',
+      '    // wait for a miracle',
+      '  }',
+      '}',
+    ],
+    run: async function (runId) {
+      highlightLine(1); await sleep(1200);
+      // Show "checking" animation several times
+      for (let round = 0; round < 8; round++) {
+        if (activeRunId !== runId) return;
+        highlightLine(2); await sleep(600);
+
+        // Check pass — highlight each bar
+        for (let i = 0; i < arr.length; i++) {
+          if (activeRunId !== runId) return;
+          arr[i].state = 'active';
+          playNote(arr[i].value, 'sine', 0.05, 0.03);
+          await sleep(100);
+          arr[i].state = 'default';
+        }
+
+        // Not sorted → wait for miracle
+        highlightLine(3); await sleep(800);
+
+        // On last round: "miracle" happens — sort it
+        if (round === 7) {
+          playNoise(0.3, 0.3);
+          await sleep(500);
+          arr.sort((a, b) => a.value - b.value);
+          arr.forEach(item => { item.state = 'valid'; });
+          playNote(1, 'triangle', 0.4, 0.15); playNote(5, 'triangle', 0.4, 0.15); playNote(8, 'triangle', 0.4, 0.15);
+        }
+      }
+      highlightLine(4); await sleep(600);
+      highlightLine(5);
+      await sleep(1500); highlightLine(null);
+    },
+  },
+
+  intelligent: {
+    type: 'sort',
+    title: 'Intelligent Design Sort',
+    badge: 'O(1)',
+    desc: 'The array is already in the order the universe intended. No sorting needed. It was designed this way.',
+    tiktokDesc: 'The array is already perfectly sorted. You just don\'t understand the higher purpose. O(1) complexity. #intelligentdesign',
+    tiktokTags: '#coding #algorithm #philosophy #programming #developer #sorted #perfect',
+    codeLines: [
+      'function intelligentDesignSort(arr) {',
+      '  // The array is already sorted.',
+      '  // It was designed that way.',
+      '  return arr; // Perfect.',
+      '}',
+    ],
+    run: async function (runId) {
+      highlightLine(1); await sleep(1500);
+      if (activeRunId !== runId) return;
+
+      highlightLine(2); await sleep(2000);
+
+      // Dramatic pause — "examine" each element
+      for (let i = 0; i < arr.length; i++) {
+        if (activeRunId !== runId) return;
+        arr[i].state = 'active';
+        playNote(arr[i].value, 'sine', 0.2, 0.05);
+        await sleep(300);
+        arr[i].state = 'valid';
+        playNote(arr[i].value, 'triangle', 0.1, 0.08);
+        await sleep(200);
+      }
+
+      highlightLine(3); await sleep(1500);
+      highlightLine(4); await sleep(1000);
+
+      // All "valid" — it was always perfect
+      arr.forEach(item => { item.state = 'valid'; });
+      playNote(1, 'triangle', 0.6, 0.1); playNote(5, 'triangle', 0.6, 0.1); playNote(8, 'triangle', 0.6, 0.1);
+      await sleep(2000);
+      highlightLine(5);
+      await sleep(1000); highlightLine(null);
+    },
+  },
+
+  quantum: {
+    type: 'sort',
+    title: 'Quantum Bogo Sort',
+    badge: 'O(n) multiverse',
+    desc: 'Destroy all universes where the array is not sorted. You now live in the one where it is.',
+    tiktokDesc: 'This algorithm destroys every universe where the array isn\'t sorted. We just happen to be in the right one. #quantumbogo',
+    tiktokTags: '#quantum #multiverse #coding #algorithm #physics #programming #developer',
+    codeLines: [
+      'function quantumBogoSort(arr) {',
+      '  if (!isSorted(arr))',
+      '    destroyUniverse();',
+      '  // If you can read this,',
+      '  // the array is sorted.',
+      '}',
+    ],
+    run: async function (runId) {
+      highlightLine(1); await sleep(1200);
+      if (activeRunId !== runId) return;
+
+      highlightLine(2); await sleep(800);
+
+      // Check — is it sorted?
+      let sorted = true;
+      for (let i = 0; i < arr.length - 1; i++) {
+        if (activeRunId !== runId) return;
+        arr[i].state = 'active';
+        arr[i + 1].state = 'active';
+        playNote(arr[i].value, 'sine', 0.08, 0.05);
+        await sleep(200);
+        if (arr[i].value > arr[i + 1].value) sorted = false;
+        arr[i].state = 'default';
+        arr[i + 1].state = 'default';
+      }
+
+      if (!sorted) {
+        highlightLine(3); await sleep(500);
+
+        // Destroy universe animation — flash + glitch
+        for (let flash = 0; flash < 6; flash++) {
+          if (activeRunId !== runId) return;
+          // Random states
+          arr.forEach(item => {
+            item.state = Math.random() > 0.5 ? 'active' : 'gray';
+          });
+          playNoise(0.1, 0.3);
+          await sleep(100);
+        }
+
+        // Everything eliminated
+        arr.forEach(item => { item.eliminated = true; });
+        playNoise(0.8, 0.5);
+        await sleep(1500);
+
+        // New universe — sorted!
+        arr.forEach(item => { item.eliminated = false; item.visible = true; item.yOffset = 0; });
+        arr.sort((a, b) => a.value - b.value);
+      }
+
+      highlightLine(4); await sleep(800);
+      highlightLine(5); await sleep(600);
+
+      // Reveal sorted
+      for (let i = 0; i < arr.length; i++) {
+        if (activeRunId !== runId) return;
+        arr[i].state = 'valid';
+        playNote(arr[i].value, 'triangle', 0.15, 0.1);
+        await sleep(150);
+      }
+
+      highlightLine(6);
+      playNote(1, 'triangle', 0.4, 0.1); playNote(5, 'triangle', 0.4, 0.1); playNote(8, 'triangle', 0.4, 0.1);
+      await sleep(2000); highlightLine(null);
+    },
+  },
+
   // =================== SIMULATIONS ===================
   territory: {
     type: 'simulation',
@@ -863,6 +1029,359 @@ const ALGORITHMS = {
       playNote(15, 'triangle', 0.8, 0.15);
 
       await sleep(3000);
+    },
+  },
+
+  boids: {
+    type: 'simulation',
+    title: 'Murmuration',
+    badge: '3 Rules',
+    desc: 'Des centaines d\'oiseaux suivent 3 regles simples. La beaute emerge du chaos.',
+    tiktokDesc: 'Comment des centaines d\'oiseaux volent ensemble sans chef ? 3 regles simples = magie pure #murmuration #boids #nature',
+    tiktokTags: '#simulation #nature #boids #birds #satisfying #science #viral #emergence',
+    init: function () {
+      this._flock = [];
+      for (let i = 0; i < 200; i++) {
+        this._flock.push({
+          x: Math.random() * WIDTH,
+          y: 300 + Math.random() * 1200,
+          vx: (Math.random() - 0.5) * 4,
+          vy: (Math.random() - 0.5) * 4,
+        });
+      }
+      this._step = 0;
+      this._predator = null;
+    },
+    draw: function (c) {
+      const SAFE_TOP = 140;
+      c.fillStyle = Theme.primaryText;
+      c.textAlign = 'center';
+      c.font = 'bold 60px Inter, sans-serif';
+      c.fillText('Murmuration', WIDTH / 2, SAFE_TOP);
+      c.font = 'bold 32px Inter, sans-serif';
+      c.fillStyle = Theme.barActive;
+      c.fillText('3 regles. 200 oiseaux. 0 chef.', WIDTH / 2, SAFE_TOP + 55);
+
+      if (!this._flock) return;
+
+      // Draw birds
+      this._flock.forEach(b => {
+        const angle = Math.atan2(b.vy, b.vx);
+        const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+        const alpha = Math.min(1, speed / 3);
+
+        c.save();
+        c.translate(b.x, b.y);
+        c.rotate(angle);
+        c.globalAlpha = 0.6 + alpha * 0.4;
+        c.fillStyle = Theme.primaryText;
+        c.beginPath();
+        c.moveTo(8, 0);
+        c.lineTo(-5, -4);
+        c.lineTo(-3, 0);
+        c.lineTo(-5, 4);
+        c.closePath();
+        c.fill();
+        c.restore();
+      });
+      c.globalAlpha = 1;
+
+      // Draw predator
+      if (this._predator) {
+        c.fillStyle = Theme.barActive;
+        c.beginPath();
+        c.arc(this._predator.x, this._predator.y, 12, 0, Math.PI * 2);
+        c.fill();
+        c.font = '24px Inter, sans-serif';
+        c.fillText('PREDATEUR', this._predator.x, this._predator.y - 20);
+      }
+
+      // Rules display
+      const rulesY = HEIGHT - 350;
+      c.fillStyle = Theme.codeBg;
+      if (c.roundRect) {
+        c.beginPath();
+        c.roundRect(60, rulesY, WIDTH - 120, 160, 16);
+        c.fill();
+      }
+      c.fillStyle = Theme.primaryText;
+      c.textAlign = 'left';
+      c.font = 'bold 28px Fira Code, monospace';
+      c.fillText('1. Separation — evite les voisins', 90, rulesY + 40);
+      c.fillText('2. Alignement — meme direction', 90, rulesY + 85);
+      c.fillText('3. Cohesion   — reste en groupe', 90, rulesY + 130);
+
+      c.fillStyle = Theme.secondaryText;
+      c.textAlign = 'center';
+      c.font = '24px Inter, sans-serif';
+      c.fillText(`Oiseaux: ${this._flock.length}  |  Tour: ${this._step}`, WIDTH / 2, HEIGHT - 170);
+    },
+    run: async function (runId) {
+      this.init();
+      initAudio();
+
+      const flock = this._flock;
+      const SPEED_LIMIT = 5;
+      const VISUAL_RANGE = 80;
+      const SEPARATION_DIST = 25;
+
+      for (let step = 0; step < 900; step++) {
+        if (activeRunId !== runId) return;
+        this._step = step;
+
+        // Introduce predator at step 300
+        if (step === 300) {
+          this._predator = { x: WIDTH / 2, y: 800 };
+          playNoise(0.3, 0.2);
+        }
+        if (step > 300 && step < 600 && this._predator) {
+          this._predator.x = WIDTH / 2 + Math.sin(step * 0.02) * 300;
+          this._predator.y = 700 + Math.cos(step * 0.015) * 200;
+        }
+        if (step === 600) this._predator = null;
+
+        for (const b of flock) {
+          let sepX = 0, sepY = 0;
+          let alignX = 0, alignY = 0;
+          let cohX = 0, cohY = 0;
+          let neighbors = 0;
+
+          for (const other of flock) {
+            if (other === b) continue;
+            const dx = other.x - b.x;
+            const dy = other.y - b.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > VISUAL_RANGE) continue;
+
+            neighbors++;
+            alignX += other.vx;
+            alignY += other.vy;
+            cohX += other.x;
+            cohY += other.y;
+
+            if (dist < SEPARATION_DIST) {
+              sepX -= dx / dist;
+              sepY -= dy / dist;
+            }
+          }
+
+          if (neighbors > 0) {
+            alignX = (alignX / neighbors - b.vx) * 0.05;
+            alignY = (alignY / neighbors - b.vy) * 0.05;
+            cohX = ((cohX / neighbors - b.x) * 0.005);
+            cohY = ((cohY / neighbors - b.y) * 0.005);
+          }
+
+          b.vx += sepX * 0.4 + alignX + cohX;
+          b.vy += sepY * 0.4 + alignY + cohY;
+
+          // Flee predator
+          if (this._predator) {
+            const pdx = b.x - this._predator.x;
+            const pdy = b.y - this._predator.y;
+            const pd = Math.sqrt(pdx * pdx + pdy * pdy);
+            if (pd < 150) {
+              b.vx += (pdx / pd) * 2;
+              b.vy += (pdy / pd) * 2;
+            }
+          }
+
+          // Boundaries — soft turn
+          if (b.x < 50) b.vx += 0.5;
+          if (b.x > WIDTH - 50) b.vx -= 0.5;
+          if (b.y < 250) b.vy += 0.5;
+          if (b.y > HEIGHT - 400) b.vy -= 0.5;
+
+          // Speed limit
+          const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+          if (speed > SPEED_LIMIT) {
+            b.vx = (b.vx / speed) * SPEED_LIMIT;
+            b.vy = (b.vy / speed) * SPEED_LIMIT;
+          }
+
+          b.x += b.vx;
+          b.y += b.vy;
+        }
+
+        // Ambient sound every 60 steps
+        if (step % 60 === 0) {
+          playNote(Math.floor(Math.random() * 12) + 1, 'sine', 0.3, 0.02);
+        }
+
+        await sleep(16);
+      }
+
+      // Ending
+      playNote(8, 'triangle', 0.8, 0.1);
+      await sleep(400);
+      playNote(12, 'triangle', 0.8, 0.1);
+      await sleep(2000);
+    },
+  },
+
+  traffic: {
+    type: 'simulation',
+    title: 'Phantom Traffic Jam',
+    badge: 'Onde de choc',
+    desc: 'Un seul frein cree un bouchon fantome. Personne n\'a cause l\'accident.',
+    tiktokDesc: 'Pourquoi t\'es dans les bouchons alors qu\'il n\'y a AUCUN accident ? Regarde cette simulation. #embouteillage #trafic #simulation',
+    tiktokTags: '#traffic #simulation #satisfying #science #voiture #paris #periph #viral',
+    init: function () {
+      const N = 40;
+      this._cars = [];
+      for (let i = 0; i < N; i++) {
+        this._cars.push({
+          pos: i / N,  // 0-1 around the ring
+          speed: 0.002,
+          color: Theme.barValid,
+          braking: false,
+        });
+      }
+      this._step = 0;
+      this._brakeTriggered = false;
+    },
+    draw: function (c) {
+      const SAFE_TOP = 140;
+      c.fillStyle = Theme.primaryText;
+      c.textAlign = 'center';
+      c.font = 'bold 52px Inter, sans-serif';
+      c.fillText('Phantom Traffic Jam', WIDTH / 2, SAFE_TOP);
+      c.font = 'bold 32px Inter, sans-serif';
+      c.fillStyle = Theme.barActive;
+      c.fillText('0 accident. 1 bouchon.', WIDTH / 2, SAFE_TOP + 55);
+
+      if (!this._cars) return;
+
+      // Draw circular road
+      const cx = WIDTH / 2;
+      const cy = 750;
+      const radius = 320;
+
+      c.strokeStyle = Theme.codeBorder;
+      c.lineWidth = 50;
+      c.beginPath();
+      c.arc(cx, cy, radius, 0, Math.PI * 2);
+      c.stroke();
+
+      // Inner road line
+      c.strokeStyle = Theme.secondaryText;
+      c.lineWidth = 2;
+      c.setLineDash([15, 15]);
+      c.beginPath();
+      c.arc(cx, cy, radius, 0, Math.PI * 2);
+      c.stroke();
+      c.setLineDash([]);
+
+      // Draw cars
+      this._cars.forEach(car => {
+        const angle = car.pos * Math.PI * 2 - Math.PI / 2;
+        const x = cx + Math.cos(angle) * radius;
+        const y = cy + Math.sin(angle) * radius;
+
+        c.fillStyle = car.braking ? Theme.barActive : car.color;
+        c.shadowColor = car.braking ? Theme.barActive : 'transparent';
+        c.shadowBlur = car.braking ? 15 : 0;
+        c.beginPath();
+        c.arc(x, y, 10, 0, Math.PI * 2);
+        c.fill();
+        c.shadowBlur = 0;
+      });
+
+      // Speed chart
+      const chartY = cy + radius + 100;
+      const chartH = 200;
+      const chartW = WIDTH - 120;
+
+      c.fillStyle = Theme.codeBg;
+      if (c.roundRect) {
+        c.beginPath();
+        c.roundRect(60, chartY, chartW, chartH + 60, 16);
+        c.fill();
+      }
+
+      c.fillStyle = Theme.secondaryText;
+      c.font = '24px Inter, sans-serif';
+      c.textAlign = 'center';
+      c.fillText('Vitesse de chaque voiture', WIDTH / 2, chartY + 30);
+
+      const barW = (chartW - 40) / this._cars.length;
+      this._cars.forEach((car, i) => {
+        const h = (car.speed / 0.004) * (chartH - 40);
+        const bx = 80 + i * barW;
+        const by = chartY + chartH + 20 - h;
+        c.fillStyle = car.braking ? Theme.barActive : Theme.barValid;
+        c.fillRect(bx, by, barW - 2, h);
+      });
+
+      // Info
+      c.fillStyle = Theme.secondaryText;
+      c.textAlign = 'center';
+      c.font = '24px Inter, sans-serif';
+      c.fillText(`Tour: ${this._step}`, WIDTH / 2, HEIGHT - 170);
+
+      if (this._brakeTriggered && this._step > 100) {
+        c.fillStyle = Theme.barActive;
+        c.font = 'bold 28px Inter, sans-serif';
+        c.fillText('Onde de choc !', WIDTH / 2, HEIGHT - 130);
+      }
+    },
+    run: async function (runId) {
+      this.init();
+      initAudio();
+
+      const cars = this._cars;
+      const N = cars.length;
+
+      for (let step = 0; step < 1200; step++) {
+        if (activeRunId !== runId) return;
+        this._step = step;
+
+        // One car brakes at step 100
+        if (step === 100) {
+          cars[0].speed = 0.0005;
+          cars[0].braking = true;
+          this._brakeTriggered = true;
+          playNoise(0.2, 0.15);
+        }
+
+        // Physics: each car adjusts speed based on car in front
+        for (let i = 0; i < N; i++) {
+          const car = cars[i];
+          const ahead = cars[(i + 1) % N];
+
+          let gap = ahead.pos - car.pos;
+          if (gap < 0) gap += 1;
+
+          const safeGap = 1 / N * 1.5;
+
+          if (gap < safeGap) {
+            // Too close → brake
+            car.speed = Math.max(0.0002, car.speed * 0.95);
+            car.braking = true;
+          } else {
+            // Space → accelerate
+            car.speed = Math.min(0.003, car.speed + 0.00005);
+            car.braking = car.speed < 0.001;
+          }
+
+          car.pos = (car.pos + car.speed) % 1;
+        }
+
+        // Sound: tick when braking wave passes
+        if (step % 30 === 0 && step > 100) {
+          const brakingCount = cars.filter(c => c.braking).length;
+          if (brakingCount > 5) {
+            playNote(3, 'square', 0.05, 0.02);
+          }
+        }
+
+        await sleep(16);
+      }
+
+      playNote(8, 'triangle', 0.5, 0.1);
+      await sleep(300);
+      playNote(12, 'triangle', 0.5, 0.1);
+      await sleep(2000);
     },
   },
 };

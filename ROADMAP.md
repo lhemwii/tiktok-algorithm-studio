@@ -32,15 +32,20 @@
 - [x] Favicon SVG
 - [x] Meta tags Open Graph + Twitter Card
 
-### Algorithmes de tri (5/5)
+### Algorithmes de tri (8/8)
 - [x] **Anxiety Sort** — Trie puis re-verifie en panique
 - [x] **Stalin Sort** — Elimine tout element pas dans l'ordre
 - [x] **Thanos Sort** — Snap : 50% disparaissent
 - [x] **Bogo Sort** — Melange aleatoire jusqu'a ce que ce soit trie
 - [x] **Sleep Sort** — Chaque element attend sa valeur en ms
+- [x] **Miracle Sort** — Ne fait rien, attend un miracle cosmique
+- [x] **Intelligent Design Sort** — Le tableau est deja parfait, pas besoin de trier
+- [x] **Quantum Bogo Sort** — Detruit tous les univers ou le tableau n'est pas trie
 
-### Simulations (1)
+### Simulations (3)
 - [x] **Territory War France** — 13 regions s'affrontent en automate cellulaire
+- [x] **Murmuration (Boids)** — 200 oiseaux, 3 regles, beaute emergente + predateur
+- [x] **Phantom Traffic Jam** — Un seul frein cree un bouchon fantome sur un ring
 
 ---
 
@@ -50,21 +55,17 @@
 
 | Simulation | Description | Potentiel viral |
 |------------|-------------|-----------------|
-| Murmuration (Boids) | Nuee d'etourneaux avec 3 regles simples → beaute emergente | Tres haut — visuellement hypnotique |
-| Embouteillages | Un seul frein → onde de choc sur le periph | Haut — les Parisiens vont commenter |
+| ~~Murmuration (Boids)~~ | ~~Fait~~ | ~~Fait~~ |
+| ~~Embouteillages~~ | ~~Fait~~ | ~~Fait~~ |
 | Mouvement de foule | Simulation panique vs flux normal dans un stade | Haut — post-actualites |
 | Fibonacci tournesol | Spirale qui se construit graine par graine | Moyen — satisfaisant |
 | Propagation epidemie | SIR model sur carte de France, slider R0 | Moyen — post-covid |
 | Segregation Schelling | Tolerance 30% → ville segregee | Moyen — debat societe |
 | Territory War Monde | Version mondiale avec pays | Tres haut — engagement international |
 
-### Algorithmes de tri supplementaires
+### Algorithmes de tri supplementaires (tous faits)
 
-| Algo | Description |
-|------|-------------|
-| Miracle Sort | Ne fait rien, espere que la RAM corrompe les bits dans le bon ordre |
-| Intelligent Design Sort | Le tableau est deja dans l'ordre voulu par l'univers |
-| Quantum Bogo Sort | Detruit tous les univers ou le tableau n'est pas trie |
+Tous implementes !
 
 ### Ameliorations app
 

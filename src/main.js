@@ -22,6 +22,7 @@ canvas.height = HEIGHT;
 let audioCtx = null;
 let masterGain = null;
 let recorderDest = null;
+let silenceNode = null; // keeps audio track alive during recording
 let mediaRecorder = null;
 let recordedChunks = [];
 let isRecording = false;
@@ -157,9 +158,17 @@ async function startRecording() {
   else if (algo.type === 'simulation' && algo.init) algo.init();
 
   // Creer le recorderDest AU MEME MOMENT que le captureStream
-  // pour que les deux flux partagent la meme reference temporelle
   recorderDest = audioCtx.createMediaStreamDestination();
   masterGain.connect(recorderDest);
+
+  // Silence continu inaudible pour garder la piste audio vivante
+  // Sans ca, Chrome coupe la piste audio apres quelques secondes de silence
+  silenceNode = audioCtx.createOscillator();
+  const silenceGain = audioCtx.createGain();
+  silenceGain.gain.value = 0.0001; // -80dB, inaudible
+  silenceNode.connect(silenceGain);
+  silenceGain.connect(masterGain);
+  silenceNode.start();
 
   const videoStream = canvas.captureStream(30);
   const combined = new MediaStream([...videoStream.getTracks(), ...recorderDest.stream.getTracks()]);
@@ -216,7 +225,11 @@ async function stopRecording() {
 
   mediaRecorder = null;
 
-  // Deconnecter le recorderDest du masterGain
+  // Arreter le silence et deconnecter le recorderDest
+  if (silenceNode) {
+    try { silenceNode.stop(); } catch {}
+    silenceNode = null;
+  }
   if (recorderDest) {
     try { masterGain.disconnect(recorderDest); } catch {}
     recorderDest = null;

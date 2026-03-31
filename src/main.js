@@ -1,5 +1,4 @@
 import './style.css';
-import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 
 // --- DOM ---
 const canvas = document.getElementById('studio-canvas');
@@ -51,10 +50,6 @@ const Theme = {
   codeText: '#FFFFFF',
   codeTextMuted: '#94A3B8',
 };
-
-// --- MP4 RECORDING ---
-let mp4State = null;
-let mp4CaptureInterval = null;
 
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -141,36 +136,21 @@ async function startRecording() {
   initAudio();
   generateArray();
 
-  let useMP4 = false;
+  const videoStream = canvas.captureStream(60);
+  const audioStream = audioDest.stream;
+  const combined = new MediaStream([...videoStream.getTracks(), ...audioStream.getTracks()]);
 
-  // Primary: WebCodecs + mp4-muxer → real H.264 MP4
-  if (typeof VideoEncoder !== 'undefined' && typeof AudioEncoder !== 'undefined') {
-    try {
-      const ok = await VideoEncoder.isConfigSupported({
-        codec: 'avc1.42001f', width: 1080, height: 1920, bitrate: 8_000_000,
-      });
-      if (ok.supported) {
-        startMP4Recording();
-        useMP4 = true;
-      }
-    } catch (e) {
-      console.warn('WebCodecs check failed:', e);
-    }
-  }
+  // Chrome 125+ supporte nativement video/mp4 dans MediaRecorder
+  const canMP4 = MediaRecorder.isTypeSupported('video/mp4');
+  const mimeType = canMP4 ? 'video/mp4' : 'video/webm;codecs=vp9';
 
-  // Fallback: MediaRecorder WebM
-  if (!useMP4) {
-    const videoStream = canvas.captureStream(60);
-    const audioStream = audioDest.stream;
-    const combined = new MediaStream([...videoStream.getTracks(), ...audioStream.getTracks()]);
-    recordedChunks = [];
-    mediaRecorder = new MediaRecorder(combined, {
-      mimeType: 'video/webm;codecs=vp9',
-      videoBitsPerSecond: 10_000_000,
-    });
-    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
-    mediaRecorder.start(100);
-  }
+  recordedChunks = [];
+  mediaRecorder = new MediaRecorder(combined, {
+    mimeType,
+    videoBitsPerSecond: 10_000_000,
+  });
+  mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+  mediaRecorder.start(100);
 
   isRecording = true;
   startTime = Date.now();
@@ -188,142 +168,29 @@ async function startRecording() {
   stopRecording();
 }
 
-function startMP4Recording() {
-  const W = 1080;
-  const H = 1920;
-  const offscreen = new OffscreenCanvas(W, H);
-  const offCtx = offscreen.getContext('2d');
-
-  let firstAudioTs = null;
-
-  const muxer = new Muxer({
-    target: new ArrayBufferTarget(),
-    video: { codec: 'avc', width: W, height: H },
-    audio: { codec: 'aac', numberOfChannels: 2, sampleRate: audioCtx.sampleRate },
-    fastStart: 'in-memory',
-  });
-
-  // Video encoder — avc format is REQUIRED for mp4-muxer
-  const videoEncoder = new VideoEncoder({
-    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-    error: e => console.error('VideoEncoder:', e),
-  });
-  videoEncoder.configure({
-    codec: 'avc1.42001f',
-    width: W,
-    height: H,
-    bitrate: 8_000_000,
-    framerate: 60,
-    latencyMode: 'quality',
-    avc: { format: 'avc' },
-  });
-
-  // Audio encoder
-  const audioEncoder = new AudioEncoder({
-    output: (chunk, meta) => {
-      if (firstAudioTs === null) firstAudioTs = chunk.timestamp;
-      muxer.addAudioChunk(chunk, meta, chunk.timestamp - firstAudioTs);
-    },
-    error: e => console.error('AudioEncoder:', e),
-  });
-  audioEncoder.configure({
-    codec: 'mp4a.40.2',
-    numberOfChannels: 2,
-    sampleRate: audioCtx.sampleRate,
-    bitrate: 128_000,
-  });
-
-  // Audio capture via MediaStreamTrackProcessor
-  let audioReader = null;
-  const audioTrack = audioDest.stream.getAudioTracks()[0];
-  if (audioTrack && typeof MediaStreamTrackProcessor !== 'undefined') {
-    const processor = new MediaStreamTrackProcessor({ track: audioTrack });
-    audioReader = processor.readable.getReader();
-    const readAudio = async () => {
-      try {
-        while (true) {
-          const { value, done } = await audioReader.read();
-          if (done) break;
-          if (value) {
-            try { audioEncoder.encode(value); } catch {}
-            value.close();
-          }
-        }
-      } catch (e) {
-        if (e.name !== 'AbortError') console.warn('Audio read stopped:', e);
-      }
-    };
-    readAudio();
-  }
-
-  // Video capture at fixed 60fps — wall-clock timestamps for correct speed
-  const t0 = performance.now();
-  let frameCount = 0;
-
-  mp4CaptureInterval = setInterval(() => {
-    if (!isRecording) return;
-    try {
-      offCtx.drawImage(canvas, 0, 0, W, H);
-      const timestamp = Math.round((performance.now() - t0) * 1000);
-      const frame = new VideoFrame(offscreen, { timestamp });
-      videoEncoder.encode(frame, { keyFrame: frameCount % 120 === 0 });
-      frame.close();
-      frameCount++;
-    } catch {}
-  }, 1000 / 60);
-
-  mp4State = { muxer, videoEncoder, audioEncoder, audioReader };
-}
-
 async function stopRecording() {
-  if (!isRecording) return;
+  if (!mediaRecorder || !isRecording) return;
   isRecording = false;
 
   recBtn.textContent = 'Encoding...';
   recBtn.classList.remove('recording');
   recStatus.classList.add('hidden');
 
-  if (mp4State) {
-    // 1. Stop capturing frames
-    clearInterval(mp4CaptureInterval);
-    mp4CaptureInterval = null;
+  // Attendre que MediaRecorder finisse d'ecrire les chunks
+  await new Promise(resolve => {
+    mediaRecorder.addEventListener('stop', resolve, { once: true });
+    setTimeout(resolve, 3000);
+    mediaRecorder.stop();
+  });
 
-    // 2. Stop audio stream reader
-    if (mp4State.audioReader) {
-      try { await mp4State.audioReader.cancel(); } catch {}
-    }
-
-    // 3. Flush remaining encoded frames (with timeout)
-    try { await Promise.race([mp4State.videoEncoder.flush(), sleep(5000)]); } catch {}
-    try { await Promise.race([mp4State.audioEncoder.flush(), sleep(3000)]); } catch {}
-
-    // 4. Close encoders
-    try { mp4State.videoEncoder.close(); } catch {}
-    try { mp4State.audioEncoder.close(); } catch {}
-
-    // 5. Finalize MP4 and download
-    mp4State.muxer.finalize();
-    const buf = mp4State.muxer.target.buffer;
-    mp4State = null;
-
-    if (buf.byteLength > 0) {
-      downloadBlob(new Blob([buf], { type: 'video/mp4' }), `tiktok_${currentAlgoId}_viral.mp4`);
-    } else {
-      console.error('MP4 buffer empty');
-    }
-  } else if (mediaRecorder) {
-    // WebM fallback — wait for stop event with timeout
-    await new Promise(resolve => {
-      mediaRecorder.addEventListener('stop', resolve, { once: true });
-      setTimeout(resolve, 3000);
-      mediaRecorder.stop();
-    });
-    if (recordedChunks.length > 0) {
-      downloadBlob(new Blob(recordedChunks, { type: 'video/webm' }), `tiktok_${currentAlgoId}_raw.webm`);
-    }
-    mediaRecorder = null;
+  if (recordedChunks.length > 0) {
+    const isMP4 = mediaRecorder.mimeType.includes('mp4');
+    const ext = isMP4 ? 'mp4' : 'webm';
+    const type = isMP4 ? 'video/mp4' : 'video/webm';
+    downloadBlob(new Blob(recordedChunks, { type }), `tiktok_${currentAlgoId}_viral.${ext}`);
   }
 
+  mediaRecorder = null;
   recBtn.textContent = '\u23FA REC';
   recBtn.disabled = false;
   startBtn.disabled = false;

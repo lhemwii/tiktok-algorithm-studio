@@ -20,7 +20,8 @@ canvas.height = HEIGHT;
 
 // --- STATE ---
 let audioCtx = null;
-let audioDest = null;
+let masterGain = null;
+let recorderDest = null;
 let mediaRecorder = null;
 let recordedChunks = [];
 let isRecording = false;
@@ -72,7 +73,8 @@ function downloadBlob(blob, filename) {
 function initAudio() {
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    audioDest = audioCtx.createMediaStreamDestination();
+    masterGain = audioCtx.createGain();
+    masterGain.connect(audioCtx.destination);
   }
   if (audioCtx.state === 'suspended') audioCtx.resume();
 }
@@ -88,8 +90,7 @@ function playNote(val, type = 'sine', duration = 0.1, vol = 0.1) {
     osc.frequency.value = baseFreq * Math.pow(2, scale[noteIndex > 0 ? noteIndex : 0] / 12);
     osc.type = type;
     osc.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-    gainNode.connect(audioDest);
+    gainNode.connect(masterGain);
     gainNode.gain.setValueAtTime(vol, audioCtx.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
     osc.start(audioCtx.currentTime);
@@ -113,8 +114,7 @@ function playNoise(duration = 0.5, vol = 0.2) {
     gainNode.gain.setValueAtTime(vol, audioCtx.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
     noise.connect(filter).connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-    gainNode.connect(audioDest);
+    gainNode.connect(masterGain);
     noise.start();
   } catch (e) { /* silent */ }
 }
@@ -127,8 +127,7 @@ function playConquer(regionIdx) {
     osc.frequency.value = 150 + regionIdx * 40;
     osc.type = 'square';
     osc.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-    gainNode.connect(audioDest);
+    gainNode.connect(masterGain);
     gainNode.gain.setValueAtTime(0.03, audioCtx.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
     osc.start(audioCtx.currentTime);
@@ -157,10 +156,13 @@ async function startRecording() {
   if (algo.type === 'sort') generateArray();
   else if (algo.type === 'simulation' && algo.init) algo.init();
 
-  // 30fps = standard TikTok
+  // Creer le recorderDest AU MEME MOMENT que le captureStream
+  // pour que les deux flux partagent la meme reference temporelle
+  recorderDest = audioCtx.createMediaStreamDestination();
+  masterGain.connect(recorderDest);
+
   const videoStream = canvas.captureStream(30);
-  const audioStream = audioDest.stream;
-  const combined = new MediaStream([...videoStream.getTracks(), ...audioStream.getTracks()]);
+  const combined = new MediaStream([...videoStream.getTracks(), ...recorderDest.stream.getTracks()]);
 
   // Forcer H.264 + AAC (compatible TikTok). Opus n'est pas supporte par TikTok.
   const mp4Aac = 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"';
@@ -213,6 +215,13 @@ async function stopRecording() {
   }
 
   mediaRecorder = null;
+
+  // Deconnecter le recorderDest du masterGain
+  if (recorderDest) {
+    try { masterGain.disconnect(recorderDest); } catch {}
+    recorderDest = null;
+  }
+
   recBtn.textContent = '\u23FA REC';
   recBtn.disabled = false;
   startBtn.disabled = false;

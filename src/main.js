@@ -266,103 +266,150 @@ function generateArray(count = numBars) {
 
 function highlightLine(lineNum) { activeLine = lineNum; }
 
-// --- TERRITORY WAR: REGIONS DATA ---
-const REGIONS_FR = [
-  { name: 'Ile-de-France',          abbr: 'IDF', color: '#E63946', cx: 540, cy: 420 },
-  { name: 'Hauts-de-France',        abbr: 'HDF', color: '#F4A261', cx: 520, cy: 250 },
-  { name: 'Grand Est',              abbr: 'GES', color: '#E9C46A', cx: 720, cy: 370 },
-  { name: 'Normandie',              abbr: 'NOR', color: '#2A9D8F', cx: 340, cy: 330 },
-  { name: 'Bretagne',               abbr: 'BRE', color: '#264653', cx: 190, cy: 420 },
-  { name: 'Pays de la Loire',       abbr: 'PDL', color: '#A8DADC', cx: 280, cy: 530 },
-  { name: 'Centre-Val de Loire',    abbr: 'CVL', color: '#457B9D', cx: 440, cy: 540 },
-  { name: 'Bourgogne-Fr.-Comte',    abbr: 'BFC', color: '#F77F00', cx: 660, cy: 530 },
-  { name: 'Nouvelle-Aquitaine',     abbr: 'NAQ', color: '#D62828', cx: 350, cy: 720 },
-  { name: 'Auvergne-Rhone-Alpes',   abbr: 'ARA', color: '#6A0572', cx: 630, cy: 700 },
-  { name: 'Occitanie',              abbr: 'OCC', color: '#1B998B', cx: 430, cy: 870 },
-  { name: 'Provence-Alpes-C.A.',    abbr: 'PAC', color: '#FF6B6B', cx: 700, cy: 850 },
-  { name: 'Corse',                  abbr: 'COR', color: '#4ECDC4', cx: 810, cy: 920 },
+// --- TERRITORY WAR: SNAKE-STYLE 4 STRATEGIES ---
+const TW_SIZE = 50; // 50x50 grid
+const TW_DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]]; // up, right, down, left
+
+const TW_STRATEGIES = [
+  { name: 'Greedy',  desc: 'Nearest empty cell',    color: '#E8985A', eyeColor: '#fff', startCorner: 0 },
+  { name: 'Spiral',  desc: 'Clockwise wall-hugger', color: '#3D3D3D', eyeColor: '#fff', startCorner: 1 },
+  { name: 'Hunter',  desc: 'Chase nearest enemy',   color: '#5BC5A7', eyeColor: '#fff', startCorner: 2 },
+  { name: 'Random',  desc: 'Random walk',           color: '#8B7EC8', eyeColor: '#fff', startCorner: 3 },
 ];
 
-const TW_COLS = 120;
-const TW_ROWS = 140;
-
 function twInit() {
-  twGrid = new Int8Array(TW_COLS * TW_ROWS).fill(-1);
-  twScores = new Array(REGIONS_FR.length).fill(0);
+  twGrid = new Int8Array(TW_SIZE * TW_SIZE).fill(-1);
+  twScores = [0, 0, 0, 0];
   twWinner = null;
   twStep = 0;
+
+  // Corners: TL, TR, BL, BR
+  const corners = [[1, 1], [TW_SIZE - 2, 1], [1, TW_SIZE - 2], [TW_SIZE - 2, TW_SIZE - 2]];
+
   twRunning = true;
 
-  // Seed each region at its capital position
-  REGIONS_FR.forEach((r, i) => {
-    // Map canvas coords (100-880 x, 200-1000 y area) to grid coords
-    const gx = Math.floor(((r.cx - 100) / 780) * TW_COLS);
-    const gy = Math.floor(((r.cy - 200) / 800) * TW_ROWS);
-    const clampX = Math.max(0, Math.min(TW_COLS - 1, gx));
-    const clampY = Math.max(0, Math.min(TW_ROWS - 1, gy));
-    twGrid[clampY * TW_COLS + clampX] = i;
+  // Snake state for each strategy
+  TW_STRATEGIES.forEach((s, i) => {
+    const [cx, cy] = corners[i];
+    s.headX = cx;
+    s.headY = cy;
+    s.dir = i; // initial direction varies per corner
+    s.alive = true;
+    s.trail = [{ x: cx, y: cy }];
+    twGrid[cy * TW_SIZE + cx] = i;
     twScores[i] = 1;
   });
 }
 
+function twGetCell(x, y) {
+  if (x < 0 || x >= TW_SIZE || y < 0 || y >= TW_SIZE) return -2; // wall
+  return twGrid[y * TW_SIZE + x];
+}
+
+function twMoveGreedy(s) {
+  // Find nearest empty cell via BFS, move one step toward it
+  const visited = new Set();
+  const queue = [{ x: s.headX, y: s.headY, firstDir: -1 }];
+  visited.add(s.headY * TW_SIZE + s.headX);
+
+  while (queue.length > 0) {
+    const cur = queue.shift();
+    for (let d = 0; d < 4; d++) {
+      const nx = cur.x + TW_DIRS[d][0];
+      const ny = cur.y + TW_DIRS[d][1];
+      const key = ny * TW_SIZE + nx;
+      if (visited.has(key)) continue;
+      visited.add(key);
+      const cell = twGetCell(nx, ny);
+      if (cell === -2) continue; // wall
+      const fd = cur.firstDir === -1 ? d : cur.firstDir;
+      if (cell === -1) {
+        // Found empty — move in firstDir
+        return fd;
+      }
+      queue.push({ x: nx, y: ny, firstDir: fd });
+    }
+  }
+  return -1; // stuck
+}
+
+function twMoveSpiral(s) {
+  // Clockwise wall-hugger: try left, then straight, then right, then back
+  const leftDir = (s.dir + 3) % 4;
+  const rightDir = (s.dir + 1) % 4;
+  const backDir = (s.dir + 2) % 4;
+
+  for (const d of [leftDir, s.dir, rightDir, backDir]) {
+    const nx = s.headX + TW_DIRS[d][0];
+    const ny = s.headY + TW_DIRS[d][1];
+    if (twGetCell(nx, ny) === -1) return d;
+  }
+  return -1;
+}
+
+function twMoveHunter(s, idx) {
+  // Chase nearest enemy head
+  let minDist = Infinity;
+  let targetX = s.headX, targetY = s.headY;
+
+  TW_STRATEGIES.forEach((other, i) => {
+    if (i === idx || !other.alive) return;
+    const dist = Math.abs(other.headX - s.headX) + Math.abs(other.headY - s.headY);
+    if (dist < minDist) {
+      minDist = dist;
+      targetX = other.headX;
+      targetY = other.headY;
+    }
+  });
+
+  // Move toward target, prefer direction that reduces distance most
+  let bestDir = -1;
+  let bestDist = Infinity;
+  for (let d = 0; d < 4; d++) {
+    const nx = s.headX + TW_DIRS[d][0];
+    const ny = s.headY + TW_DIRS[d][1];
+    if (twGetCell(nx, ny) !== -1) continue;
+    const dist = Math.abs(targetX - nx) + Math.abs(targetY - ny);
+    if (dist < bestDist) { bestDist = dist; bestDir = d; }
+  }
+  return bestDir;
+}
+
+function twMoveRandom(s) {
+  const options = [];
+  for (let d = 0; d < 4; d++) {
+    const nx = s.headX + TW_DIRS[d][0];
+    const ny = s.headY + TW_DIRS[d][1];
+    if (twGetCell(nx, ny) === -1) options.push(d);
+  }
+  return options.length > 0 ? options[Math.floor(Math.random() * options.length)] : -1;
+}
+
+const TW_AI = [twMoveGreedy, twMoveSpiral, twMoveHunter, twMoveRandom];
+
 function twStepOnce() {
-  // Expand: each cell tries to claim empty neighbors
-  const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-  const frontier = [];
+  let anyAlive = false;
 
-  for (let y = 0; y < TW_ROWS; y++) {
-    for (let x = 0; x < TW_COLS; x++) {
-      const owner = twGrid[y * TW_COLS + x];
-      if (owner < 0) continue;
-      for (const [ddx, ddy] of dirs) {
-        const nx = x + ddx, ny = y + ddy;
-        if (nx < 0 || nx >= TW_COLS || ny < 0 || ny >= TW_ROWS) continue;
-        const ni = ny * TW_COLS + nx;
-        if (twGrid[ni] < 0) {
-          frontier.push({ x: nx, y: ny, owner });
-        }
-      }
+  TW_STRATEGIES.forEach((s, i) => {
+    if (!s.alive) return;
+
+    const dir = TW_AI[i](s, i);
+    if (dir === -1) {
+      s.alive = false;
+      return;
     }
-  }
 
-  // Shuffle frontier for fairness
-  for (let i = frontier.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [frontier[i], frontier[j]] = [frontier[j], frontier[i]];
-  }
-
-  let claimed = 0;
-  for (const f of frontier) {
-    const ni = f.y * TW_COLS + f.x;
-    if (twGrid[ni] < 0) {
-      twGrid[ni] = f.owner;
-      twScores[f.owner]++;
-      claimed++;
-    }
-  }
-
-  // Border battles: adjacent cells of different owners fight
-  for (let y = 0; y < TW_ROWS; y++) {
-    for (let x = 0; x < TW_COLS; x++) {
-      const owner = twGrid[y * TW_COLS + x];
-      if (owner < 0) continue;
-      if (Math.random() > 0.02) continue; // 2% chance of battle per cell per step
-      const [ddx, ddy] = dirs[Math.floor(Math.random() * 4)];
-      const nx = x + ddx, ny = y + ddy;
-      if (nx < 0 || nx >= TW_COLS || ny < 0 || ny >= TW_ROWS) continue;
-      const ni = ny * TW_COLS + nx;
-      const other = twGrid[ni];
-      if (other >= 0 && other !== owner) {
-        // Attacker wins
-        twGrid[ni] = owner;
-        twScores[owner]++;
-        twScores[other]--;
-      }
-    }
-  }
+    s.dir = dir;
+    s.headX += TW_DIRS[dir][0];
+    s.headY += TW_DIRS[dir][1];
+    twGrid[s.headY * TW_SIZE + s.headX] = i;
+    s.trail.push({ x: s.headX, y: s.headY });
+    twScores[i]++;
+    anyAlive = true;
+  });
 
   twStep++;
-  return claimed > 0 || twStep < 600;
+  return anyAlive;
 }
 
 // --- RENDER ENGINE (60fps Canvas Loop) ---
@@ -923,129 +970,188 @@ const ALGORITHMS = {
   territory: {
     type: 'simulation',
     title: 'Territory War',
-    badge: '13 Regions',
-    desc: 'Les 13 regions de France s\'affrontent. Chacune s\'etend depuis sa capitale. La derniere debout gagne.',
-    tiktokDesc: 'Quelle region de France va conquerir toutes les autres ? Commente ta region ! #france #regions #simulation #territorywar',
-    tiktokTags: '#france #simulation #viral #regions #guerre #territoire #map #satisfying',
+    badge: '4 Strategies',
+    desc: '4 strategies fight for space on a grid. Each leaves a permanent trail. Who dominates?',
+    tiktokDesc: '4 IA s\'affrontent sur une grille. Greedy, Spiral, Hunter ou Random : qui va dominer ? #territorywar #simulation #strategy',
+    tiktokTags: '#simulation #strategy #viral #satisfying #coding #algorithm #ai #territory',
     init: twInit,
     draw: function (c) {
-      const SAFE_TOP = 140;
+      const SAFE_TOP = 130;
       const SAFE_X = 60;
 
       // Title
       c.fillStyle = Theme.primaryText;
       c.textAlign = 'center';
-      c.font = 'bold 60px Inter, sans-serif';
-      c.fillText('Territory War : France', WIDTH / 2, SAFE_TOP);
+      c.font = 'bold 64px Inter, sans-serif';
+      c.fillText('Territory War', WIDTH / 2, SAFE_TOP);
 
-      c.font = 'bold 32px Inter, sans-serif';
-      c.fillStyle = Theme.barActive;
-      c.fillText('Quelle region va dominer ?', WIDTH / 2, SAFE_TOP + 55);
+      c.font = '30px Inter, sans-serif';
+      c.fillStyle = Theme.secondaryText;
+      c.fillText('4 strategies fight for space', WIDTH / 2, SAFE_TOP + 45);
 
       if (!twGrid) return;
 
-      // Draw grid
+      // Draw grid — pixel art style
       const gridX = SAFE_X;
-      const gridY = SAFE_TOP + 80;
+      const gridY = SAFE_TOP + 70;
       const gridW = WIDTH - SAFE_X * 2;
-      const gridH = 900;
-      const cellW = gridW / TW_COLS;
-      const cellH = gridH / TW_ROWS;
+      const gridH = gridW; // square grid
+      const cellW = gridW / TW_SIZE;
+      const cellH = gridH / TW_SIZE;
 
-      for (let y = 0; y < TW_ROWS; y++) {
-        for (let x = 0; x < TW_COLS; x++) {
-          const owner = twGrid[y * TW_COLS + x];
-          if (owner < 0) {
-            c.fillStyle = Theme.codeBg;
-          } else {
-            c.fillStyle = REGIONS_FR[owner].color;
-          }
-          c.fillRect(gridX + x * cellW, gridY + y * cellH, cellW + 0.5, cellH + 0.5);
+      // Grid background
+      c.fillStyle = Theme.codeBg;
+      c.fillRect(gridX, gridY, gridW, gridH);
+
+      // Subtle grid lines
+      c.strokeStyle = Theme.codeBorder;
+      c.lineWidth = 0.3;
+      for (let x = 0; x <= TW_SIZE; x++) {
+        c.beginPath();
+        c.moveTo(gridX + x * cellW, gridY);
+        c.lineTo(gridX + x * cellW, gridY + gridH);
+        c.stroke();
+      }
+      for (let y = 0; y <= TW_SIZE; y++) {
+        c.beginPath();
+        c.moveTo(gridX, gridY + y * cellH);
+        c.lineTo(gridX + gridW, gridY + y * cellH);
+        c.stroke();
+      }
+
+      // Draw territories (filled cells)
+      for (let y = 0; y < TW_SIZE; y++) {
+        for (let x = 0; x < TW_SIZE; x++) {
+          const owner = twGrid[y * TW_SIZE + x];
+          if (owner < 0) continue;
+          c.fillStyle = TW_STRATEGIES[owner].color;
+          c.fillRect(gridX + x * cellW + 0.5, gridY + y * cellH + 0.5, cellW - 0.5, cellH - 0.5);
         }
       }
+
+      // Draw creature heads with eyes
+      TW_STRATEGIES.forEach((s, i) => {
+        if (!s.alive && !s.trail) return;
+        const hx = gridX + s.headX * cellW;
+        const hy = gridY + s.headY * cellH;
+        const size = cellW;
+
+        // Head square (slightly larger)
+        c.fillStyle = s.color;
+        c.fillRect(hx - 1, hy - 1, size + 2, size + 2);
+
+        // Eyes
+        const eyeSize = Math.max(2, size * 0.25);
+        const eyeOffX = size * 0.25;
+        const eyeOffY = size * 0.3;
+        c.fillStyle = s.eyeColor;
+        c.fillRect(hx + eyeOffX, hy + eyeOffY, eyeSize, eyeSize);
+        c.fillRect(hx + size - eyeOffX - eyeSize, hy + eyeOffY, eyeSize, eyeSize);
+
+        // Pupils
+        c.fillStyle = '#111';
+        const pupilSize = Math.max(1, eyeSize * 0.5);
+        // Pupils look in movement direction
+        const dx = TW_DIRS[s.dir][0] * pupilSize * 0.5;
+        const dy = TW_DIRS[s.dir][1] * pupilSize * 0.5;
+        c.fillRect(hx + eyeOffX + (eyeSize - pupilSize) / 2 + dx, hy + eyeOffY + (eyeSize - pupilSize) / 2 + dy, pupilSize, pupilSize);
+        c.fillRect(hx + size - eyeOffX - eyeSize + (eyeSize - pupilSize) / 2 + dx, hy + eyeOffY + (eyeSize - pupilSize) / 2 + dy, pupilSize, pupilSize);
+      });
 
       // Grid border
       c.strokeStyle = Theme.codeBorder;
       c.lineWidth = 2;
-      if (c.roundRect) {
-        c.beginPath();
-        c.roundRect(gridX, gridY, gridW, gridH, 12);
-        c.stroke();
-      }
+      c.strokeRect(gridX, gridY, gridW, gridH);
 
-      // Scoreboard
-      const scoreY = gridY + gridH + 40;
-      const sorted = REGIONS_FR.map((r, i) => ({ ...r, idx: i, score: twScores ? twScores[i] : 0 }))
+      // Dashboard — 4 strategy cards
+      const dashY = gridY + gridH + 30;
+      const dashX = SAFE_X;
+      const dashW = WIDTH - SAFE_X * 2;
+      const cardH = 70;
+      const totalCells = TW_SIZE * TW_SIZE;
+
+      // Sort by score for ranking
+      const ranked = TW_STRATEGIES.map((s, i) => ({ ...s, idx: i, score: twScores[i] }))
         .sort((a, b) => b.score - a.score);
 
-      const totalCells = TW_COLS * TW_ROWS;
-      const colWidth = (WIDTH - SAFE_X * 2) / 2;
+      ranked.forEach((s, rank) => {
+        const cy = dashY + rank * (cardH + 8);
 
-      sorted.forEach((r, rank) => {
-        const col = rank < 7 ? 0 : 1;
-        const row = rank < 7 ? rank : rank - 7;
-        const x = SAFE_X + col * colWidth;
-        const y = scoreY + row * 50;
-        const pct = totalCells > 0 ? ((r.score / totalCells) * 100).toFixed(1) : '0.0';
+        // Card background
+        c.fillStyle = Theme.codeBg;
+        if (c.roundRect) {
+          c.beginPath();
+          c.roundRect(dashX, cy, dashW, cardH, 12);
+          c.fill();
+        } else {
+          c.fillRect(dashX, cy, dashW, cardH);
+        }
 
-        // Color dot
-        c.fillStyle = r.color;
-        c.beginPath();
-        c.arc(x + 15, y + 5, 10, 0, Math.PI * 2);
-        c.fill();
+        // Creature icon with eyes
+        const iconX = dashX + 20;
+        const iconY = cy + 15;
+        const iconSize = 40;
+        c.fillStyle = s.color;
+        if (c.roundRect) {
+          c.beginPath();
+          c.roundRect(iconX, iconY, iconSize, iconSize, 6);
+          c.fill();
+        } else {
+          c.fillRect(iconX, iconY, iconSize, iconSize);
+        }
+        // Eyes on icon
+        c.fillStyle = '#fff';
+        c.fillRect(iconX + 8, iconY + 10, 8, 8);
+        c.fillRect(iconX + iconSize - 16, iconY + 10, 8, 8);
+        c.fillStyle = '#111';
+        c.fillRect(iconX + 10, iconY + 12, 4, 4);
+        c.fillRect(iconX + iconSize - 14, iconY + 12, 4, 4);
 
-        // Rank + name
-        c.fillStyle = rank === 0 ? Theme.barActive : Theme.primaryText;
+        // Name
+        c.fillStyle = Theme.primaryText;
         c.textAlign = 'left';
-        c.font = rank === 0 ? 'bold 28px Inter, sans-serif' : '26px Inter, sans-serif';
-        c.fillText(`${rank + 1}. ${r.abbr}`, x + 32, y + 12);
+        c.font = 'bold 28px Inter, sans-serif';
+        c.fillText(s.name, iconX + iconSize + 16, cy + 32);
+
+        // Description
+        c.fillStyle = Theme.secondaryText;
+        c.font = '20px Inter, sans-serif';
+        c.fillText(s.desc, iconX + iconSize + 16, cy + 55);
 
         // Percentage
+        const pct = Math.floor((s.score / totalCells) * 100);
+        c.fillStyle = Theme.primaryText;
         c.textAlign = 'right';
-        c.fillText(`${pct}%`, x + colWidth - 10, y + 12);
+        c.font = 'bold 32px Inter, sans-serif';
+        c.fillText(`${pct}%`, dashX + dashW - 20, cy + 45);
       });
-
-      // Step counter
-      c.fillStyle = Theme.secondaryText;
-      c.textAlign = 'center';
-      c.font = '24px Inter, sans-serif';
-      c.fillText(`Tour ${twStep}`, WIDTH / 2, HEIGHT - 180);
 
       // Winner banner
       if (twWinner !== null) {
-        const w = REGIONS_FR[twWinner];
-        c.fillStyle = 'rgba(0,0,0,0.6)';
+        const w = TW_STRATEGIES[twWinner];
+        c.fillStyle = 'rgba(0,0,0,0.7)';
         c.fillRect(0, HEIGHT / 2 - 80, WIDTH, 160);
 
         c.fillStyle = w.color;
         c.textAlign = 'center';
         c.font = 'bold 64px Inter, sans-serif';
-        c.fillText(`${w.name}`, WIDTH / 2, HEIGHT / 2 - 5);
+        c.fillText(`${w.name} wins!`, WIDTH / 2, HEIGHT / 2 + 5);
 
         c.fillStyle = '#FFD700';
-        c.font = 'bold 40px Inter, sans-serif';
-        c.fillText('VICTOIRE !', WIDTH / 2, HEIGHT / 2 + 55);
+        c.font = 'bold 36px Inter, sans-serif';
+        c.fillText(`${Math.floor((twScores[twWinner] / totalCells) * 100)}% territory`, WIDTH / 2, HEIGHT / 2 + 55);
       }
     },
     run: async function (runId) {
       twInit();
       initAudio();
 
-      // Expansion phase
-      let expanding = true;
-      while (expanding && activeRunId === runId) {
-        for (let i = 0; i < 3; i++) {
-          expanding = twStepOnce();
-          if (!expanding) break;
-        }
-
-        // Sound: conquest ticks
-        if (twStep % 10 === 0) {
+      while (twStepOnce() && activeRunId === runId) {
+        if (twStep % 5 === 0) {
           const leader = twScores.indexOf(Math.max(...twScores));
           playConquer(leader);
         }
-
-        await sleep(30);
+        await sleep(40);
       }
 
       if (activeRunId !== runId) return;
@@ -1058,7 +1164,6 @@ const ALGORITHMS = {
       });
       twWinner = winner;
 
-      // Victory sound
       playNote(8, 'triangle', 0.5, 0.15);
       await sleep(300);
       playNote(12, 'triangle', 0.5, 0.15);

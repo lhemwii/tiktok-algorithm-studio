@@ -165,11 +165,15 @@ async function startRecording() {
   const audioStream = audioDest.stream;
   const combined = new MediaStream([...videoStream.getTracks(), ...audioStream.getTracks()]);
 
-  const canMP4 = MediaRecorder.isTypeSupported('video/mp4');
-  const mimeType = canMP4 ? 'video/mp4' : 'video/webm;codecs=vp9';
+  // Forcer H.264 + AAC (compatible TikTok). Opus n'est pas supporte par TikTok.
+  const mp4Aac = 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"';
+  const mp4Plain = 'video/mp4';
+  const mimeType = MediaRecorder.isTypeSupported(mp4Aac) ? mp4Aac
+    : MediaRecorder.isTypeSupported(mp4Plain) ? mp4Plain
+    : 'video/webm;codecs=vp9';
 
   recordedChunks = [];
-  mediaRecorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: 10_000_000 });
+  mediaRecorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: 10_000_000, audioBitsPerSecond: 128_000 });
   mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
   mediaRecorder.start();
 

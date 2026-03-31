@@ -4,6 +4,8 @@ import './style.css';
 const canvas = document.getElementById('studio-canvas');
 const ctx = canvas.getContext('2d');
 const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const restartBtn = document.getElementById('restartBtn');
 const recBtn = document.getElementById('recBtn');
 const recStatus = document.getElementById('rec-status');
 const navList = document.getElementById('nav-list');
@@ -1603,10 +1605,28 @@ function renderNav() {
   }
 }
 
+function updateControlButtons(state) {
+  // state: 'idle' | 'running' | 'done'
+  if (state === 'idle') {
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+    restartBtn.disabled = true;
+    startBtn.textContent = '\u25B6 Demarrer';
+  } else if (state === 'running') {
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+    restartBtn.disabled = true;
+  } else if (state === 'done') {
+    startBtn.disabled = true;
+    stopBtn.disabled = true;
+    restartBtn.disabled = false;
+  }
+}
+
 async function startCurrentAlgo() {
   if (isAnimating || isRecording) return;
   isAnimating = true;
-  startBtn.disabled = true;
+  updateControlButtons('running');
 
   initAudio();
   activeRunId++;
@@ -1624,12 +1644,31 @@ async function startCurrentAlgo() {
 
   if (activeRunId === runId && !isRecording) {
     isAnimating = false;
-    startBtn.disabled = false;
-    startBtn.textContent = 'Restart Simulation';
+    updateControlButtons('done');
   }
 }
 
+function stopCurrentAlgo() {
+  if (!isAnimating) return;
+  activeRunId++; // invalide le runId en cours → l'algo s'arrete
+  isAnimating = false;
+  updateControlButtons('done');
+}
+
+function restartCurrentAlgo() {
+  // Reset state puis relance
+  activeRunId++;
+  isAnimating = false;
+  const algo = ALGORITHMS[currentAlgoId];
+  if (algo.type === 'sort') generateArray();
+  else if (algo.init) algo.init();
+  activeLine = null;
+  updateControlButtons('idle');
+}
+
 // --- EVENTS ---
+stopBtn.addEventListener('click', stopCurrentAlgo);
+restartBtn.addEventListener('click', restartCurrentAlgo);
 themeToggle.addEventListener('click', () => {
   document.body.classList.toggle('dark-mode');
   themeToggle.textContent = document.body.classList.contains('dark-mode') ? '\u2600\uFE0F' : '\uD83C\uDF19';

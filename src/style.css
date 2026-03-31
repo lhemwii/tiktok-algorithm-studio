@@ -198,24 +198,34 @@ ul.nav-category button.active {
   gap: 1rem;
 }
 
-#startBtn {
+#startBtn, #stopBtn, #restartBtn {
   background-color: var(--btn-bg);
   color: var(--btn-color);
   border: none;
-  padding: 1rem 2rem;
-  font-size: 1.1rem;
+  padding: 0.8rem 1.5rem;
+  font-size: 1rem;
   font-weight: 600;
   border-radius: 50px;
   cursor: pointer;
   transition: transform 0.2s;
   box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }
-#startBtn:hover:not(:disabled) {
+#startBtn:hover:not(:disabled),
+#stopBtn:hover:not(:disabled),
+#restartBtn:hover:not(:disabled) {
   transform: translateY(-2px);
 }
-#startBtn:disabled {
+#startBtn:disabled, #stopBtn:disabled, #restartBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+#stopBtn {
+  background-color: #EF4444;
+}
+#restartBtn {
+  background-color: transparent;
+  border: 2px solid var(--btn-bg);
+  color: var(--text-main);
 }
 
 /* TikTok Meta Box */

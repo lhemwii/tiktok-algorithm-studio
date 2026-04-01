@@ -533,3 +533,226 @@
 - Grille en arriere-plan
 - Particules ambiantes
 - Dernier debout gagne
+
+---
+
+## Specs techniques detaillees (analyse Gemini + videos)
+
+### Spec 1 : Arena War — Grille circulaire
+
+**Architecture logicielle** :
+- `grid` : Int8Array de `SIZE * SIZE` cellules
+- `entities` : tableau de 4-5 objets IA
+- Boucle tick-based : setInterval(tick, 50ms)
+
+**Generation de l'arene circulaire** :
+```
+Rayon R = SIZE / 2 (ex: 25 pour une grille 50x50)
+Centre (cx, cy) = (R, R)
+Pour chaque cellule (x, y) :
+  distance = sqrt((x - cx)^2 + (y - cy)^2)
+  Si distance <= R → case jouable (EMPTY = -1)
+  Si distance > R → case hors-jeu (WALL = -2)
+```
+
+**Structure d'une entite** :
+```js
+{
+  id: 0,
+  name: 'Greedy',
+  color: '#E8985A',
+  headX: 10, headY: 15,
+  dir: 1, // 0=up, 1=right, 2=down, 3=left
+  alive: true,
+  score: 0
+}
+```
+
+**Algorithmes IA** :
+- **Greedy** : BFS depuis la tete, trouve la cellule vide la plus proche, fait un pas vers elle. Traverse son propre territoire.
+- **Spiral** : Regle de la main gauche — essaie gauche, puis tout droit, puis droite, puis demi-tour. Longe les murs.
+- **Random** : Filtre les cases adjacentes vides, en choisit une au hasard.
+- **Mimic** (5eme IA) : Identifie le leader (plus haut score, excluant lui-meme). Execute la fonction de decision du leader a sa place. Ex: si Spiral mene, Mimic joue comme Spiral.
+
+**Positions de depart** : 4 points equidistants sur le cercle :
+- Greedy : angle 225° (bas-gauche)
+- Spiral : angle 315° (bas-droite)  
+- Hunter/Mimic : angle 45° (haut-droite)
+- Random : angle 135° (haut-gauche)
+
+**Rendu** :
+- Canvas 2D uniquement (pas de DOM pour les cellules)
+- Tete de creature : carre colore + 2 yeux blancs (2x2px) + 2 pupilles noires (1x1px)
+- Pupilles pointent dans la direction du mouvement
+- Scoreboard : 4 cartes triees par score descendant
+
+---
+
+### Spec 2 : Football Pong — Arene circulaire
+
+**Moteur physique** :
+- Gravite : ZERO (`gravity.x = 0, gravity.y = 0`)
+- Friction air : quasi-nulle (`frictionAir: 0.001`)
+- Rebond : parfait (`restitution: 1.0`)
+- Friction sol : zero
+
+**Construction de l'arene** :
+- Anneau = 40-60 petits rectangles places en cercle via sin/cos
+- 2 ouvertures aux angles opposes (buts) : omettre les rectangles a 170-190° et 350-10°
+- Derriere chaque ouverture : rectangle `isSensor: true` avec label `goal_teamA` / `goal_teamB`
+
+**Balles** :
+- 2 cercles avec couleurs du drapeau (bandes horizontales)
+- Rotation : `Body.angle` mis a jour a chaque frame pour que le drapeau tourne
+- Taille : rayon ~20px
+
+**Systeme de but** :
+- Quand balle touche sensor adverse → score++
+- Remise au centre des 2 balles
+- Force aleatoire appliquee pour relancer l'engagement
+
+**Particules au choc** :
+- 10 petits cercles generes au point d'impact
+- Force explosive (vecteur s'eloignant du point d'impact + aleatoire)
+- `collisionFilter` pour qu'elles passent a travers les balles
+- Supprimer apres 1-2 secondes
+
+**UI** :
+- Scoreboard en haut : [Drapeau1] Score1 | Timer MM:SS | Score2 [Drapeau2]
+- Timer : compte de 0:00 a 90:00 (temps de match)
+- Footer : noms des equipes + logo tournoi
+
+---
+
+### Spec 3 : Ball Multiply — Croissance exponentielle
+
+**Architecture performance-critique** :
+- JAMAIS `useState` pour les balles — utiliser `useRef` ou variable globale
+- Boucle `requestAnimationFrame` native
+- Pas de re-render React
+
+**Structure d'une balle** :
+```js
+{
+  x: 150, y: 150,
+  vx: 3, vy: -2,
+  radius: 4,
+  color: `hsl(${Math.random() * 360}, 100%, 60%)`, // couleurs vives garanties
+  cooldown: 10 // frames avant de pouvoir re-spawner
+}
+```
+
+**Physique de rebond sur cercle** :
+```
+distance = sqrt((ball.x - cx)^2 + (ball.y - cy)^2)
+Si distance + ball.radius >= arenaRadius :
+  // Vecteur normal au point d'impact
+  nx = (ball.x - cx) / distance
+  ny = (ball.y - cy) / distance
+  // Reflexion du vecteur velocite
+  dot = ball.vx * nx + ball.vy * ny
+  ball.vx -= 2 * dot * nx
+  ball.vy -= 2 * dot * ny
+```
+
+**Mecanique de multiplication** :
+- Collision balle-balle detectee quand `distance < radiusA + radiusB`
+- ANTI-GLITCH : resoudre le chevauchement AVANT le rebond (separer les balles)
+- Verifier `cooldown === 0` pour A et B avant de spawner
+- Nouvelle balle C : position = milieu du point d'impact, velocite perpendiculaire a l'axe de collision
+- Reset cooldown de A, B, C a 15 frames
+
+**Optimisation : Spatial Hash Grid** (obligatoire au-dela de 500 balles) :
+```
+Diviser le canvas en cases de 20x20px
+A chaque frame : assigner chaque balle a sa case
+Pour collision de balle A : ne verifier QUE les balles dans la meme case + 8 cases adjacentes
+Passe de O(n^2) = 6.25M calculs a ~quelques milliers
+```
+
+**Limites** : max 2500 balles, reduire le rayon progressivement apres 1000
+
+---
+
+### Spec 4 : Escape Before You Die — Roue mortelle
+
+**Physique** :
+- Gravite : ACTIVE (`gravity.y = 1`)
+- Rebond : moyen (`restitution: 0.6-0.7`)
+- La balle a du poids, tombe naturellement
+
+**Construction de la roue** :
+- Corps composite Matter.js (`Body.create` avec `parts`)
+- Segments : rectangles arranges en cercle (paroi exterieure lisse)
+- Piques : triangles (`Bodies.polygon(x, y, 3, radius)`) pointe vers le centre, label `spike`
+- Ouverture : omettre 1-2 segments pour la sortie
+- Rotation : `Body.setAngle(roue, roue.angle + 0.02)` a chaque frame
+- `isStatic: true` pour que la roue ne tombe pas
+
+**Systeme de vie** :
+- 10 coeurs pixel art
+- Collision avec `label === 'spike'` → `health -= 1`
+- Knockback : `Body.applyForce` pour repousser la balle de la pique
+- `health === 0` → "You Died 💀"
+
+**Victoire** :
+- Zone sensor invisible a l'exterieur du cercle
+- Balle tombe par gravite a travers l'ouverture → touche le sensor → "Escaped!"
+
+**Particules de degat** :
+- Meme systeme que Football Pong
+- Couleur = couleur de la balle
+- Emises au point d'impact avec la pique
+
+---
+
+### Spec 5 : Free For All — Auto-Battler Emojis
+
+**IA : Machine d'etats (State Machine)** :
+```
+SEEK_WEAPON → (arme trouvee) → ATTACK
+ATTACK → (PV < 30%) → SEEK_HEALTH
+SEEK_HEALTH → (PV > 50%) → ATTACK
+SEEK_WEAPON → (rien dispo) → FLEE
+```
+
+**Structure emoji** :
+```js
+{
+  id: 'green',
+  x: 100, y: 100,
+  radius: 30,
+  hp: 100,        // 100 = 10 coeurs pleins
+  weapon: null,
+  state: 'SEEK_WEAPON',
+  speed: 2,
+  expression: 'neutral' // 'angry', 'sad', 'hurt'
+}
+```
+
+**Systeme d'armement** :
+| Arme | Projectiles | Degats | Cadence | Special |
+|------|------------|--------|---------|---------|
+| Sniper | 1 balle rapide | 30 HP (3 coeurs) | 2s cooldown | Longue portee |
+| Shotgun | 4-5 balles avec spread | 15 HP chacune | 1.5s | Dispersion angulaire |
+| Minigun | Rafale continue | 5 HP par balle | 100ms | Haute cadence |
+| Staff | 1 grosse boule lente | 25 HP | 1.5s | Homing leger vers cible |
+| Couteau | Pas de projectile | 40 HP | 0.5s | Melee (distance < 20px) |
+
+**Expressions faciales** :
+- `neutral` : yeux ronds, bouche droite
+- `angry` : yeux en V, bouche ouverte (quand tire)
+- `sad` : yeux tombants, bouche en U inverse (quand PV < 30%)
+- `hurt` : yeux fermes, bouche en O (quand touche)
+
+**Douilles** :
+- A chaque `fire()` : creer un petit rectangle "douille"
+- Gravite active pour les douilles (`vy += 0.5` par frame)
+- Se posent au sol (`y >= arenaBottom`) : `vy = 0`
+- S'accumulent visuellement en bas de l'arene
+
+**Spawn d'objets** :
+- Armes et pommes apparaissent a intervalles reguliers (toutes les 5s)
+- Position aleatoire dans l'arene
+- Pomme : soigne 30 HP
+- Arme : remplace l'arme actuelle

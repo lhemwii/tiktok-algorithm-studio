@@ -2877,16 +2877,19 @@ const ALGORITHMS = {
       ];
       const midX = px + pw / 2, midY = py + ph / 2;
       const goalMidY = midY;
+      const PR = 22; // all players same size
       this._players = [
         // Bosnia: GK + 2 field
-        { x: px + 40, y: midY, vx: 0, vy: 0, r: 24, team: 0, role: 'gk' },
-        { x: midX - 140, y: midY - 100, vx: 0, vy: 0, r: 22, team: 0, role: 'field' },
-        { x: midX - 140, y: midY + 100, vx: 0, vy: 0, r: 22, team: 0, role: 'field' },
+        { x: px + 40, y: midY, vx: 0, vy: 0, r: PR, team: 0, role: 'gk' },
+        { x: midX - 140, y: midY - 100, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
+        { x: midX - 140, y: midY + 100, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
         // Italy: GK + 2 field
-        { x: px + pw - 40, y: midY, vx: 0, vy: 0, r: 24, team: 1, role: 'gk' },
-        { x: midX + 140, y: midY - 100, vx: 0, vy: 0, r: 22, team: 1, role: 'field' },
-        { x: midX + 140, y: midY + 100, vx: 0, vy: 0, r: 22, team: 1, role: 'field' },
+        { x: px + pw - 40, y: midY, vx: 0, vy: 0, r: PR, team: 1, role: 'gk' },
+        { x: midX + 140, y: midY - 100, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
+        { x: midX + 140, y: midY + 100, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
       ];
+      // Referee — follows the action, can bounce the ball
+      this._referee = { x: midX, y: midY + 50, vx: 0, vy: 0, r: 18 };
       this._ball = { x: midX, y: midY, vx: 0, vy: 0, r: 12 };
       this._particles = [];
       this._timerSecs = 90;
@@ -2895,6 +2898,8 @@ const ALGORITHMS = {
       this._kickoff = true;
       this._kickoffTimer = 0;
       this._goalLog = [];
+      this._lastGoalTime = 0; // timer for foul detection
+      this._foulFlash = 0;
     },
     draw: function (c) {
       const p = this._pitch;
@@ -3009,6 +3014,36 @@ const ALGORITHMS = {
         c.beginPath(); c.arc(6 + Math.cos(ea) * 3, -3 + Math.sin(ea) * 3, 3.5, 0, Math.PI * 2); c.fill();
         c.restore();
       });
+
+      // --- REFEREE ---
+      if (this._referee) {
+        const ref = this._referee;
+        c.save(); c.translate(ref.x, ref.y);
+        c.fillStyle = '#111';
+        c.beginPath(); c.arc(0, 0, ref.r, 0, Math.PI * 2); c.fill();
+        // Yellow stripe (referee shirt)
+        c.fillStyle = '#FFD700';
+        c.fillRect(-ref.r, -4, ref.r * 2, 8);
+        // Eyes follow ball
+        const rea = Math.atan2(fb.y - ref.y, fb.x - ref.x);
+        c.fillStyle = '#fff';
+        c.beginPath(); c.ellipse(-5, -4, 6, 8, 0, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.ellipse(5, -4, 6, 8, 0, 0, Math.PI * 2); c.fill();
+        c.fillStyle = '#000';
+        c.beginPath(); c.arc(-5 + Math.cos(rea) * 2.5, -4 + Math.sin(rea) * 2.5, 3, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.arc(5 + Math.cos(rea) * 2.5, -4 + Math.sin(rea) * 2.5, 3, 0, Math.PI * 2); c.fill();
+        c.restore();
+      }
+
+      // --- FOUL FLASH ---
+      if (this._foulFlash > 0) {
+        c.fillStyle = `rgba(255,255,0,${this._foulFlash * 0.2})`;
+        c.fillRect(0, 0, WIDTH, HEIGHT);
+        c.fillStyle = '#FFD700'; c.textAlign = 'center';
+        c.font = 'bold 50px Inter, sans-serif';
+        c.fillText('FOUL!', WIDTH / 2, midY - 30);
+        this._foulFlash -= 0.02;
+      }
 
       // --- GOAL LOG ---
       if (this._goalLog.length > 0) {
@@ -3144,6 +3179,34 @@ const ALGORITHMS = {
           pl.x += pl.vx; pl.y += pl.vy;
         });
 
+        // Referee AI: follows the ball at a distance, stays offset
+        const ref = this._referee;
+        const refTargetX = fb.x + (fb.x > midX ? -60 : 60);
+        const refTargetY = fb.y + 40;
+        const rdx = refTargetX - ref.x, rdy = refTargetY - ref.y;
+        const rd = Math.sqrt(rdx * rdx + rdy * rdy) || 1;
+        ref.vx += (rdx / rd) * 0.25;
+        ref.vy += (rdy / rd) * 0.25;
+        ref.vx *= 0.94; ref.vy *= 0.94;
+        const rspd = Math.sqrt(ref.vx * ref.vx + ref.vy * ref.vy);
+        if (rspd > 4) { ref.vx = (ref.vx / rspd) * 4; ref.vy = (ref.vy / rspd) * 4; }
+        ref.x += ref.vx; ref.y += ref.vy;
+        bounceRect(ref);
+
+        // Foul detection: no goal for 25 seconds → whistle + free kick
+        this._lastGoalTime += 1 / 60;
+        if (this._lastGoalTime >= 25 && !this._kickoff) {
+          // Determine which half the ball is in → free kick to the team attacking that side
+          const attackingTeam = fb.x < midX ? 1 : 0; // ball in left half = Italy attacks, etc.
+          this._foulFlash = 1.5;
+          playNoise(0.15, 0.15); // whistle
+          playNote(15, 'square', 0.2, 0.1);
+          // Place ball at the spot, give to attacking team
+          fb.vx = attackingTeam === 0 ? 4 : -4;
+          fb.vy = (Math.random() - 0.5) * 3;
+          this._lastGoalTime = 0;
+        }
+
         fb.vx *= 0.997; fb.vy *= 0.997;
         fb.x += fb.vx; fb.y += fb.vy;
 
@@ -3163,6 +3226,14 @@ const ALGORITHMS = {
         });
         for (let i = 0; i < players.length; i++) for (let j = i + 1; j < players.length; j++) collide(players[i], players[j]);
 
+        // Referee-ball collision (ball bounces off referee — funny moments!)
+        if (collide(ref, fb)) {
+          for (let i = 0; i < 8; i++) this._particles.push({ x: fb.x, y: fb.y, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6, size: 2, color: '#FFD700', life: 0.8 });
+          playNote(3, 'square', 0.06, 0.08);
+        }
+        // Referee-player collisions
+        players.forEach(pl => collide(ref, pl));
+
         // Goal detection — ball fully inside goal box
         let scored = -1;
         if (fb.x < pi.x && fb.y > gTop && fb.y < gBot) scored = 1; // Italy scores
@@ -3173,9 +3244,12 @@ const ALGORITHMS = {
           const el = 90 - this._timerSecs;
           this._goalLog.push({ team: scored, timeStr: `${Math.floor(el / 60)}'${Math.floor(el % 60).toString().padStart(2, '0')}` });
           this._goalFlash = 1.0;
+          this._lastGoalTime = 0; // reset foul timer
           playNote(15, 'triangle', 0.5, 0.2);
           await sleep(1500);
           resetPositions();
+          // Reset referee to center too
+          ref.x = midX; ref.y = midY + 50; ref.vx = 0; ref.vy = 0;
           this._kickoff = true; this._kickoffTimer = 60;
           continue;
         }

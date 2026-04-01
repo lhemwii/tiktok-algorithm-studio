@@ -8,8 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "studio": "remotion studio remotion/index.jsx",
-    "render": "remotion render remotion/index.jsx WorldCup out/worldcup_4k.mp4 --codec h264 --crf 18 --image-format jpeg --jpeg-quality 95",
-    "render:all": "remotion render remotion/index.jsx"
+    "render": "remotion render remotion/index.jsx WorldCup out/worldcup_4k.mp4 --codec h264 --crf 18",
+    "render:match": "node render-match.js",
+    "render:all": "node render-match.js all"
   },
   "devDependencies": {
     "vite": "^8.0.3"

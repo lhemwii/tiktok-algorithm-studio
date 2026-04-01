@@ -1,14 +1,19 @@
-import { useCurrentFrame, useVideoConfig, Audio, Sequence } from 'remotion';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCurrentFrame, useVideoConfig } from 'remotion';
+import { useEffect, useRef } from 'react';
+import { TEAMS as ALL_TEAMS } from './teams';
 
 // --- CONSTANTS ---
-const W = 1080, H = 1920; // logical size
-const SCALE = 2; // 4K
+const W = 1080, H = 1920;
+const SCALE = 2;
 
-const TEAMS = [
-  { name: 'BOSNIA', shortName: 'BOS', color: '#002395', altColor: '#FFC107', score: 0, fouls: 0 },
-  { name: 'ITALY', shortName: 'ITA', color: '#008C45', altColor: '#CE2B37', score: 0, fouls: 0 },
-];
+function getTeamPair(homeCode, awayCode) {
+  const h = ALL_TEAMS[homeCode] || { name: homeCode, shortName: homeCode, color: '#333', altColor: '#999', flag: [] };
+  const a = ALL_TEAMS[awayCode] || { name: awayCode, shortName: awayCode, color: '#666', altColor: '#ccc', flag: [] };
+  return [
+    { ...h, score: 0, fouls: 0 },
+    { ...a, score: 0, fouls: 0 },
+  ];
+}
 
 // --- SIMULATION STATE (deterministic, seeded) ---
 function seededRandom(seed) {
@@ -19,7 +24,7 @@ function seededRandom(seed) {
   };
 }
 
-function createState(seed) {
+function createState(seed, homeCode, awayCode, matchInfo) {
   const rand = seededRandom(seed);
   const px = 60, py = 320, pw = W - 120, ph = 650;
   const midX = px + pw / 2, midY = py + ph / 2;
@@ -27,7 +32,7 @@ function createState(seed) {
   const gTop = midY - goalH / 2, gBot = midY + goalH / 2;
   const PR = 22;
 
-  const teams = TEAMS.map(t => ({ ...t }));
+  const teams = getTeamPair(homeCode, awayCode);
   const players = [
     { x: px + 35, y: midY, vx: 0, vy: 0, r: PR, team: 0, role: 'gk' },
     { x: midX - 130, y: midY - 90, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
@@ -50,7 +55,7 @@ function createState(seed) {
     rand, px, py, pw, ph, midX, midY, goalW, goalH, gTop, gBot,
     teams, players, referee, ball, goalLog,
     stuckTimer, lastBallX, lastBallY, foulFlash, goalFlash,
-    kickoff, kickoffTimer, timerFrames: 0, totalFrames: 30 * 65,
+    kickoff, kickoffTimer, timerFrames: 0, totalFrames: 30 * 65, matchInfo: matchInfo || '',
   };
 }
 
@@ -299,15 +304,14 @@ function drawFrame(ctx, state, frameNum) {
     c.save(); c.translate(pl.x, pl.y);
     c.fillStyle = tm.color;
     c.beginPath(); c.arc(0, 0, pl.r, 0, Math.PI * 2); c.fill();
+    // Draw flag pattern from team data
     c.save(); c.beginPath(); c.arc(0, 0, pl.r, 0, Math.PI * 2); c.clip();
-    if (pl.team === 0) {
-      c.fillStyle = '#FFC107';
-      c.beginPath(); c.moveTo(-pl.r, -pl.r); c.lineTo(pl.r, pl.r); c.lineTo(-pl.r, pl.r); c.fill();
-    } else {
-      c.fillStyle = '#008C45'; c.fillRect(-pl.r, -pl.r, pl.r * 2 / 3, pl.r * 2);
-      c.fillStyle = '#fff'; c.fillRect(-pl.r / 3, -pl.r, pl.r * 2 / 3, pl.r * 2);
-      c.fillStyle = '#CE2B37'; c.fillRect(pl.r / 3, -pl.r, pl.r * 2 / 3, pl.r * 2);
-    }
+    const flagData = tm.flag || [];
+    const d = pl.r * 2;
+    flagData.forEach(f => {
+      c.fillStyle = f[0];
+      c.fillRect(-pl.r + f[1] * d, -pl.r + f[2] * d, f[3] * d, f[4] * d);
+    });
     c.restore();
     if (pl.role === 'gk') { c.strokeStyle = '#FFD700'; c.lineWidth = 3; c.beginPath(); c.arc(0, 0, pl.r + 2, 0, Math.PI * 2); c.stroke(); }
     const ea = Math.atan2(ball.y - pl.y, ball.x - pl.x);
@@ -376,8 +380,16 @@ function drawFrame(ctx, state, frameNum) {
     c.fillRect(0, 0, W, H);
   }
 
+  // --- MATCH INFO (bottom) ---
+  if (state.matchInfo) {
+    c.fillStyle = 'rgba(0,0,0,0.6)';
+    if (c.roundRect) { c.beginPath(); c.roundRect(100, H - 130, W - 200, 50, 12); c.fill(); }
+    c.fillStyle = '#ccc'; c.textAlign = 'center'; c.font = '22px Inter, sans-serif';
+    c.fillText(state.matchInfo, W / 2, H - 98);
+  }
+
   // --- FULL TIME ---
-  if (state.timerFrames >= state.totalFrames - 90) { // last 3 seconds
+  if (state.timerFrames >= state.totalFrames - 90) {
     c.fillStyle = 'rgba(0,0,0,0.75)'; c.fillRect(0, H / 2 - 100, W, 200);
     c.textAlign = 'center'; c.font = 'bold 30px Inter, sans-serif'; c.fillStyle = '#aaa';
     c.fillText('FULL TIME', W / 2, H / 2 - 55);
@@ -392,28 +404,21 @@ function drawFrame(ctx, state, frameNum) {
 }
 
 // --- REACT COMPONENT ---
-export const WorldCup = () => {
+export const WorldCup = ({ homeTeam = 'FRA', awayTeam = 'SEN', seed = 42, matchInfo = '' }) => {
   const frame = useCurrentFrame();
-  const { width, height, fps } = useVideoConfig();
+  const { width, height } = useVideoConfig();
   const canvasRef = useRef(null);
-  const stateRef = useRef(null);
-
-  // Initialize state on first frame
-  if (!stateRef.current) {
-    stateRef.current = createState(42); // deterministic seed
-  }
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
 
-    // Reset state and simulate up to current frame
-    const state = createState(42);
+    // Simulate deterministically up to current frame
+    const state = createState(seed, homeTeam, awayTeam, matchInfo);
     for (let f = 0; f < frame; f++) {
       stepSimulation(state);
     }
-    stateRef.current = state;
 
     // Draw
     ctx.clearRect(0, 0, width, height);

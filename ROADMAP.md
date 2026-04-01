@@ -183,6 +183,164 @@
 
 ---
 
+---
+
+## Catalogue 101-200 — Tension, Suspense & "I Can't Stop Watching"
+
+### Cat. 11: PICK YOUR WINNER — Betting Tension
+| # | Concept | Status |
+|---|---------|--------|
+| 101 | Last Country Standing — World Map Elimination | Planifie |
+| 102 | Color War — 4 Paint Drops | Planifie |
+| 103 | Alphabet Elimination | Planifie |
+| 104 | Zodiac Battle Royale | Planifie |
+| 105 | Birth Month Hunger Games | FAIT |
+| 106 | Blood Type Battle | Planifie |
+| 107 | Left Hand vs Right Hand | Planifie |
+| 108 | Morning Person vs Night Owl | Planifie |
+| 109 | iPhone vs Android Pong | Planifie |
+| 110 | Cat vs Dog Territory War | Planifie |
+
+### Cat. 12: WILL IT SURVIVE? — Countdown to Disaster
+| # | Concept | Status |
+|---|---------|--------|
+| 111 | Balloon and the Needles | FAIT |
+| 112 | Tightrope Ball | Planifie |
+| 113 | Rising Water | Planifie |
+| 114 | Asteroid Field | Planifie |
+| 115 | Shrinking Platform | Planifie |
+| 116 | Lava Floor Rising | Planifie |
+| 117 | Crumbling Bridge | Planifie |
+| 118 | 1000 Degrees Knife vs Objects | Planifie |
+| 119 | Closing Walls | Planifie |
+| 120 | Lightning Survival | Planifie |
+
+### Cat. 13: SO CLOSE! — Near-Miss Tension
+| # | Concept | Status |
+|---|---------|--------|
+| 121 | Hole-in-One Machine | FAIT |
+| 122 | Perfect Bounce (5 walls + cup) | Planifie |
+| 123 | Thread the Needle (10 gaps) | Planifie |
+| 124 | Maze — Almost There | Planifie |
+| 125 | Parallel Parking Bot | Planifie |
+| 126 | Stacking Game | Planifie |
+| 127 | Pendulum Timer | Planifie |
+| 128 | Coin Spinning on Edge | Planifie |
+| 129 | Jenga Tower Physics | Planifie |
+| 130 | Gap Jump | Planifie |
+
+### Cat. 14: THE GREAT REVERSAL — Comeback Tension
+| # | Concept | Status |
+|---|---------|--------|
+| 131 | Tortoise and the Hare | Planifie |
+| 132 | Empire Rise and Fall | Planifie |
+| 133 | Battery Race | Planifie |
+| 134 | Comeback King Score Race | Planifie |
+| 135 | Inflation vs Savings | Planifie |
+| 136 | Forest vs Fire | FAIT |
+| 137 | Population vs Resources | Planifie |
+| 138 | Student vs Deadline | Planifie |
+| 139 | Dam vs Rising Water | Planifie |
+| 140 | Immune System vs Infection Race | Planifie |
+
+### Cat. 15: IMPOSSIBLE ODDS
+| # | Concept | Status |
+|---|---------|--------|
+| 141 | Random Walk Home | Planifie |
+| 142 | Monkey Typing Shakespeare | Planifie |
+| 143 | Shuffle to Sorted | Planifie |
+| 144 | Lightning Same Spot | Planifie |
+| 145 | Needle in a Haystack | Planifie |
+| 146 | Random Maze Solver | Planifie |
+| 147 | Lottery Simulation | Planifie |
+| 148 | Pi by Throwing Darts | Planifie |
+| 149 | Evolution Simulation | Planifie |
+| 150 | Infinite Monkey Painter | Planifie |
+
+### Cat. 16: WHO GETS ELIMINATED NEXT?
+| # | Concept | Status |
+|---|---------|--------|
+| 151 | Country Elimination by Disaster | Planifie |
+| 152 | Musical Chairs Dots | Planifie |
+| 153 | Floor is Lava Platforms | Planifie |
+| 154 | Weakest Link Stats | Planifie |
+| 155 | Hunger Games 24 Dots | Planifie |
+| 156 | Spelling Bee Elimination | Planifie |
+| 157 | Planet Elimination | Planifie |
+| 158 | Social Media App Elimination | Planifie |
+| 159 | Food Chain Elimination | Planifie |
+| 160 | Celebrity Popularity Contest | Planifie |
+
+### Cat. 17: THE DOMINO EFFECT — Chain Reaction
+| # | Concept | Status |
+|---|---------|--------|
+| 161 | One Domino Topples a City | Planifie |
+| 162 | One Lie Snowball | Planifie |
+| 163 | Butterfly Effect Weather | Planifie |
+| 164 | One Person Starts Clapping | Planifie |
+| 165 | Bank Run Simulation | Planifie |
+| 166 | Traffic Shockwave Highway | FAIT (Phantom Traffic) |
+| 167 | Viral Tweet Simulation | Planifie |
+| 168 | Nuclear Chain Reaction | Planifie |
+| 169 | One Crack in a Dam | Planifie |
+| 170 | Invasive Species | Planifie |
+
+### Cat. 18: HOW LONG UNTIL...? — Timer Tension
+| # | Concept | Status |
+|---|---------|--------|
+| 171 | Ice Cube Melting | Planifie |
+| 172 | Candle Burning Down | Planifie |
+| 173 | Balance Inverted Pendulum | Planifie |
+| 174 | Erosion River Canyon | Planifie |
+| 175 | Rust Timelapse | Planifie |
+| 176 | Sun Burning Out | Planifie |
+| 177 | Hourglass Random Sand | Planifie |
+| 178 | AI Driving How Far | Planifie |
+| 179 | Growing Bacteria Petri Dish | Planifie |
+| 180 | Memory Filling Up | Planifie |
+
+### Cat. 19: MAKE THE CHOICE — Decision Tension
+| # | Concept | Status |
+|---|---------|--------|
+| 181 | Monty Hall 3 Doors | Planifie |
+| 182 | Trolley Problem Visualized | Planifie |
+| 183 | Risk vs Safety Investment | Planifie |
+| 184 | Flight vs Invisibility | Planifie |
+| 185 | Escape Room 2 Strategies | Planifie |
+| 186 | Fight or Flight | Planifie |
+| 187 | Save One Ethical Dilemma | Planifie |
+| 188 | Short-Term vs Long-Term | Planifie |
+| 189 | Cooperation vs Betrayal | Planifie |
+| 190 | Fast Lane vs Slow Lane | Planifie |
+
+### Cat. 20: EMOTIONAL INVESTMENT — Stories
+| # | Concept | Status |
+|---|---------|--------|
+| 191 | The Last Tree | Planifie |
+| 192 | The Lonely Dot | FAIT |
+| 193 | Baby Turtle to Ocean | Planifie |
+| 194 | The Underdog Race | Planifie |
+| 195 | Plant Growing Through Concrete | Planifie |
+| 196 | Lost Penguin Finding Home | Planifie |
+| 197 | Paper Boat in a Storm | Planifie |
+| 198 | The Climbing Dot | Planifie |
+| 199 | Two Magnets Finding Each Other | Planifie |
+| 200 | The Signal | Planifie |
+
+### Watch Time Psychology Cheat Sheet
+
+| Mecanique | Pourquoi ca marche | Boost watch time |
+|-----------|-------------------|-----------------|
+| Betting/Picking | Investissement identitaire | +40% completion |
+| Countdown | Doom inevitable = urgence | +35% completion |
+| Near-misses | Boucle dopamine (slot machine) | +50% completion |
+| Reversal | Les perdants restent pour le comeback | +45% completion |
+| Impossible odds | Curiosite pour l'improbable | +30% completion |
+| Emotional attachment | Anthropomorphiser des points | +60% completion |
+| Slow escalation | Effet "encore un peu" | +40% completion |
+
+---
+
 ## Formule video TikTok
 
 1. **HOOK (0-3s)** — Action deja en cours. Jamais de titre au debut.

@@ -1528,6 +1528,487 @@ const ALGORITHMS = {
       await sleep(2000);
     },
   },
+
+  ballescape: {
+    type: 'simulation',
+    title: 'Ball Escape',
+    badge: '1 Exit',
+    desc: 'Two balls bounce inside a circle. One tiny exit. First one out wins.',
+    tiktokDesc: 'Rouge vs Bleu. Un seul trou. Qui s\'echappe en premier ? #ballescape #simulation #satisfying #versus',
+    tiktokTags: '#ballescape #simulation #satisfying #versus #viral #physics #race',
+    init: function () {
+      const cx = WIDTH / 2, cy = 680, r = 340;
+      this._arena = { cx, cy, r };
+      this._holeAngle = -Math.PI / 2; // top
+      this._holeSize = 0.15; // radians
+      this._balls = [
+        { x: cx - 80, y: cy, vx: 4, vy: -3, r: 18, color: '#EF4444', name: 'Rouge', escaped: false },
+        { x: cx + 80, y: cy, vx: -3, vy: 4, r: 18, color: '#3B82F6', name: 'Bleu', escaped: false },
+      ];
+      this._winner = null;
+      this._step = 0;
+    },
+    draw: function (c) {
+      const SAFE_TOP = 130;
+      c.fillStyle = Theme.primaryText;
+      c.textAlign = 'center';
+      c.font = 'bold 64px Inter, sans-serif';
+      c.fillText('Ball Escape', WIDTH / 2, SAFE_TOP);
+      c.font = '30px Inter, sans-serif';
+      c.fillStyle = Theme.secondaryText;
+      c.fillText('First one out wins!', WIDTH / 2, SAFE_TOP + 45);
+
+      if (!this._arena) return;
+      const { cx, cy, r } = this._arena;
+
+      // Arena circle (with gap for hole)
+      c.strokeStyle = Theme.primaryText;
+      c.lineWidth = 6;
+      const ha = this._holeAngle;
+      const hs = this._holeSize;
+      c.beginPath();
+      c.arc(cx, cy, r, ha + hs, ha + Math.PI * 2 - hs);
+      c.stroke();
+
+      // Hole indicator
+      c.strokeStyle = Theme.barValid;
+      c.lineWidth = 4;
+      c.setLineDash([8, 8]);
+      c.beginPath();
+      c.arc(cx, cy, r, ha - hs, ha + hs);
+      c.stroke();
+      c.setLineDash([]);
+
+      // EXIT label
+      const ex = cx + Math.cos(ha) * (r + 30);
+      const ey = cy + Math.sin(ha) * (r + 30);
+      c.fillStyle = Theme.barValid;
+      c.font = 'bold 24px Inter, sans-serif';
+      c.fillText('EXIT', ex, ey);
+
+      // Balls
+      this._balls.forEach(b => {
+        if (b.escaped) return;
+        c.fillStyle = b.color;
+        c.beginPath();
+        c.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+        c.fill();
+        // Highlight
+        c.fillStyle = 'rgba(255,255,255,0.3)';
+        c.beginPath();
+        c.arc(b.x - b.r * 0.3, b.y - b.r * 0.3, b.r * 0.35, 0, Math.PI * 2);
+        c.fill();
+      });
+
+      // Score panel
+      const panelY = cy + r + 60;
+      this._balls.forEach((b, i) => {
+        const py = panelY + i * 80;
+        c.fillStyle = Theme.codeBg;
+        if (c.roundRect) { c.beginPath(); c.roundRect(100, py, WIDTH - 200, 65, 12); c.fill(); }
+        c.fillStyle = b.color;
+        c.beginPath();
+        c.arc(135, py + 32, 20, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = Theme.primaryText;
+        c.textAlign = 'left';
+        c.font = 'bold 30px Inter, sans-serif';
+        c.fillText(b.name, 170, py + 40);
+        c.textAlign = 'right';
+        c.fillText(b.escaped ? 'ESCAPED!' : 'Trapped', WIDTH - 130, py + 40);
+      });
+
+      // Winner
+      if (this._winner) {
+        c.fillStyle = 'rgba(0,0,0,0.7)';
+        c.fillRect(0, HEIGHT / 2 - 80, WIDTH, 160);
+        c.fillStyle = this._winner.color;
+        c.textAlign = 'center';
+        c.font = 'bold 64px Inter, sans-serif';
+        c.fillText(`${this._winner.name} escapes!`, WIDTH / 2, HEIGHT / 2 + 10);
+        c.fillStyle = '#FFD700';
+        c.font = 'bold 36px Inter, sans-serif';
+        c.fillText(`Step ${this._step}`, WIDTH / 2, HEIGHT / 2 + 55);
+      }
+    },
+    run: async function (runId) {
+      this.init();
+      initAudio();
+      const { cx, cy, r } = this._arena;
+      const balls = this._balls;
+
+      while (activeRunId === runId && !this._winner) {
+        this._step++;
+        for (const b of balls) {
+          if (b.escaped) continue;
+          b.x += b.vx;
+          b.y += b.vy;
+
+          // Bounce off arena walls
+          const dx = b.x - cx, dy = b.y - cy;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist + b.r > r) {
+            const angle = Math.atan2(dy, dx);
+            const ha = this._holeAngle;
+            const hs = this._holeSize;
+            let diff = angle - ha;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+
+            if (Math.abs(diff) < hs) {
+              // Through the hole!
+              b.escaped = true;
+              if (!this._winner) this._winner = b;
+              playNote(15, 'triangle', 0.5, 0.2);
+              continue;
+            }
+            // Reflect
+            const nx = dx / dist, ny = dy / dist;
+            const dot = b.vx * nx + b.vy * ny;
+            b.vx -= 2 * dot * nx;
+            b.vy -= 2 * dot * ny;
+            b.x = cx + nx * (r - b.r - 1);
+            b.y = cy + ny * (r - b.r - 1);
+            // Add slight randomness
+            b.vx += (Math.random() - 0.5) * 0.5;
+            b.vy += (Math.random() - 0.5) * 0.5;
+            playNote(Math.floor(Math.random() * 10) + 1, 'sine', 0.03, 0.03);
+          }
+
+          // Ball-ball collision
+          const other = balls.find(o => o !== b && !o.escaped);
+          if (other) {
+            const bx = other.x - b.x, by = other.y - b.y;
+            const bd = Math.sqrt(bx * bx + by * by);
+            if (bd < b.r + other.r) {
+              const bnx = bx / bd, bny = by / bd;
+              const relV = (b.vx - other.vx) * bnx + (b.vy - other.vy) * bny;
+              b.vx -= relV * bnx;
+              b.vy -= relV * bny;
+              other.vx += relV * bnx;
+              other.vy += relV * bny;
+              playNote(5, 'square', 0.03, 0.04);
+            }
+          }
+
+          // Speed limit
+          const spd = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+          if (spd > 6) { b.vx = (b.vx / spd) * 6; b.vy = (b.vy / spd) * 6; }
+          if (spd < 2) { b.vx *= 1.1; b.vy *= 1.1; }
+        }
+
+        // Slowly rotate hole for extra chaos
+        this._holeAngle += 0.003;
+
+        await sleep(16);
+      }
+
+      await sleep(3000);
+    },
+  },
+
+  battleroyale: {
+    type: 'simulation',
+    title: 'Battle Royale',
+    badge: '100 Dots',
+    desc: '100 colored dots. Shrinking circle. Collision = elimination. Last dot standing.',
+    tiktokDesc: '100 dots entrent. 1 seul survit. Le cercle retrecit. Qui va gagner ? #battleroyale #simulation #100dots',
+    tiktokTags: '#battleroyale #simulation #satisfying #viral #100 #elimination #laststanding',
+    init: function () {
+      const cx = WIDTH / 2, cy = 650;
+      this._arena = { cx, cy, r: 380, maxR: 380 };
+      this._dots = [];
+      const colors = ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#F97316'];
+      for (let i = 0; i < 100; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const d = Math.random() * 300;
+        this._dots.push({
+          x: cx + Math.cos(a) * d,
+          y: cy + Math.sin(a) * d,
+          vx: (Math.random() - 0.5) * 3,
+          vy: (Math.random() - 0.5) * 3,
+          r: 8,
+          color: colors[i % colors.length],
+          alive: true,
+          id: i + 1,
+        });
+      }
+      this._alive = 100;
+      this._step = 0;
+      this._winner = null;
+    },
+    draw: function (c) {
+      const SAFE_TOP = 130;
+      c.fillStyle = Theme.primaryText;
+      c.textAlign = 'center';
+      c.font = 'bold 60px Inter, sans-serif';
+      c.fillText('Battle Royale', WIDTH / 2, SAFE_TOP);
+      c.font = 'bold 32px Inter, sans-serif';
+      c.fillStyle = Theme.barActive;
+      c.fillText(`${this._alive || 0} alive`, WIDTH / 2, SAFE_TOP + 48);
+
+      if (!this._arena) return;
+      const { cx, cy, r } = this._arena;
+
+      // Arena
+      c.strokeStyle = Theme.barActive;
+      c.lineWidth = 3;
+      c.beginPath();
+      c.arc(cx, cy, r, 0, Math.PI * 2);
+      c.stroke();
+
+      // Danger zone fill
+      c.fillStyle = 'rgba(239, 68, 68, 0.05)';
+      c.beginPath();
+      c.arc(cx, cy, r, 0, Math.PI * 2);
+      c.fill();
+
+      // Dots
+      if (this._dots) {
+        this._dots.forEach(d => {
+          if (!d.alive) return;
+          c.fillStyle = d.color;
+          c.beginPath();
+          c.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+          c.fill();
+        });
+      }
+
+      // Kill feed (bottom)
+      const feedY = cy + this._arena.maxR + 60;
+      c.fillStyle = Theme.codeBg;
+      if (c.roundRect) { c.beginPath(); c.roundRect(60, feedY, WIDTH - 120, 200, 16); c.fill(); }
+
+      c.fillStyle = Theme.primaryText;
+      c.textAlign = 'center';
+      c.font = 'bold 28px Inter, sans-serif';
+      c.fillText(`Zone: ${Math.floor(r)}px`, WIDTH / 2, feedY + 40);
+
+      // Progress bar
+      const barX = 100, barY = feedY + 60, barW = WIDTH - 200, barH = 20;
+      c.fillStyle = Theme.codeBorder;
+      c.fillRect(barX, barY, barW, barH);
+      c.fillStyle = Theme.barActive;
+      c.fillRect(barX, barY, barW * (this._alive / 100), barH);
+
+      c.fillStyle = Theme.secondaryText;
+      c.font = '24px Inter, sans-serif';
+      c.fillText(`${this._alive}/100 remaining`, WIDTH / 2, feedY + 120);
+
+      // Step
+      c.fillText(`Step ${this._step}`, WIDTH / 2, feedY + 160);
+
+      // Winner
+      if (this._winner) {
+        c.fillStyle = 'rgba(0,0,0,0.7)';
+        c.fillRect(0, HEIGHT / 2 - 80, WIDTH, 160);
+        c.fillStyle = this._winner.color;
+        c.textAlign = 'center';
+        c.font = 'bold 60px Inter, sans-serif';
+        c.fillText(`Dot #${this._winner.id} wins!`, WIDTH / 2, HEIGHT / 2 + 5);
+        c.fillStyle = '#FFD700';
+        c.font = 'bold 36px Inter, sans-serif';
+        c.fillText('VICTORY ROYALE', WIDTH / 2, HEIGHT / 2 + 55);
+      }
+    },
+    run: async function (runId) {
+      this.init();
+      initAudio();
+      const dots = this._dots;
+      const arena = this._arena;
+
+      while (activeRunId === runId && this._alive > 1) {
+        this._step++;
+
+        // Shrink zone
+        if (arena.r > 50) arena.r -= 0.15;
+
+        for (const d of dots) {
+          if (!d.alive) continue;
+          d.x += d.vx;
+          d.y += d.vy;
+          d.vx += (Math.random() - 0.5) * 0.3;
+          d.vy += (Math.random() - 0.5) * 0.3;
+
+          // Speed limit
+          const spd = Math.sqrt(d.vx * d.vx + d.vy * d.vy);
+          if (spd > 4) { d.vx = (d.vx / spd) * 4; d.vy = (d.vy / spd) * 4; }
+
+          // Arena boundary
+          const dx = d.x - arena.cx, dy = d.y - arena.cy;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist + d.r > arena.r) {
+            // Push inside or kill if zone is too small
+            if (arena.r < 60) {
+              d.alive = false;
+              this._alive--;
+              playNoise(0.05, 0.1);
+              continue;
+            }
+            const nx = dx / dist, ny = dy / dist;
+            d.x = arena.cx + nx * (arena.r - d.r - 1);
+            d.y = arena.cy + ny * (arena.r - d.r - 1);
+            d.vx -= nx * 2;
+            d.vy -= ny * 2;
+          }
+
+          // Collision with others
+          for (const other of dots) {
+            if (other === d || !other.alive) continue;
+            const cx = other.x - d.x, cy = other.y - d.y;
+            const cd = Math.sqrt(cx * cx + cy * cy);
+            if (cd < d.r + other.r) {
+              // Random elimination
+              if (Math.random() > 0.5) {
+                other.alive = false;
+              } else {
+                d.alive = false;
+              }
+              this._alive--;
+              playNoise(0.05, 0.08);
+              break;
+            }
+          }
+        }
+
+        if (this._step % 30 === 0 && this._alive > 1) {
+          playNote(Math.max(1, this._alive % 15), 'sine', 0.05, 0.02);
+        }
+
+        await sleep(16);
+      }
+
+      // Winner
+      const winner = dots.find(d => d.alive);
+      if (winner) this._winner = winner;
+
+      playNote(8, 'triangle', 0.5, 0.15);
+      await sleep(300);
+      playNote(12, 'triangle', 0.5, 0.15);
+      await sleep(300);
+      playNote(15, 'triangle', 0.8, 0.15);
+      await sleep(3000);
+    },
+  },
+
+  gameoflife: {
+    type: 'simulation',
+    title: 'Game of Life',
+    badge: 'Cellular',
+    desc: 'Conway\'s Game of Life. Simple rules create infinite complexity from nothing.',
+    tiktokDesc: '4 regles simples. 0 intelligence. Et pourtant ca cree de la VIE. Conway\'s Game of Life #gameoflife #conway #emergence',
+    tiktokTags: '#gameoflife #conway #simulation #satisfying #cellular #emergence #science #viral',
+    init: function () {
+      this._cols = 80;
+      this._rows = 100;
+      this._grid = new Uint8Array(this._cols * this._rows);
+      // Random seed — ~30% alive
+      for (let i = 0; i < this._grid.length; i++) {
+        this._grid[i] = Math.random() < 0.3 ? 1 : 0;
+      }
+      this._gen = 0;
+      this._pop = 0;
+      this._maxPop = 0;
+    },
+    draw: function (c) {
+      const SAFE_TOP = 130;
+      c.fillStyle = Theme.primaryText;
+      c.textAlign = 'center';
+      c.font = 'bold 60px Inter, sans-serif';
+      c.fillText('Game of Life', WIDTH / 2, SAFE_TOP);
+      c.font = 'bold 28px Inter, sans-serif';
+      c.fillStyle = Theme.secondaryText;
+      c.fillText('Simple rules. Infinite complexity.', WIDTH / 2, SAFE_TOP + 42);
+
+      if (!this._grid) return;
+      const cols = this._cols, rows = this._rows;
+      const SAFE_X = 40;
+      const gridY = SAFE_TOP + 65;
+      const gridW = WIDTH - SAFE_X * 2;
+      const gridH = 1050;
+      const cellW = gridW / cols;
+      const cellH = gridH / rows;
+
+      // Grid bg
+      c.fillStyle = Theme.codeBg;
+      c.fillRect(SAFE_X, gridY, gridW, gridH);
+
+      // Alive cells
+      let pop = 0;
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          if (this._grid[y * cols + x]) {
+            pop++;
+            c.fillStyle = Theme.barValid;
+            c.fillRect(SAFE_X + x * cellW, gridY + y * cellH, cellW - 0.5, cellH - 0.5);
+          }
+        }
+      }
+      this._pop = pop;
+      if (pop > this._maxPop) this._maxPop = pop;
+
+      // Border
+      c.strokeStyle = Theme.codeBorder;
+      c.lineWidth = 2;
+      c.strokeRect(SAFE_X, gridY, gridW, gridH);
+
+      // Stats panel
+      const panelY = gridY + gridH + 20;
+      c.fillStyle = Theme.codeBg;
+      if (c.roundRect) { c.beginPath(); c.roundRect(60, panelY, WIDTH - 120, 120, 12); c.fill(); }
+
+      c.fillStyle = Theme.primaryText;
+      c.textAlign = 'center';
+      c.font = 'bold 30px Inter, sans-serif';
+      c.fillText(`Generation ${this._gen}`, WIDTH / 2, panelY + 40);
+      c.font = '26px Inter, sans-serif';
+      c.fillStyle = Theme.barValid;
+      c.fillText(`Population: ${pop}`, WIDTH / 3, panelY + 80);
+      c.fillStyle = Theme.secondaryText;
+      c.fillText(`Peak: ${this._maxPop}`, (WIDTH / 3) * 2, panelY + 80);
+    },
+    run: async function (runId) {
+      this.init();
+      initAudio();
+      const cols = this._cols, rows = this._rows;
+
+      for (let gen = 0; gen < 500; gen++) {
+        if (activeRunId !== runId) return;
+        this._gen = gen;
+
+        // Compute next generation
+        const next = new Uint8Array(cols * rows);
+        for (let y = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++) {
+            let neighbors = 0;
+            for (let dy = -1; dy <= 1; dy++) {
+              for (let dx = -1; dx <= 1; dx++) {
+                if (dx === 0 && dy === 0) continue;
+                const nx = (x + dx + cols) % cols;
+                const ny = (y + dy + rows) % rows;
+                neighbors += this._grid[ny * cols + nx];
+              }
+            }
+            const alive = this._grid[y * cols + x];
+            if (alive && (neighbors === 2 || neighbors === 3)) next[y * cols + x] = 1;
+            else if (!alive && neighbors === 3) next[y * cols + x] = 1;
+          }
+        }
+        this._grid = next;
+
+        if (gen % 10 === 0) {
+          playNote((this._pop % 12) + 1, 'sine', 0.08, 0.02);
+        }
+
+        await sleep(50);
+      }
+
+      playNote(8, 'triangle', 0.5, 0.1);
+      await sleep(300);
+      playNote(12, 'triangle', 0.5, 0.1);
+      await sleep(2000);
+    },
+  },
 };
 
 // --- NAVIGATION ---

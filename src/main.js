@@ -2867,7 +2867,7 @@ const ALGORITHMS = {
     init: function () {
       // Rectangular pitch
       const px = 80, py = 240, pw = WIDTH - 160, ph = 700;
-      const goalW = 20, goalH = 140;
+      const goalW = 50, goalH = 220; // bigger goals with proper nets
       this._pitch = { x: px, y: py, w: pw, h: ph };
       this._goalH = goalH;
       this._goalW = goalW;
@@ -2898,7 +2898,8 @@ const ALGORITHMS = {
       this._kickoff = true;
       this._kickoffTimer = 0;
       this._goalLog = [];
-      this._lastGoalTime = 0; // timer for foul detection
+      this._stuckTimer = 0;
+      this._lastBallZone = { x: 0, y: 0 };
       this._foulFlash = 0;
     },
     draw: function (c) {
@@ -2945,26 +2946,27 @@ const ALGORITHMS = {
       c.fillStyle = 'rgba(255,255,255,0.5)';
       c.beginPath(); c.arc(midX, midY, 4, 0, Math.PI * 2); c.fill();
 
-      // --- GOALS ---
+      // --- GOALS (white cages with net) ---
       const gH = this._goalH, gW = this._goalW;
       const gTop = midY - gH / 2;
-      // Left goal (Bosnia defends)
-      c.fillStyle = 'rgba(255,255,255,0.15)';
+      // Left goal
+      c.fillStyle = 'rgba(255,255,255,0.08)';
       c.fillRect(p.x - gW, gTop, gW, gH);
-      c.strokeStyle = t[0].color; c.lineWidth = 3;
-      c.strokeRect(p.x - gW, gTop, gW, gH);
-      // Net lines
-      c.strokeStyle = 'rgba(255,255,255,0.2)'; c.lineWidth = 1;
-      for (let ny = gTop; ny < gTop + gH; ny += 15) { c.beginPath(); c.moveTo(p.x - gW, ny); c.lineTo(p.x, ny); c.stroke(); }
-      for (let nx = p.x - gW; nx < p.x; nx += 10) { c.beginPath(); c.moveTo(nx, gTop); c.lineTo(nx, gTop + gH); c.stroke(); }
-      // Right goal (Italy defends)
-      c.fillStyle = 'rgba(255,255,255,0.15)';
+      c.strokeStyle = '#fff'; c.lineWidth = 4;
+      // Goal frame: 3 sides (no right side = opening)
+      c.beginPath(); c.moveTo(p.x, gTop); c.lineTo(p.x - gW, gTop); c.lineTo(p.x - gW, gTop + gH); c.lineTo(p.x, gTop + gH); c.stroke();
+      // Net pattern
+      c.strokeStyle = 'rgba(255,255,255,0.25)'; c.lineWidth = 1;
+      for (let ny = gTop + 12; ny < gTop + gH; ny += 12) { c.beginPath(); c.moveTo(p.x - gW, ny); c.lineTo(p.x, ny); c.stroke(); }
+      for (let nx = p.x - gW + 8; nx < p.x; nx += 8) { c.beginPath(); c.moveTo(nx, gTop); c.lineTo(nx, gTop + gH); c.stroke(); }
+      // Right goal
+      c.fillStyle = 'rgba(255,255,255,0.08)';
       c.fillRect(p.x + p.w, gTop, gW, gH);
-      c.strokeStyle = t[1].color; c.lineWidth = 3;
-      c.strokeRect(p.x + p.w, gTop, gW, gH);
-      c.strokeStyle = 'rgba(255,255,255,0.2)'; c.lineWidth = 1;
-      for (let ny = gTop; ny < gTop + gH; ny += 15) { c.beginPath(); c.moveTo(p.x + p.w, ny); c.lineTo(p.x + p.w + gW, ny); c.stroke(); }
-      for (let nx = p.x + p.w; nx < p.x + p.w + gW; nx += 10) { c.beginPath(); c.moveTo(nx, gTop); c.lineTo(nx, gTop + gH); c.stroke(); }
+      c.strokeStyle = '#fff'; c.lineWidth = 4;
+      c.beginPath(); c.moveTo(p.x + p.w, gTop); c.lineTo(p.x + p.w + gW, gTop); c.lineTo(p.x + p.w + gW, gTop + gH); c.lineTo(p.x + p.w, gTop + gH); c.stroke();
+      c.strokeStyle = 'rgba(255,255,255,0.25)'; c.lineWidth = 1;
+      for (let ny = gTop + 12; ny < gTop + gH; ny += 12) { c.beginPath(); c.moveTo(p.x + p.w, ny); c.lineTo(p.x + p.w + gW, ny); c.stroke(); }
+      for (let nx = p.x + p.w + 8; nx < p.x + p.w + gW; nx += 8) { c.beginPath(); c.moveTo(nx, gTop); c.lineTo(nx, gTop + gH); c.stroke(); }
 
       // --- PARTICLES ---
       this._particles.forEach(pt => {
@@ -3156,24 +3158,44 @@ const ALGORITHMS = {
           let tx, ty;
 
           if (pl.role === 'gk') {
+            // GK: stay on goal line, track ball Y
             tx = ownGoalX + (pl.team === 0 ? 35 : -35);
             ty = midY + (fb.y - midY) * 0.7;
             ty = Math.max(gTop + 20, Math.min(gBot - 20, ty));
+            // Rush if ball is dangerously close
             if (Math.abs(fb.x - ownGoalX) < 150) { tx = fb.x; ty = fb.y; }
           } else {
-            // Field: go behind ball relative to opponent goal
+            // Field player: ALWAYS chase the ball aggressively
+            // Get behind ball relative to opponent's goal
             const gdx = oppGoalX - fb.x, gdy = midY - fb.y;
             const gd = Math.sqrt(gdx * gdx + gdy * gdy) || 1;
-            tx = fb.x - (gdx / gd) * (fb.r + pl.r + 12);
-            ty = fb.y - (gdy / gd) * (fb.r + pl.r + 12);
+            tx = fb.x - (gdx / gd) * (fb.r + pl.r + 8);
+            ty = fb.y - (gdy / gd) * (fb.r + pl.r + 8);
+
+            // If close enough to ball, rush directly at it
+            const distToBall = Math.sqrt((pl.x - fb.x) ** 2 + (pl.y - fb.y) ** 2);
+            if (distToBall < 80) {
+              tx = fb.x + (oppGoalX - fb.x) * 0.1;
+              ty = fb.y;
+            }
+
+            // Anti-corner: if player is stuck near a corner, push toward center
+            const nearLeft = pl.x < pi.x + 40;
+            const nearRight = pl.x > pi.x + pi.w - 40;
+            const nearTop = pl.y < pi.y + 40;
+            const nearBot = pl.y > pi.y + pi.h - 40;
+            if ((nearLeft || nearRight) && (nearTop || nearBot)) {
+              tx = midX + (Math.random() - 0.5) * 100;
+              ty = midY + (Math.random() - 0.5) * 100;
+            }
           }
 
           const dx = tx - pl.x, dy = ty - pl.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
-          const acc = pl.role === 'gk' ? 0.45 : 0.4;
+          const acc = pl.role === 'gk' ? 0.5 : 0.5;
           pl.vx += (dx / d) * acc; pl.vy += (dy / d) * acc;
-          pl.vx += (Math.random() - 0.5) * 0.1; pl.vy += (Math.random() - 0.5) * 0.1;
-          pl.vx *= 0.95; pl.vy *= 0.95;
-          const ms = pl.role === 'gk' ? 5.5 : 6.5;
+          pl.vx += (Math.random() - 0.5) * 0.15; pl.vy += (Math.random() - 0.5) * 0.15;
+          pl.vx *= 0.94; pl.vy *= 0.94;
+          const ms = pl.role === 'gk' ? 5.5 : 7;
           const sp = Math.sqrt(pl.vx * pl.vx + pl.vy * pl.vy);
           if (sp > ms) { pl.vx = (pl.vx / sp) * ms; pl.vy = (pl.vy / sp) * ms; }
           pl.x += pl.vx; pl.y += pl.vy;
@@ -3193,18 +3215,31 @@ const ALGORITHMS = {
         ref.x += ref.vx; ref.y += ref.vy;
         bounceRect(ref);
 
-        // Foul detection: no goal for 25 seconds → whistle + free kick
-        this._lastGoalTime += 1 / 60;
-        if (this._lastGoalTime >= 25 && !this._kickoff) {
-          // Determine which half the ball is in → free kick to the team attacking that side
-          const attackingTeam = fb.x < midX ? 1 : 0; // ball in left half = Italy attacks, etc.
+        // Stuck detection: if ball stays in same ~80px zone for 5 seconds → foul
+        const zoneX = Math.floor(fb.x / 80);
+        const zoneY = Math.floor(fb.y / 80);
+        if (zoneX === this._lastBallZone.x && zoneY === this._lastBallZone.y) {
+          this._stuckTimer += 1 / 60;
+        } else {
+          this._stuckTimer = 0;
+          this._lastBallZone = { x: zoneX, y: zoneY };
+        }
+        if (this._stuckTimer >= 5) {
           this._foulFlash = 1.5;
-          playNoise(0.15, 0.15); // whistle
+          playNoise(0.15, 0.15);
           playNote(15, 'square', 0.2, 0.1);
-          // Place ball at the spot, give to attacking team
-          fb.vx = attackingTeam === 0 ? 4 : -4;
-          fb.vy = (Math.random() - 0.5) * 3;
-          this._lastGoalTime = 0;
+          // Kick ball toward center with force
+          const toCenterX = midX - fb.x, toCenterY = midY - fb.y;
+          const tcD = Math.sqrt(toCenterX * toCenterX + toCenterY * toCenterY) || 1;
+          fb.vx = (toCenterX / tcD) * 6 + (Math.random() - 0.5) * 3;
+          fb.vy = (toCenterY / tcD) * 6 + (Math.random() - 0.5) * 3;
+          // Push all players away from ball
+          players.forEach(pl => {
+            const dx = pl.x - fb.x, dy = pl.y - fb.y;
+            const d = Math.sqrt(dx * dx + dy * dy) || 1;
+            pl.vx += (dx / d) * 4; pl.vy += (dy / d) * 4;
+          });
+          this._stuckTimer = 0;
         }
 
         fb.vx *= 0.997; fb.vy *= 0.997;
@@ -3244,7 +3279,7 @@ const ALGORITHMS = {
           const el = 90 - this._timerSecs;
           this._goalLog.push({ team: scored, timeStr: `${Math.floor(el / 60)}'${Math.floor(el % 60).toString().padStart(2, '0')}` });
           this._goalFlash = 1.0;
-          this._lastGoalTime = 0; // reset foul timer
+          this._stuckTimer = 0; // reset foul timer
           playNote(15, 'triangle', 0.5, 0.2);
           await sleep(1500);
           resetPositions();

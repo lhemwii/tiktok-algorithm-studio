@@ -3846,6 +3846,103 @@ window.addEventListener('hashchange', () => {
   }
 });
 
+// --- RENDER PANEL ---
+const renderBtn = document.getElementById('renderBtn');
+const renderHome = document.getElementById('renderHome');
+const renderAway = document.getElementById('renderAway');
+const renderSeed = document.getElementById('renderSeed');
+const renderStatus = document.getElementById('render-status');
+const renderProgressBar = document.getElementById('render-progress-bar');
+const renderStatusText = document.getElementById('render-status-text');
+const renderDownload = document.getElementById('render-download');
+
+// Populate team selectors from known teams
+const TEAM_LIST = [
+  'MEX','RSA','KOR','CZE','CAN','BIH','QAT','SUI','BRA','MAR','HAI','SCO',
+  'USA','PAR','AUS','TUR','GER','CUW','CIV','ECU','NED','JPN','SWE','TUN',
+  'BEL','EGY','IRN','NZL','ESP','CPV','KSA','URU','FRA','SEN','IRQ','NOR',
+  'ARG','ALG','AUT','JOR','POR','COD','UZB','COL','ENG','CRO','GHA','PAN',
+];
+
+if (renderHome && renderAway) {
+  TEAM_LIST.forEach(code => {
+    renderHome.appendChild(new Option(code, code));
+    renderAway.appendChild(new Option(code, code));
+  });
+  renderHome.value = 'FRA';
+  renderAway.value = 'SEN';
+}
+
+if (renderBtn) {
+  renderBtn.addEventListener('click', async () => {
+    const home = renderHome.value;
+    const away = renderAway.value;
+    const seed = parseInt(renderSeed.value) || 42;
+
+    renderBtn.disabled = true;
+    renderBtn.textContent = 'Rendering...';
+    renderStatus.style.display = 'block';
+    renderDownload.style.display = 'none';
+    renderProgressBar.style.width = '0%';
+    renderStatusText.textContent = 'Bundling Remotion...';
+
+    try {
+      // Start render job
+      const resp = await fetch('http://localhost:3001/api/render', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          compositionId: 'WorldCup',
+          props: {
+            homeTeam: home,
+            awayTeam: away,
+            seed,
+            matchInfo: `${home} vs ${away} | Seed ${seed}`,
+          },
+        }),
+      });
+      const { jobId } = await resp.json();
+
+      // Poll progress
+      const poll = setInterval(async () => {
+        try {
+          const statusResp = await fetch(`http://localhost:3001/api/render/${jobId}`);
+          const job = await statusResp.json();
+
+          if (job.status === 'bundling') {
+            renderStatusText.textContent = 'Bundling Remotion (first time only)...';
+          } else if (job.status === 'composing') {
+            renderStatusText.textContent = 'Preparing composition...';
+          } else if (job.status === 'rendering') {
+            renderProgressBar.style.width = `${job.progress}%`;
+            renderStatusText.textContent = `Rendering... ${job.progress}%`;
+          } else if (job.status === 'done') {
+            clearInterval(poll);
+            renderProgressBar.style.width = '100%';
+            renderStatusText.textContent = 'Done!';
+            renderDownload.href = `http://localhost:3001${job.file}`;
+            renderDownload.download = `${home}_vs_${away}.mp4`;
+            renderDownload.style.display = 'block';
+            renderBtn.disabled = false;
+            renderBtn.textContent = 'Render 4K MP4';
+          } else if (job.status === 'error') {
+            clearInterval(poll);
+            renderStatusText.textContent = `Error: ${job.error}`;
+            renderBtn.disabled = false;
+            renderBtn.textContent = 'Render 4K MP4';
+          }
+        } catch (e) {
+          // Server not reachable, keep polling
+        }
+      }, 1000);
+    } catch (e) {
+      renderStatusText.textContent = 'Server not running. Launch with: npm run dev';
+      renderBtn.disabled = false;
+      renderBtn.textContent = 'Render 4K MP4';
+    }
+  });
+}
+
 // --- INIT ---
 renderNav();
 const initialAlgo = window.location.hash.slice(1);

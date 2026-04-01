@@ -1,5 +1,5 @@
-import { useCurrentFrame, useVideoConfig } from 'remotion';
-import { useEffect, useRef } from 'react';
+import { useCurrentFrame, useVideoConfig, Sequence, Audio } from 'remotion';
+import { useEffect, useRef, useMemo } from 'react';
 import { TEAMS as ALL_TEAMS } from './teams';
 
 // --- CONSTANTS ---

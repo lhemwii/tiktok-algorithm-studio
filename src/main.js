@@ -584,7 +584,7 @@ const ALGORITHMS = {
       '}',
     ],
     run: async function (runId) {
-      highlightLine(1); await sleep(1200);
+      highlightLine(1); await sleep(2000);
       if (activeRunId !== runId) return;
       highlightLine(2);
       for (let i = 0; i < arr.length - 1; i++) {
@@ -593,33 +593,37 @@ const ALGORITHMS = {
           arr[j].state = 'active';
           arr[j + 1].state = 'active';
           playNote(arr[j].value, 'sine', 0.1, 0.05);
-          await sleep(250);
+          await sleep(350);
           if (arr[j].value > arr[j + 1].value) {
             const temp = arr[j]; arr[j] = arr[j + 1]; arr[j + 1] = temp;
             playNote(arr[j + 1].value, 'square', 0.1, 0.05);
-            await sleep(400);
+            await sleep(500);
           } else {
-            await sleep(150);
+            await sleep(200);
           }
           arr[j].state = 'default';
           arr[j + 1].state = 'default';
         }
       }
-      await sleep(1000);
-      highlightLine(3); await sleep(600);
-      for (let i = 0; i < arr.length; i++) {
-        if (activeRunId !== runId) return;
-        arr[i].state = 'valid';
-        playNote(arr[i].value, 'triangle', 0.15, 0.1);
-        if (i < arr.length - 1) highlightLine(4);
-        await sleep(250);
-        setTimeout(() => { if (arr[i]) arr[i].state = 'default'; }, 300);
+      await sleep(1500);
+      highlightLine(3); await sleep(1000);
+      // Double verification pass for anxiety
+      for (let pass = 0; pass < 2; pass++) {
+        for (let i = 0; i < arr.length; i++) {
+          if (activeRunId !== runId) return;
+          arr[i].state = 'valid';
+          playNote(arr[i].value, 'triangle', 0.15, 0.1);
+          if (i < arr.length - 1) highlightLine(4);
+          await sleep(350);
+          setTimeout(() => { if (arr[i]) arr[i].state = 'default'; }, 400);
+        }
+        if (pass === 0) { highlightLine(3); await sleep(800); }
       }
-      highlightLine(5); await sleep(600);
+      highlightLine(5); await sleep(1000);
       if (activeRunId !== runId) return;
       arr.forEach(item => { item.state = 'valid'; });
       playNote(1, 'triangle', 0.4, 0.1); playNote(5, 'triangle', 0.4, 0.1); playNote(8, 'triangle', 0.4, 0.1);
-      await sleep(1000); highlightLine(null);
+      await sleep(2000); highlightLine(null);
     },
   },
 
@@ -640,32 +644,32 @@ const ALGORITHMS = {
       '}',
     ],
     run: async function (runId) {
-      highlightLine(1); await sleep(1200);
+      highlightLine(1); await sleep(2500);
       highlightLine(2);
       let maxItem = arr[0];
       maxItem.state = 'valid';
       playNote(maxItem.value, 'triangle', 0.2, 0.1);
-      await sleep(1200);
+      await sleep(2000);
       for (let i = 1; i < arr.length; i++) {
         if (activeRunId !== runId) return;
-        highlightLine(3); await sleep(400);
-        arr[i].state = 'active'; await sleep(500);
+        highlightLine(3); await sleep(800);
+        arr[i].state = 'active'; await sleep(1000);
         if (arr[i].value >= maxItem.value) {
           highlightLine(4);
           maxItem.state = 'default'; maxItem = arr[i]; maxItem.state = 'valid';
-          playNote(maxItem.value, 'triangle', 0.15, 0.1); await sleep(600);
+          playNote(maxItem.value, 'triangle', 0.15, 0.1); await sleep(1200);
         } else {
           highlightLine(5); playNoise(0.2, 0.4);
-          arr[i].eliminated = true; await sleep(800);
+          arr[i].eliminated = true; await sleep(1500);
         }
         if (!arr[i].eliminated) arr[i].state = 'default';
       }
-      highlightLine(6); await sleep(600);
+      highlightLine(6); await sleep(1500);
       highlightLine(7);
       if (activeRunId !== runId) return;
       arr.forEach(item => { if (!item.eliminated) item.state = 'valid'; });
       playNote(1, 'triangle', 0.4, 0.1); playNote(5, 'triangle', 0.4, 0.1); playNote(8, 'triangle', 0.4, 0.1);
-      await sleep(1000); highlightLine(null);
+      await sleep(2000); highlightLine(null);
     },
   },
 
@@ -689,25 +693,37 @@ const ALGORITHMS = {
       '}',
     ],
     run: async function (runId) {
-      highlightLine(1); await sleep(1200);
-      highlightLine(2); await sleep(1200);
+      highlightLine(1); await sleep(3000);
+      highlightLine(2); await sleep(3000);
       let toDestroy = Math.floor(arr.length / 2);
+      // Dramatic build-up: scan all elements first
+      for (let i = 0; i < arr.length; i++) {
+        if (activeRunId !== runId) return;
+        arr[i].state = 'active';
+        playNote(arr[i].value, 'sine', 0.05, 0.03);
+        await sleep(300);
+        arr[i].state = 'default';
+      }
+      await sleep(2000);
+      // The snap
       while (toDestroy > 0) {
         if (activeRunId !== runId) return;
-        highlightLine(3); await sleep(250);
+        highlightLine(3); await sleep(500);
         highlightLine(4);
         const idx = Math.floor(Math.random() * arr.length);
-        highlightLine(5); await sleep(250);
+        highlightLine(5); await sleep(500);
         if (!arr[idx].eliminated) {
           highlightLine(6); playNoise(0.8, 0.5);
-          arr[idx].eliminated = true; await sleep(1000);
+          arr[idx].eliminated = true; await sleep(2000);
           highlightLine(7); toDestroy--;
         }
       }
       highlightLine(10);
       if (activeRunId !== runId) return;
+      // Moment of silence
+      await sleep(3000);
       playNote(1, 'sine', 1.0, 0.1); playNote(3, 'sine', 1.0, 0.1); playNote(5, 'sine', 1.0, 0.1);
-      await sleep(1500); highlightLine(null);
+      await sleep(3000); highlightLine(null);
     },
   },
 
@@ -726,15 +742,21 @@ const ALGORITHMS = {
       '}',
     ],
     run: async function (runId) {
-      highlightLine(1); await sleep(800);
+      highlightLine(1); await sleep(2000);
       let attempts = 0;
       let sorted = false;
-      while (!sorted && attempts < 50) {
+      while (!sorted && attempts < 120) {
         if (activeRunId !== runId) return;
-        highlightLine(2); await sleep(200);
+        highlightLine(2); await sleep(300);
+        // Visual check pass
         let isSorted = true;
         for (let i = 0; i < arr.length - 1; i++) {
-          if (arr[i].value > arr[i + 1].value) { isSorted = false; break; }
+          arr[i].state = 'active';
+          arr[i + 1].state = 'active';
+          await sleep(30);
+          if (arr[i].value > arr[i + 1].value) { isSorted = false; }
+          arr[i].state = 'default';
+          arr[i + 1].state = 'default';
         }
         if (isSorted) { sorted = true; break; }
         else {
@@ -743,7 +765,7 @@ const ALGORITHMS = {
             const j = Math.floor(Math.random() * (i + 1));
             const temp = arr[i]; arr[i] = arr[j]; arr[j] = temp;
           }
-          await sleep(200);
+          await sleep(300);
         }
         attempts++;
       }
@@ -754,7 +776,7 @@ const ALGORITHMS = {
       } else {
         arr.forEach(item => { item.state = 'gray'; });
       }
-      await sleep(1000); highlightLine(null);
+      await sleep(2000); highlightLine(null);
     },
   },
 
@@ -790,7 +812,7 @@ const ALGORITHMS = {
             itemsAdded++;
             if (itemsAdded === arr.length) setTimeout(() => resolve(), 500);
             else resolve();
-          }, item.value * 200);
+          }, item.value * 600);
         });
       });
       await Promise.all(promises);
@@ -819,24 +841,24 @@ const ALGORITHMS = {
     run: async function (runId) {
       highlightLine(1); await sleep(1200);
       // Show "checking" animation several times
-      for (let round = 0; round < 8; round++) {
+      for (let round = 0; round < 16; round++) {
         if (activeRunId !== runId) return;
-        highlightLine(2); await sleep(600);
+        highlightLine(2); await sleep(1000);
 
         // Check pass — highlight each bar
         for (let i = 0; i < arr.length; i++) {
           if (activeRunId !== runId) return;
           arr[i].state = 'active';
           playNote(arr[i].value, 'sine', 0.05, 0.03);
-          await sleep(100);
+          await sleep(200);
           arr[i].state = 'default';
         }
 
         // Not sorted → wait for miracle
-        highlightLine(3); await sleep(800);
+        highlightLine(3); await sleep(1500);
 
         // On last round: "miracle" happens — sort it
-        if (round === 7) {
+        if (round === 15) {
           playNoise(0.3, 0.3);
           await sleep(500);
           arr.sort((a, b) => a.value - b.value);
@@ -865,31 +887,33 @@ const ALGORITHMS = {
       '}',
     ],
     run: async function (runId) {
-      highlightLine(1); await sleep(1500);
+      highlightLine(1); await sleep(3000);
       if (activeRunId !== runId) return;
 
-      highlightLine(2); await sleep(2000);
+      highlightLine(2); await sleep(4000);
 
-      // Dramatic pause — "examine" each element
-      for (let i = 0; i < arr.length; i++) {
-        if (activeRunId !== runId) return;
-        arr[i].state = 'active';
-        playNote(arr[i].value, 'sine', 0.2, 0.05);
-        await sleep(300);
-        arr[i].state = 'valid';
-        playNote(arr[i].value, 'triangle', 0.1, 0.08);
-        await sleep(200);
+      // Examine each element — 3 passes with increasing "enlightenment"
+      for (let pass = 0; pass < 3; pass++) {
+        for (let i = 0; i < arr.length; i++) {
+          if (activeRunId !== runId) return;
+          arr[i].state = 'active';
+          playNote(arr[i].value, 'sine', 0.2, 0.05);
+          await sleep(500);
+          arr[i].state = pass === 2 ? 'valid' : 'default';
+          if (pass === 2) playNote(arr[i].value, 'triangle', 0.1, 0.08);
+          await sleep(300);
+        }
+        if (pass < 2) { highlightLine(3); await sleep(2000); highlightLine(2); await sleep(1500); }
       }
 
-      highlightLine(3); await sleep(1500);
-      highlightLine(4); await sleep(1000);
+      highlightLine(3); await sleep(3000);
+      highlightLine(4); await sleep(2000);
 
-      // All "valid" — it was always perfect
       arr.forEach(item => { item.state = 'valid'; });
       playNote(1, 'triangle', 0.6, 0.1); playNote(5, 'triangle', 0.6, 0.1); playNote(8, 'triangle', 0.6, 0.1);
-      await sleep(2000);
+      await sleep(3000);
       highlightLine(5);
-      await sleep(1000); highlightLine(null);
+      await sleep(2000); highlightLine(null);
     },
   },
 
@@ -909,10 +933,10 @@ const ALGORITHMS = {
       '}',
     ],
     run: async function (runId) {
-      highlightLine(1); await sleep(1200);
+      highlightLine(1); await sleep(3000);
       if (activeRunId !== runId) return;
 
-      highlightLine(2); await sleep(800);
+      highlightLine(2); await sleep(2000);
 
       // Check — is it sorted?
       let sorted = true;
@@ -921,38 +945,48 @@ const ALGORITHMS = {
         arr[i].state = 'active';
         arr[i + 1].state = 'active';
         playNote(arr[i].value, 'sine', 0.08, 0.05);
-        await sleep(200);
+        await sleep(500);
         if (arr[i].value > arr[i + 1].value) sorted = false;
         arr[i].state = 'default';
         arr[i + 1].state = 'default';
       }
+      await sleep(2000);
 
       if (!sorted) {
-        highlightLine(3); await sleep(500);
+        highlightLine(3); await sleep(2000);
 
-        // Destroy universe animation — flash + glitch
-        for (let flash = 0; flash < 6; flash++) {
-          if (activeRunId !== runId) return;
-          // Random states
-          arr.forEach(item => {
-            item.state = Math.random() > 0.5 ? 'active' : 'gray';
-          });
-          playNoise(0.1, 0.3);
-          await sleep(100);
+        // 3 waves of increasing chaos
+        for (let wave = 0; wave < 3; wave++) {
+          for (let flash = 0; flash < 8; flash++) {
+            if (activeRunId !== runId) return;
+            arr.forEach(item => {
+              item.state = Math.random() > 0.5 ? 'active' : 'gray';
+            });
+            playNoise(0.1, 0.2 + wave * 0.1);
+            await sleep(150 - wave * 30);
+          }
+          await sleep(1000);
         }
 
-        // Everything eliminated
+        // Void
         arr.forEach(item => { item.eliminated = true; });
         playNoise(0.8, 0.5);
-        await sleep(1500);
+        await sleep(4000);
 
-        // New universe — sorted!
+        // New universe emerges slowly
         arr.forEach(item => { item.eliminated = false; item.visible = true; item.yOffset = 0; });
         arr.sort((a, b) => a.value - b.value);
+        arr.forEach(item => { item.visible = false; });
+        await sleep(2000);
+        for (let i = 0; i < arr.length; i++) {
+          arr[i].visible = true;
+          playNote(arr[i].value, 'sine', 0.1, 0.04);
+          await sleep(400);
+        }
       }
 
-      highlightLine(4); await sleep(800);
-      highlightLine(5); await sleep(600);
+      highlightLine(4); await sleep(2000);
+      highlightLine(5); await sleep(1500);
 
       // Reveal sorted
       for (let i = 0; i < arr.length; i++) {
@@ -1153,7 +1187,7 @@ const ALGORITHMS = {
           const leader = twScores.indexOf(Math.max(...twScores));
           playConquer(leader);
         }
-        await sleep(40);
+        await sleep(80);
       }
 
       if (activeRunId !== runId) return;
@@ -1269,20 +1303,20 @@ const ALGORITHMS = {
       const VISUAL_RANGE = 80;
       const SEPARATION_DIST = 25;
 
-      for (let step = 0; step < 900; step++) {
+      for (let step = 0; step < 4500; step++) {
         if (activeRunId !== runId) return;
         this._step = step;
 
         // Introduce predator at step 300
-        if (step === 300) {
+        if (step === 1500) {
           this._predator = { x: WIDTH / 2, y: 800 };
           playNoise(0.3, 0.2);
         }
-        if (step > 300 && step < 600 && this._predator) {
+        if (step > 1500 && step < 3000 && this._predator) {
           this._predator.x = WIDTH / 2 + Math.sin(step * 0.02) * 300;
           this._predator.y = 700 + Math.cos(step * 0.015) * 200;
         }
-        if (step === 600) this._predator = null;
+        if (step === 3000) this._predator = null;
 
         for (const b of flock) {
           let sepX = 0, sepY = 0;
@@ -1476,7 +1510,7 @@ const ALGORITHMS = {
       const cars = this._cars;
       const N = cars.length;
 
-      for (let step = 0; step < 1200; step++) {
+      for (let step = 0; step < 4500; step++) {
         if (activeRunId !== runId) return;
         this._step = step;
 
@@ -1820,8 +1854,8 @@ const ALGORITHMS = {
       while (activeRunId === runId && this._alive > 1) {
         this._step++;
 
-        // Shrink zone
-        if (arena.r > 50) arena.r -= 0.15;
+        // Shrink zone slowly for longer game
+        if (arena.r > 50) arena.r -= 0.05;
 
         for (const d of dots) {
           if (!d.alive) continue;
@@ -1972,7 +2006,7 @@ const ALGORITHMS = {
       initAudio();
       const cols = this._cols, rows = this._rows;
 
-      for (let gen = 0; gen < 500; gen++) {
+      for (let gen = 0; gen < 1400; gen++) {
         if (activeRunId !== runId) return;
         this._gen = gen;
 
@@ -2119,8 +2153,8 @@ const ALGORITHMS = {
         // Add speed wobble
         b.vx += (Math.random() - 0.5) * 0.2;
 
-        // New spike every 60 frames (~1 sec)
-        if (this._step % 60 === 0) {
+        // New spike every 120 frames (~2 sec) for longer game
+        if (this._step % 120 === 0) {
           const walls = ['top', 'bottom', 'left', 'right'];
           const wall = walls[Math.floor(Math.random() * 4)];
           let spike;
@@ -2162,8 +2196,8 @@ const ALGORITHMS = {
       const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const colors = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#F97316', '#06B6D4', '#84CC16', '#A855F6', '#14B8A6', '#E11D48'];
       this._months = names.map((n, i) => ({
-        name: n, color: colors[i], hp: 100, alive: true,
-        power: 30 + Math.floor(Math.random() * 40),
+        name: n, color: colors[i], hp: 200, alive: true,
+        power: 20 + Math.floor(Math.random() * 30),
       }));
       this._alive = 12;
       this._round = 0;
@@ -2224,7 +2258,7 @@ const ALGORITHMS = {
         // Stats
         c.fillStyle = Theme.secondaryText;
         c.font = '22px Inter, sans-serif';
-        c.fillText(`HP: ${Math.max(0, Math.floor(m.hp))}  PWR: ${m.power}`, x + 20, y + 100);
+        c.fillText(`HP: ${Math.max(0, Math.floor(m.hp))}/200  PWR: ${m.power}`, x + 20, y + 100);
         if (!m.alive) {
           c.fillStyle = Theme.barActive;
           c.font = 'bold 24px Inter, sans-serif';
@@ -2277,13 +2311,12 @@ const ALGORITHMS = {
 
         this._log = `${a.name} (${Math.floor(aDmg)} dmg) vs ${b.name} (${Math.floor(bDmg)} dmg)`;
         playNote(Math.floor(Math.random() * 12) + 1, 'square', 0.08, 0.04);
-        await sleep(600);
+        await sleep(1200);
 
-        if (b.hp <= 0) { b.alive = false; b.hp = 0; this._alive--; playNoise(0.2, 0.15); this._log = `${b.name} ELIMINATED by ${a.name}!`; }
-        if (a.hp <= 0) { a.alive = false; a.hp = 0; this._alive--; playNoise(0.2, 0.15); this._log = `${a.name} ELIMINATED by ${b.name}!`; }
+        if (b.hp <= 0) { b.alive = false; b.hp = 0; this._alive--; playNoise(0.2, 0.15); this._log = `${b.name} ELIMINATED by ${a.name}!`; await sleep(1500); }
+        if (a.hp <= 0) { a.alive = false; a.hp = 0; this._alive--; playNoise(0.2, 0.15); this._log = `${a.name} ELIMINATED by ${b.name}!`; await sleep(1500); }
 
-        // Randomize power each round for variety
-        alive.forEach(m => { if (m.alive) m.power = 30 + Math.floor(Math.random() * 40); });
+        alive.forEach(m => { if (m.alive) m.power = 20 + Math.floor(Math.random() * 30); });
 
         await sleep(800);
       }
@@ -2396,7 +2429,7 @@ const ALGORITHMS = {
       initAudio();
       const maxAttempts = 200;
       // success on a random attempt between 30 and 180
-      const successAttempt = 30 + Math.floor(Math.random() * 150);
+      const successAttempt = 80 + Math.floor(Math.random() * 100);
 
       for (let a = 1; a <= maxAttempts; a++) {
         if (activeRunId !== runId) return;
@@ -2540,8 +2573,8 @@ const ALGORITHMS = {
       const cols = this._cols, rows = this._rows;
       const grid = this._grid;
 
-      // Phase 1: Forest grows for ~150 steps
-      for (let s = 0; s < 150; s++) {
+      // Phase 1: Forest grows for ~300 steps
+      for (let s = 0; s < 300; s++) {
         if (activeRunId !== runId) return;
         this._step = s;
         // Random tree growth
@@ -2579,7 +2612,7 @@ const ALGORITHMS = {
       const windX = (Math.random() - 0.5) * 0.3;
       const windY = (Math.random() - 0.5) * 0.3;
 
-      for (let s = 150; s < 800; s++) {
+      for (let s = 300; s < 1600; s++) {
         if (activeRunId !== runId) return;
         this._step = s;
 
@@ -2616,7 +2649,7 @@ const ALGORITHMS = {
         this._trees = Array.from(grid).filter(v => v === 1).length;
         this._fires = Array.from(grid).filter(v => v === 2).length;
 
-        if (this._fires === 0 && s > 200) break;
+        if (this._fires === 0 && s > 400) break;
 
         if (s % 10 === 0 && this._fires > 0) playNote(2, 'square', 0.03, 0.02);
         await sleep(30);
@@ -2782,7 +2815,7 @@ const ALGORITHMS = {
           this._step++;
           const dx = wp.x - dot.x, dy = wp.y - dot.y;
           const d = Math.sqrt(dx * dx + dy * dy);
-          const speed = 3;
+          const speed = 1.5;
           dot.x += (dx / d) * Math.min(speed, d);
           dot.y += (dy / d) * Math.min(speed, d);
           this._path.push({ x: dot.x, y: dot.y });
@@ -2800,7 +2833,7 @@ const ALGORITHMS = {
         // Hit a wall? Pause and "think"
         if (wp.y === 350 || wp.y === 800 || wp.y === 200) {
           playNote(2, 'square', 0.1, 0.03);
-          await sleep(500);
+          await sleep(2000);
         }
       }
 

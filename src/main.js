@@ -2872,10 +2872,16 @@ const ALGORITHMS = {
         { name: 'BOSNIA', shortName: 'BOS', color: '#002395', altColor: '#FFC107', score: 0, side: -1 },
         { name: 'ITALY', shortName: 'ITA', color: '#008C45', altColor: '#fff', score: 0, side: 1 },
       ];
-      // Team balls (players)
+      // 3 players per team: 1 goalkeeper (GK) + 2 field players
       this._players = [
-        { x: cx - 140, y: cy, vx: 0, vy: 0, r: 32, team: 0 },
-        { x: cx + 140, y: cy, vx: 0, vy: 0, r: 32, team: 1 },
+        // Bosnia
+        { x: cx - r + 50, y: cy, vx: 0, vy: 0, r: 28, team: 0, role: 'gk' },
+        { x: cx - 120, y: cy - 80, vx: 0, vy: 0, r: 26, team: 0, role: 'field' },
+        { x: cx - 120, y: cy + 80, vx: 0, vy: 0, r: 26, team: 0, role: 'field' },
+        // Italy
+        { x: cx + r - 50, y: cy, vx: 0, vy: 0, r: 28, team: 1, role: 'gk' },
+        { x: cx + 120, y: cy - 80, vx: 0, vy: 0, r: 26, team: 1, role: 'field' },
+        { x: cx + 120, y: cy + 80, vx: 0, vy: 0, r: 26, team: 1, role: 'field' },
       ];
       // The football
       this._ball = { x: cx, y: cy, vx: 0, vy: 0, r: 16 };
@@ -2986,20 +2992,26 @@ const ALGORITHMS = {
         }
         c.restore();
 
+        // GK indicator: gloves (yellow outline)
+        if (p.role === 'gk') {
+          c.strokeStyle = '#FFD700'; c.lineWidth = 3;
+          c.beginPath(); c.arc(0, 0, p.r + 2, 0, Math.PI * 2); c.stroke();
+        }
+
         // Eyes — look toward the ball
         const edx = fb.x - p.x, edy = fb.y - p.y;
         const ea = Math.atan2(edy, edx);
+        const eyeScale = p.role === 'gk' ? 0.9 : 1;
         c.fillStyle = '#fff';
-        c.beginPath(); c.ellipse(-8, -5, 10, 13, 0, 0, Math.PI * 2); c.fill();
-        c.beginPath(); c.ellipse(8, -5, 10, 13, 0, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.ellipse(-7 * eyeScale, -4, 9 * eyeScale, 12 * eyeScale, 0, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.ellipse(7 * eyeScale, -4, 9 * eyeScale, 12 * eyeScale, 0, 0, Math.PI * 2); c.fill();
         c.strokeStyle = '#000'; c.lineWidth = 1.5;
-        c.beginPath(); c.ellipse(-8, -5, 10, 13, 0, 0, Math.PI * 2); c.stroke();
-        c.beginPath(); c.ellipse(8, -5, 10, 13, 0, 0, Math.PI * 2); c.stroke();
-        // Pupils follow ball
-        const pupOff = 4;
+        c.beginPath(); c.ellipse(-7 * eyeScale, -4, 9 * eyeScale, 12 * eyeScale, 0, 0, Math.PI * 2); c.stroke();
+        c.beginPath(); c.ellipse(7 * eyeScale, -4, 9 * eyeScale, 12 * eyeScale, 0, 0, Math.PI * 2); c.stroke();
+        const pupOff = 3.5;
         c.fillStyle = '#000';
-        c.beginPath(); c.arc(-8 + Math.cos(ea) * pupOff, -5 + Math.sin(ea) * pupOff, 5, 0, Math.PI * 2); c.fill();
-        c.beginPath(); c.arc(8 + Math.cos(ea) * pupOff, -5 + Math.sin(ea) * pupOff, 5, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.arc(-7 * eyeScale + Math.cos(ea) * pupOff, -4 + Math.sin(ea) * pupOff, 4, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.arc(7 * eyeScale + Math.cos(ea) * pupOff, -4 + Math.sin(ea) * pupOff, 4, 0, Math.PI * 2); c.fill();
 
         c.restore();
       });
@@ -3097,11 +3109,17 @@ const ALGORITHMS = {
         return false;
       };
 
-      // Kickoff reset
+      // Kickoff reset — 3v3
       const resetPositions = () => {
         fb.x = cx; fb.y = cy; fb.vx = 0; fb.vy = 0;
-        players[0].x = cx - 140; players[0].y = cy; players[0].vx = 0; players[0].vy = 0;
-        players[1].x = cx + 140; players[1].y = cy; players[1].vx = 0; players[1].vy = 0;
+        // Bosnia (team 0): GK left, 2 field mid-left
+        players[0].x = cx - r + 50; players[0].y = cy; players[0].vx = 0; players[0].vy = 0;
+        players[1].x = cx - 120; players[1].y = cy - 80; players[1].vx = 0; players[1].vy = 0;
+        players[2].x = cx - 120; players[2].y = cy + 80; players[2].vx = 0; players[2].vy = 0;
+        // Italy (team 1): GK right, 2 field mid-right
+        players[3].x = cx + r - 50; players[3].y = cy; players[3].vx = 0; players[3].vy = 0;
+        players[4].x = cx + 120; players[4].y = cy - 80; players[4].vx = 0; players[4].vy = 0;
+        players[5].x = cx + 120; players[5].y = cy + 80; players[5].vx = 0; players[5].vy = 0;
       };
 
       // Initial kickoff
@@ -3131,58 +3149,59 @@ const ALGORITHMS = {
           this._ended = true;
         }
 
-        // AI: each player chases the ball and tries to push it toward opponent's goal
-        players.forEach((p, idx) => {
-          const targetGoalX = idx === 0 ? cx + r : cx - r; // push toward opponent goal
-          const targetGoalY = cy;
+        // AI per player role
+        players.forEach(p => {
+          const oppGoalX = p.team === 0 ? cx + r : cx - r;
+          const ownGoalX = p.team === 0 ? cx - r : cx + r;
+          let targetX, targetY;
 
-          // Vector from ball to opponent's goal
-          const goalDx = targetGoalX - fb.x, goalDy = targetGoalY - fb.y;
-          const goalDist = Math.sqrt(goalDx * goalDx + goalDy * goalDy);
-
-          // Position behind the ball (opposite side from goal)
-          const behindX = fb.x - (goalDx / goalDist) * (fb.r + p.r + 10);
-          const behindY = fb.y - (goalDy / goalDist) * (fb.r + p.r + 10);
-
-          // Move toward "behind ball" position
-          const toDx = behindX - p.x, toDy = behindY - p.y;
-          const toDist = Math.sqrt(toDx * toDx + toDy * toDy);
-
-          if (toDist > 1) {
-            const accel = 0.35;
-            p.vx += (toDx / toDist) * accel;
-            p.vy += (toDy / toDist) * accel;
+          if (p.role === 'gk') {
+            // Goalkeeper: stay near own goal, track ball's Y position
+            targetX = ownGoalX + (p.team === 0 ? 60 : -60);
+            targetY = cy + (fb.y - cy) * 0.6; // follow ball Y loosely
+            // Rush out if ball is very close to goal
+            const ballDistToGoal = Math.abs(fb.x - ownGoalX);
+            if (ballDistToGoal < 120) {
+              targetX = fb.x;
+              targetY = fb.y;
+            }
+          } else {
+            // Field player: position behind ball to push toward opponent's goal
+            const goalDx = oppGoalX - fb.x, goalDy = cy - fb.y;
+            const goalDist = Math.sqrt(goalDx * goalDx + goalDy * goalDy) || 1;
+            targetX = fb.x - (goalDx / goalDist) * (fb.r + p.r + 15);
+            targetY = fb.y - (goalDy / goalDist) * (fb.r + p.r + 15);
           }
 
-          // Add some randomness for variety
-          p.vx += (Math.random() - 0.5) * 0.1;
-          p.vy += (Math.random() - 0.5) * 0.1;
+          const toDx = targetX - p.x, toDy = targetY - p.y;
+          const toDist = Math.sqrt(toDx * toDx + toDy * toDy) || 1;
+          const accel = p.role === 'gk' ? 0.4 : 0.35;
+          p.vx += (toDx / toDist) * accel;
+          p.vy += (toDy / toDist) * accel;
 
-          // Friction
-          p.vx *= 0.97; p.vy *= 0.97;
+          p.vx += (Math.random() - 0.5) * 0.08;
+          p.vy += (Math.random() - 0.5) * 0.08;
+          p.vx *= 0.96; p.vy *= 0.96;
 
-          // Speed limit
+          const maxSpd = p.role === 'gk' ? 5 : 6;
           const spd = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-          if (spd > 6) { p.vx = (p.vx / spd) * 6; p.vy = (p.vy / spd) * 6; }
+          if (spd > maxSpd) { p.vx = (p.vx / spd) * maxSpd; p.vy = (p.vy / spd) * maxSpd; }
 
           p.x += p.vx; p.y += p.vy;
         });
 
         // Move football
-        fb.vx *= 0.995; fb.vy *= 0.995; // slight friction
+        fb.vx *= 0.995; fb.vy *= 0.995;
         fb.x += fb.vx; fb.y += fb.vy;
 
         // Wall bounces
         if (bounceWall(fb)) {
           for (let i = 0; i < 5; i++) {
-            const dx = fb.x - cx, dy = fb.y - cy;
-            const dist = Math.sqrt(dx * dx + dy * dy);
             this._particles.push({ x: fb.x, y: fb.y, vx: (Math.random() - 0.5) * 4, vy: (Math.random() - 0.5) * 4, size: 2, color: '#fff', life: 0.8 });
           }
           playNote(6, 'sine', 0.03, 0.03);
         }
-        bounceWall(players[0]);
-        bounceWall(players[1]);
+        players.forEach(p => bounceWall(p));
 
         // Player-ball collisions
         players.forEach(p => {
@@ -3194,29 +3213,28 @@ const ALGORITHMS = {
           }
         });
 
-        // Player-player collision
-        collide(players[0], players[1]);
-
-        // Check goals — football enters goal zones
-        // Left goal (team 0 defends): ball crosses x < cx - r
-        if (fb.x - fb.r < cx - r) {
-          // Team 1 (Italy) scores!
-          teams[1].score++;
-          const timeStr = `${Math.floor((90 - this._timerSecs) / 60)}'${Math.floor((90 - this._timerSecs) % 60).toString().padStart(2, '0')}`;
-          this._goalLog.push({ team: 1, timeStr });
-          this._goalFlash = 1.0;
-          playNote(15, 'triangle', 0.5, 0.2);
-          await sleep(1500);
-          resetPositions();
-          this._kickoff = true; this._kickoffTimer = 60;
-          continue;
+        // Player-player collisions (all pairs)
+        for (let i = 0; i < players.length; i++) {
+          for (let j = i + 1; j < players.length; j++) {
+            collide(players[i], players[j]);
+          }
         }
-        // Right goal (team 1 defends): ball crosses x > cx + r
-        if (fb.x + fb.r > cx + r) {
-          // Team 0 (Bosnia) scores!
-          teams[0].score++;
-          const timeStr = `${Math.floor((90 - this._timerSecs) / 60)}'${Math.floor((90 - this._timerSecs) % 60).toString().padStart(2, '0')}`;
-          this._goalLog.push({ team: 0, timeStr });
+
+        // Check goals — ball enters the semicircle goal ZONE
+        const goalZoneR = 60;
+        const leftGoalCx = cx - r, rightGoalCx = cx + r;
+        const distToLeftGoal = Math.sqrt((fb.x - leftGoalCx) ** 2 + (fb.y - cy) ** 2);
+        const distToRightGoal = Math.sqrt((fb.x - rightGoalCx) ** 2 + (fb.y - cy) ** 2);
+
+        let scored = -1;
+        if (distToLeftGoal < goalZoneR) scored = 1; // Italy scores (ball in Bosnia's goal zone)
+        if (distToRightGoal < goalZoneR) scored = 0; // Bosnia scores (ball in Italy's goal zone)
+
+        if (scored >= 0) {
+          teams[scored].score++;
+          const elapsed = 90 - this._timerSecs;
+          const timeStr = `${Math.floor(elapsed / 60)}'${Math.floor(elapsed % 60).toString().padStart(2, '0')}`;
+          this._goalLog.push({ team: scored, timeStr });
           this._goalFlash = 1.0;
           playNote(15, 'triangle', 0.5, 0.2);
           await sleep(1500);

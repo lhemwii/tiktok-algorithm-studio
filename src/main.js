@@ -2861,277 +2861,384 @@ const ALGORITHMS = {
     type: 'simulation',
     title: 'World Cup Arena',
     badge: 'Bosnia vs Italy',
-    desc: 'Exact clone of the viral Country Ball match. Rotating goal and reactive eyes.',
-    tiktokDesc: 'Bosnie vs Italie ! Qui va marquer le plus de buts dans l\'arene tournante ? #worldcup #countryball #football',
+    desc: 'Two country balls fight over a football in a circular arena. Push it into the goal!',
+    tiktokDesc: 'Bosnie vs Italie ! Qui pousse le ballon dans le but ? 90 secondes de chaos #worldcup #football #countryball',
     tiktokTags: '#worldcup #football #countryball #bosnia #italy #satisfying #simulation #physics',
     init: function () {
-      const cx = WIDTH / 2, cy = 720, r = 380;
-      this._arena = { cx, cy, r, goalAngle: 0, goalWidth: 0.8 };
-      this._balls = [
-        {
-          x: cx - 120, y: cy, vx: 8, vy: -6, r: 38,
-          color: '#002395', name: 'BOSNIA & HER...', score: 0, flag: '\uD83C\uDDE7\uD83C\uDDE6',
-          eyes: 'normal'
-        },
-        {
-          x: cx + 120, y: cy, vx: -6, vy: 8, r: 38,
-          color: '#008C45', name: 'ITALY', score: 0, flag: '\uD83C\uDDEE\uD83C\uDDF9',
-          eyes: 'normal'
-        },
+      const cx = WIDTH / 2, cy = 680, r = 340;
+      // Two goals at opposite sides (left = Bosnia's goal to defend, right = Italy's)
+      this._arena = { cx, cy, r, goalLeft: Math.PI, goalRight: 0, goalWidth: 0.6 };
+      this._teams = [
+        { name: 'BOSNIA', shortName: 'BOS', color: '#002395', altColor: '#FFC107', score: 0, side: -1 },
+        { name: 'ITALY', shortName: 'ITA', color: '#008C45', altColor: '#fff', score: 0, side: 1 },
       ];
+      // Team balls (players)
+      this._players = [
+        { x: cx - 140, y: cy, vx: 0, vy: 0, r: 32, team: 0 },
+        { x: cx + 140, y: cy, vx: 0, vy: 0, r: 32, team: 1 },
+      ];
+      // The football
+      this._ball = { x: cx, y: cy, vx: 0, vy: 0, r: 16 };
       this._particles = [];
-      this._timerSecs = 120; // 120 seconds countdown
+      this._timerSecs = 90;
       this._goalFlash = 0;
       this._ended = false;
+      this._kickoff = true;
+      this._kickoffTimer = 0;
+      this._goalLog = []; // { team, time }
     },
     draw: function (c) {
+      const { cx, cy, r } = this._arena;
+      const t = this._teams;
+
+      // Green pitch
       c.fillStyle = '#1B7339';
       c.fillRect(0, 0, WIDTH, HEIGHT);
-      const { cx, cy, r, goalAngle, goalWidth } = this._arena;
 
-      // --- TOP SCOREBOARD ---
-      const sbY = 180, sbW = 620, sbH = 75;
-      const sx = WIDTH/2 - sbW/2;
-      c.save();
-      c.fillStyle = '#002395';
-      if (c.roundRect) { c.beginPath(); c.roundRect(sx, sbY, sbW, sbH, 15); c.fill(); }
-      c.fillStyle = '#FFC107';
-      c.fillRect(sx + 180, sbY, 260, sbH);
-      c.font = '45px Inter, sans-serif'; c.textAlign = 'center';
-      c.fillText('🇧🇦', sx + 40, sbY + 52);
-      c.fillText('🇮🇹', sx + sbW - 40, sbY + 52);
-      c.fillStyle = '#fff'; c.font = 'bold 48px Inter, sans-serif';
-      c.fillText(this._balls[0].score, sx + 130, sbY + 55);
-      c.fillText(this._balls[1].score, sx + sbW - 130, sbY + 55);
-      c.fillStyle = '#fff'; c.font = 'bold 36px Inter, sans-serif';
-      const mins = Math.floor(this._timerSecs / 60).toString().padStart(2, '0');
-      const secs = Math.floor(this._timerSecs % 60).toString().padStart(2, '0');
-      c.fillText(`${mins}:${secs}`, sx + 310, sbY + 52);
-      c.restore();
+      // --- SCOREBOARD ---
+      const sbY = 140, sbW = 700, sbH = 70;
+      const sx = WIDTH / 2 - sbW / 2;
+      c.fillStyle = t[0].color;
+      if (c.roundRect) { c.beginPath(); c.roundRect(sx, sbY, sbW / 2, sbH, [15, 0, 0, 15]); c.fill(); }
+      else c.fillRect(sx, sbY, sbW / 2, sbH);
+      c.fillStyle = t[1].color;
+      if (c.roundRect) { c.beginPath(); c.roundRect(sx + sbW / 2, sbY, sbW / 2, sbH, [0, 15, 15, 0]); c.fill(); }
+      else c.fillRect(sx + sbW / 2, sbY, sbW / 2, sbH);
+
+      c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = 'bold 28px Inter, sans-serif';
+      c.fillText(t[0].shortName, sx + 80, sbY + 45);
+      c.fillText(t[1].shortName, sx + sbW - 80, sbY + 45);
+      c.font = 'bold 44px Inter, sans-serif';
+      c.fillText(t[0].score, sx + sbW / 2 - 60, sbY + 50);
+      c.fillText(t[1].score, sx + sbW / 2 + 60, sbY + 50);
+
+      // Timer
+      const mins = Math.floor(Math.max(0, this._timerSecs) / 60).toString().padStart(2, '0');
+      const secs = Math.floor(Math.max(0, this._timerSecs) % 60).toString().padStart(2, '0');
+      c.fillStyle = '#222';
+      if (c.roundRect) { c.beginPath(); c.roundRect(sx + sbW / 2 - 40, sbY - 5, 80, 30, 8); c.fill(); }
+      c.fillStyle = '#0F0'; c.font = 'bold 22px Fira Code, monospace';
+      c.fillText(`${mins}:${secs}`, sx + sbW / 2, sbY + 18);
 
       // --- ARENA ---
-      c.save();
-      c.shadowBlur = 40; c.shadowColor = 'rgba(255,255,255,0.6)';
-      c.strokeStyle = '#fff'; c.lineWidth = 14;
-      c.beginPath();
-      c.arc(cx, cy, r, goalAngle + goalWidth/2, goalAngle + Math.PI * 2 - goalWidth/2);
-      c.stroke();
-      c.restore();
+      // Full circle wall
+      c.strokeStyle = '#fff'; c.lineWidth = 8;
+      c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.stroke();
 
-      // --- GOAL ---
-      c.save();
-      c.translate(cx, cy);
-      c.rotate(goalAngle);
-      c.strokeStyle = 'rgba(255,255,255,0.9)';
-      c.lineWidth = 6;
-      c.beginPath(); c.arc(0, 0, r + 50, -goalWidth/2, goalWidth/2); c.stroke();
-      c.lineWidth = 2; c.globalAlpha = 0.5;
-      for (let i = -3; i <= 3; i++) {
-        const a = i * 0.12;
-        c.beginPath(); c.moveTo(Math.cos(a)*r, Math.sin(a)*r); c.lineTo(Math.cos(a)*(r+50), Math.sin(a)*(r+50)); c.stroke();
-      }
-      for (let d = 10; d <= 50; d += 15) {
-        c.beginPath(); c.arc(0, 0, r + d, -goalWidth/2, goalWidth/2); c.stroke();
-      }
-      c.restore();
+      // Center line + circle
+      c.strokeStyle = 'rgba(255,255,255,0.3)'; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(cx, cy - r); c.lineTo(cx, cy + r); c.stroke();
+      c.beginPath(); c.arc(cx, cy, 50, 0, Math.PI * 2); c.stroke();
+
+      // Goals (left = team 0 defends, right = team 1 defends)
+      const goalR = 60;
+      // Left goal
+      c.fillStyle = 'rgba(255,50,50,0.15)';
+      c.beginPath(); c.arc(cx - r, cy, goalR, -Math.PI / 2, Math.PI / 2); c.fill();
+      c.strokeStyle = t[0].color; c.lineWidth = 4;
+      c.beginPath(); c.arc(cx - r, cy, goalR, -Math.PI / 2, Math.PI / 2); c.stroke();
+      // Right goal
+      c.fillStyle = 'rgba(50,255,50,0.15)';
+      c.beginPath(); c.arc(cx + r, cy, goalR, Math.PI / 2, -Math.PI / 2); c.fill();
+      c.strokeStyle = t[1].color; c.lineWidth = 4;
+      c.beginPath(); c.arc(cx + r, cy, goalR, Math.PI / 2, -Math.PI / 2); c.stroke();
 
       // --- PARTICLES ---
       this._particles.forEach(p => {
         c.globalAlpha = p.life; c.fillStyle = p.color;
         c.beginPath(); c.arc(p.x, p.y, p.size, 0, Math.PI * 2); c.fill();
       });
-      c.globalAlpha = 1.0;
+      c.globalAlpha = 1;
 
-      // --- BALLS ---
-      this._balls.forEach(b => {
-        c.save(); c.translate(b.x, b.y);
-        c.fillStyle = 'rgba(0,0,0,0.3)';
-        c.beginPath(); c.ellipse(0, b.r + 15, b.r * 0.9, 12, 0, 0, Math.PI * 2); c.fill();
-        const grad = c.createRadialGradient(-b.r/3, -b.r/3, b.r/5, 0, 0, b.r);
-        grad.addColorStop(0, '#fff'); grad.addColorStop(0.2, b.color); grad.addColorStop(1, '#000');
-        c.fillStyle = grad;
-        c.beginPath(); c.arc(0, 0, b.r, 0, Math.PI * 2); c.fill();
-        c.save(); c.clip();
-        if (b.name.includes('BOSNIA')) {
-          c.fillStyle = '#FFC107'; c.beginPath(); c.moveTo(-b.r, -b.r); c.lineTo(b.r, b.r); c.lineTo(-b.r, b.r); c.fill();
+      // --- FOOTBALL ---
+      const fb = this._ball;
+      c.fillStyle = '#fff';
+      c.beginPath(); c.arc(fb.x, fb.y, fb.r, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = '#333'; c.lineWidth = 2;
+      c.beginPath(); c.arc(fb.x, fb.y, fb.r, 0, Math.PI * 2); c.stroke();
+      // Pentagon pattern
+      c.fillStyle = '#333';
+      for (let i = 0; i < 5; i++) {
+        const a = i * Math.PI * 2 / 5 - Math.PI / 2;
+        c.beginPath(); c.arc(fb.x + Math.cos(a) * fb.r * 0.55, fb.y + Math.sin(a) * fb.r * 0.55, 3, 0, Math.PI * 2); c.fill();
+      }
+
+      // --- PLAYER BALLS ---
+      this._players.forEach(p => {
+        const tm = t[p.team];
+        c.save(); c.translate(p.x, p.y);
+
+        // Ball body with flag colors
+        c.fillStyle = tm.color;
+        c.beginPath(); c.arc(0, 0, p.r, 0, Math.PI * 2); c.fill();
+
+        // Flag pattern
+        c.save(); c.beginPath(); c.arc(0, 0, p.r, 0, Math.PI * 2); c.clip();
+        if (p.team === 0) {
+          // Bosnia: diagonal yellow triangle
+          c.fillStyle = '#FFC107';
+          c.beginPath(); c.moveTo(-p.r, -p.r); c.lineTo(p.r, p.r); c.lineTo(-p.r, p.r); c.fill();
         } else {
-          c.fillStyle = '#fff'; c.fillRect(-b.r/3, -b.r, b.r*2/3, b.r*2);
-          c.fillStyle = '#CE2B37'; c.fillRect(b.r/3, -b.r, b.r, b.r*2);
+          // Italy: green white red vertical
+          c.fillStyle = '#008C45'; c.fillRect(-p.r, -p.r, p.r * 2 / 3, p.r * 2);
+          c.fillStyle = '#fff'; c.fillRect(-p.r + p.r * 2 / 3, -p.r, p.r * 2 / 3, p.r * 2);
+          c.fillStyle = '#CE2B37'; c.fillRect(-p.r + p.r * 4 / 3, -p.r, p.r * 2 / 3, p.r * 2);
         }
         c.restore();
-        c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 2;
-        const eyeW = 14, eyeH = 18, eyeOff = 10;
-        if (b.eyes === 'angry') {
-          c.save(); c.translate(-eyeOff, -5); c.rotate(0.3); c.beginPath(); c.ellipse(0, 0, eyeW, eyeH/2, 0, 0, Math.PI*2); c.fill(); c.stroke(); c.restore();
-          c.save(); c.translate(eyeOff, -5); c.rotate(-0.3); c.beginPath(); c.ellipse(0, 0, eyeW, eyeH/2, 0, 0, Math.PI*2); c.fill(); c.stroke(); c.restore();
-        } else {
-          c.beginPath(); c.ellipse(-eyeOff, -5, eyeW, eyeH, 0, 0, Math.PI * 2); c.fill(); c.stroke();
-          c.beginPath(); c.ellipse(eyeOff, -5, eyeW, eyeH, 0, 0, Math.PI * 2); c.fill(); c.stroke();
-        }
+
+        // Eyes — look toward the ball
+        const edx = fb.x - p.x, edy = fb.y - p.y;
+        const ea = Math.atan2(edy, edx);
+        c.fillStyle = '#fff';
+        c.beginPath(); c.ellipse(-8, -5, 10, 13, 0, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.ellipse(8, -5, 10, 13, 0, 0, Math.PI * 2); c.fill();
+        c.strokeStyle = '#000'; c.lineWidth = 1.5;
+        c.beginPath(); c.ellipse(-8, -5, 10, 13, 0, 0, Math.PI * 2); c.stroke();
+        c.beginPath(); c.ellipse(8, -5, 10, 13, 0, 0, Math.PI * 2); c.stroke();
+        // Pupils follow ball
+        const pupOff = 4;
+        c.fillStyle = '#000';
+        c.beginPath(); c.arc(-8 + Math.cos(ea) * pupOff, -5 + Math.sin(ea) * pupOff, 5, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.arc(8 + Math.cos(ea) * pupOff, -5 + Math.sin(ea) * pupOff, 5, 0, Math.PI * 2); c.fill();
+
         c.restore();
       });
 
-      // --- BOTTOM INFO BOX ---
-      const ibY = HEIGHT - 320, ibW = 620, ibH = 200;
-      const ibx = WIDTH/2 - ibW/2;
-      c.save(); c.translate(ibx, ibY);
-      c.shadowBlur = 30; c.shadowColor = 'rgba(0,0,0,0.2)';
-      c.fillStyle = '#fff'; if (c.roundRect) { c.beginPath(); c.roundRect(0, 0, ibW, ibH, 30); c.fill(); }
-      c.shadowBlur = 0;
-      c.fillStyle = '#111'; c.textAlign = 'center';
-      c.font = 'bold 22px Inter, sans-serif'; c.fillText('MILLI TAKIMLAR', ibW/2, 45);
-      c.font = '20px Inter, sans-serif'; c.fillStyle = '#666'; c.fillText('31/03 TUE', ibW/2, 75);
-      c.font = 'bold 54px serif'; c.fillStyle = '#111'; c.fillText('qualifiers', ibW/2, 140);
-      c.font = '40px Inter, sans-serif';
-      c.fillText('🇧🇦', 80, 100); c.fillText('🇮🇹', ibW - 80, 100);
-      c.font = 'bold 16px Inter, sans-serif'; c.fillStyle = '#444';
-      c.fillText('BOSNIA & HER...', 80, 150); c.fillText('ITALY', ibW - 80, 150);
-      c.restore();
-
-      if (this._goalFlash > 0) {
-        c.fillStyle = `rgba(255,255,255,${this._goalFlash * 0.4})`;
-        c.fillRect(0, 0, WIDTH, HEIGHT);
-        this._goalFlash -= 0.04;
+      // --- GOAL LOG ---
+      if (this._goalLog.length > 0) {
+        const logY = cy + r + 50;
+        c.fillStyle = 'rgba(0,0,0,0.5)';
+        if (c.roundRect) { c.beginPath(); c.roundRect(100, logY, WIDTH - 200, this._goalLog.length * 36 + 20, 12); c.fill(); }
+        this._goalLog.forEach((g, i) => {
+          c.fillStyle = t[g.team].color;
+          c.font = 'bold 26px Inter, sans-serif'; c.textAlign = 'left';
+          c.fillText(`\u26BD ${g.timeStr}  ${t[g.team].shortName} GOAL!`, 130, logY + 30 + i * 36);
+        });
       }
 
-      // End of match overlay
+      // --- KICKOFF TEXT ---
+      if (this._kickoff && this._kickoffTimer > 0) {
+        c.fillStyle = 'rgba(0,0,0,0.5)';
+        c.fillRect(0, cy - 50, WIDTH, 100);
+        c.fillStyle = '#fff'; c.textAlign = 'center';
+        c.font = 'bold 60px Inter, sans-serif';
+        const txt = this._kickoffTimer > 45 ? 'KICK OFF!' : this._kickoffTimer > 15 ? '3' : this._kickoffTimer > 10 ? '2' : '1';
+        c.fillText(txt, WIDTH / 2, cy + 18);
+      }
+
+      // Goal flash
+      if (this._goalFlash > 0) {
+        c.fillStyle = `rgba(255,255,255,${this._goalFlash * 0.3})`;
+        c.fillRect(0, 0, WIDTH, HEIGHT);
+        this._goalFlash -= 0.03;
+      }
+
+      // --- END OVERLAY ---
       if (this._ended) {
-        c.fillStyle = 'rgba(0,0,0,0.7)';
-        c.fillRect(0, HEIGHT / 2 - 100, WIDTH, 200);
-        c.fillStyle = '#FFD700';
+        c.fillStyle = 'rgba(0,0,0,0.75)';
+        c.fillRect(0, HEIGHT / 2 - 120, WIDTH, 240);
         c.textAlign = 'center';
-        c.font = 'bold 52px Inter, sans-serif';
-        const b0 = this._balls[0], b1 = this._balls[1];
-        const winner = b0.score > b1.score ? b0.name : b1.score > b0.score ? b1.name : 'DRAW';
-        c.fillText(winner === 'DRAW' ? 'DRAW!' : `${winner} WINS!`, WIDTH / 2, HEIGHT / 2 - 20);
+        c.font = 'bold 36px Inter, sans-serif';
+        c.fillStyle = '#aaa';
+        c.fillText('FULL TIME', WIDTH / 2, HEIGHT / 2 - 70);
+        c.font = 'bold 80px Inter, sans-serif';
         c.fillStyle = '#fff';
+        c.fillText(`${t[0].score} - ${t[1].score}`, WIDTH / 2, HEIGHT / 2 + 10);
         c.font = 'bold 40px Inter, sans-serif';
-        c.fillText(`${b0.score} - ${b1.score}`, WIDTH / 2, HEIGHT / 2 + 40);
-        c.font = '28px Inter, sans-serif';
-        c.fillText('FULL TIME', WIDTH / 2, HEIGHT / 2 + 80);
+        const w = t[0].score > t[1].score ? t[0].name : t[1].score > t[0].score ? t[1].name : 'DRAW';
+        c.fillStyle = '#FFD700';
+        c.fillText(w === 'DRAW' ? 'DRAW!' : `${w} WINS!`, WIDTH / 2, HEIGHT / 2 + 70);
       }
     },
     run: async function (runId) {
       this.init(); initAudio();
       const { cx, cy, r } = this._arena;
-      const balls = this._balls;
+      const players = this._players;
+      const fb = this._ball;
+      const teams = this._teams;
+      const goalR = 60;
+
+      // Helper: bounce any circle off arena wall
+      const bounceWall = (b) => {
+        const dx = b.x - cx, dy = b.y - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist + b.r > r) {
+          const nx = dx / dist, ny = dy / dist;
+          const dot = b.vx * nx + b.vy * ny;
+          b.vx -= 2 * dot * nx; b.vy -= 2 * dot * ny;
+          b.x = cx + nx * (r - b.r - 1); b.y = cy + ny * (r - b.r - 1);
+          return true;
+        }
+        return false;
+      };
+
+      // Helper: elastic collision between two circles
+      const collide = (a, b) => {
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < a.r + b.r && dist > 0) {
+          const nx = dx / dist, ny = dy / dist;
+          const relV = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
+          if (relV > 0) {
+            // Mass ratio: players are heavier than football
+            const mA = a.r * a.r, mB = b.r * b.r;
+            const totalM = mA + mB;
+            a.vx -= relV * nx * (2 * mB / totalM);
+            a.vy -= relV * ny * (2 * mB / totalM);
+            b.vx += relV * nx * (2 * mA / totalM);
+            b.vy += relV * ny * (2 * mA / totalM);
+            // Separate
+            const overlap = (a.r + b.r - dist) / 2;
+            a.x -= nx * overlap; a.y -= ny * overlap;
+            b.x += nx * overlap; b.y += ny * overlap;
+            return true;
+          }
+        }
+        return false;
+      };
+
+      // Kickoff reset
+      const resetPositions = () => {
+        fb.x = cx; fb.y = cy; fb.vx = 0; fb.vy = 0;
+        players[0].x = cx - 140; players[0].y = cy; players[0].vx = 0; players[0].vy = 0;
+        players[1].x = cx + 140; players[1].y = cy; players[1].vx = 0; players[1].vy = 0;
+      };
+
+      // Initial kickoff
+      resetPositions();
+      this._kickoff = true;
+      this._kickoffTimer = 60; // ~1 second countdown
 
       while (activeRunId === runId && !this._ended) {
-        // Timer countdown
+        // Kickoff countdown
+        if (this._kickoff) {
+          this._kickoffTimer--;
+          if (this._kickoffTimer <= 0) {
+            this._kickoff = false;
+            // Give ball a small random push
+            fb.vx = (Math.random() - 0.5) * 2;
+            fb.vy = (Math.random() - 0.5) * 2;
+            playNote(12, 'triangle', 0.15, 0.1);
+          }
+          await sleep(16);
+          continue;
+        }
+
+        // Timer
         this._timerSecs -= 1 / 60;
         if (this._timerSecs <= 0) {
           this._timerSecs = 0;
           this._ended = true;
         }
 
-        // Rotate goal slowly
-        this._arena.goalAngle += 0.008;
+        // AI: each player chases the ball and tries to push it toward opponent's goal
+        players.forEach((p, idx) => {
+          const targetGoalX = idx === 0 ? cx + r : cx - r; // push toward opponent goal
+          const targetGoalY = cy;
 
-        // Move balls — ZERO gravity (air hockey)
-        balls.forEach((b, idx) => {
-          b.x += b.vx;
-          b.y += b.vy;
+          // Vector from ball to opponent's goal
+          const goalDx = targetGoalX - fb.x, goalDy = targetGoalY - fb.y;
+          const goalDist = Math.sqrt(goalDx * goalDx + goalDy * goalDy);
 
-          // Wall collision
-          const dx = b.x - cx, dy = b.y - cy;
-          const dist = Math.sqrt(dx * dx + dy * dy);
+          // Position behind the ball (opposite side from goal)
+          const behindX = fb.x - (goalDx / goalDist) * (fb.r + p.r + 10);
+          const behindY = fb.y - (goalDy / goalDist) * (fb.r + p.r + 10);
 
-          if (dist + b.r > r) {
-            const angle = Math.atan2(dy, dx);
-            const relAng = ((angle - this._arena.goalAngle) % (Math.PI * 2) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
+          // Move toward "behind ball" position
+          const toDx = behindX - p.x, toDy = behindY - p.y;
+          const toDist = Math.sqrt(toDx * toDx + toDy * toDy);
 
-            if (Math.abs(relAng) < this._arena.goalWidth / 2) {
-              // GOAL — point for the OTHER team
-              const otherIdx = idx === 0 ? 1 : 0;
-              balls[otherIdx].score++;
-              this._goalFlash = 1.0;
-              playNote(15, 'triangle', 0.5, 0.2);
-
-              // Reset both balls to center
-              balls[0].x = cx - 60; balls[0].y = cy;
-              balls[0].vx = 6 + Math.random() * 4; balls[0].vy = (Math.random() - 0.5) * 8;
-              balls[1].x = cx + 60; balls[1].y = cy;
-              balls[1].vx = -(6 + Math.random() * 4); balls[1].vy = (Math.random() - 0.5) * 8;
-            } else {
-              // Bounce off wall
-              const nx = dx / dist, ny = dy / dist;
-              const dot = b.vx * nx + b.vy * ny;
-              b.vx -= 2 * dot * nx;
-              b.vy -= 2 * dot * ny;
-              b.x = cx + nx * (r - b.r - 1);
-              b.y = cy + ny * (r - b.r - 1);
-
-              // Particles
-              for (let i = 0; i < 8; i++) {
-                this._particles.push({
-                  x: b.x + nx * b.r, y: b.y + ny * b.r,
-                  vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6,
-                  size: Math.random() * 4 + 2, color: b.color, life: 1.0,
-                });
-              }
-              playNote(Math.floor(Math.random() * 5) + 4, 'square', 0.05, 0.05);
-            }
+          if (toDist > 1) {
+            const accel = 0.35;
+            p.vx += (toDx / toDist) * accel;
+            p.vy += (toDy / toDist) * accel;
           }
+
+          // Add some randomness for variety
+          p.vx += (Math.random() - 0.5) * 0.1;
+          p.vy += (Math.random() - 0.5) * 0.1;
+
+          // Friction
+          p.vx *= 0.97; p.vy *= 0.97;
 
           // Speed limit
-          const spd = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
-          if (spd > 12) { b.vx = (b.vx / spd) * 12; b.vy = (b.vy / spd) * 12; }
-          if (spd < 3) { b.vx *= 1.05; b.vy *= 1.05; } // minimum speed
+          const spd = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+          if (spd > 6) { p.vx = (p.vx / spd) * 6; p.vy = (p.vy / spd) * 6; }
 
-          // Add slight random perturbation for chaos
-          b.vx += (Math.random() - 0.5) * 0.15;
-          b.vy += (Math.random() - 0.5) * 0.15;
+          p.x += p.vx; p.y += p.vy;
         });
 
-        // Ball-ball collision
-        const b0 = balls[0], b1 = balls[1];
-        const bdx = b1.x - b0.x, bdy = b1.y - b0.y;
-        const bdist = Math.sqrt(bdx * bdx + bdy * bdy);
-        if (bdist < b0.r + b1.r && bdist > 0) {
-          // Normal vector
-          const bnx = bdx / bdist, bny = bdy / bdist;
-          // Relative velocity
-          const relV = (b0.vx - b1.vx) * bnx + (b0.vy - b1.vy) * bny;
-          if (relV > 0) { // Only if approaching
-            b0.vx -= relV * bnx; b0.vy -= relV * bny;
-            b1.vx += relV * bnx; b1.vy += relV * bny;
-            // Separate balls
-            const overlap = (b0.r + b1.r - bdist) / 2;
-            b0.x -= bnx * overlap; b0.y -= bny * overlap;
-            b1.x += bnx * overlap; b1.y += bny * overlap;
+        // Move football
+        fb.vx *= 0.995; fb.vy *= 0.995; // slight friction
+        fb.x += fb.vx; fb.y += fb.vy;
 
-            // Particles at collision point
-            const px = (b0.x + b1.x) / 2, py = (b0.y + b1.y) / 2;
-            for (let i = 0; i < 6; i++) {
-              this._particles.push({
-                x: px, y: py,
-                vx: (Math.random() - 0.5) * 8, vy: (Math.random() - 0.5) * 8,
-                size: Math.random() * 3 + 1, color: '#FFD700', life: 1.0,
-              });
-            }
-            b0.eyes = 'angry'; b1.eyes = 'angry';
-            playNote(10, 'square', 0.08, 0.08);
+        // Wall bounces
+        if (bounceWall(fb)) {
+          for (let i = 0; i < 5; i++) {
+            const dx = fb.x - cx, dy = fb.y - cy;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            this._particles.push({ x: fb.x, y: fb.y, vx: (Math.random() - 0.5) * 4, vy: (Math.random() - 0.5) * 4, size: 2, color: '#fff', life: 0.8 });
           }
-        } else {
-          b0.eyes = 'normal'; b1.eyes = 'normal';
+          playNote(6, 'sine', 0.03, 0.03);
+        }
+        bounceWall(players[0]);
+        bounceWall(players[1]);
+
+        // Player-ball collisions
+        players.forEach(p => {
+          if (collide(p, fb)) {
+            for (let i = 0; i < 6; i++) {
+              this._particles.push({ x: fb.x, y: fb.y, vx: (Math.random() - 0.5) * 5, vy: (Math.random() - 0.5) * 5, size: 3, color: teams[p.team].color, life: 0.8 });
+            }
+            playNote(8, 'square', 0.04, 0.06);
+          }
+        });
+
+        // Player-player collision
+        collide(players[0], players[1]);
+
+        // Check goals — football enters goal zones
+        // Left goal (team 0 defends): ball crosses x < cx - r
+        if (fb.x - fb.r < cx - r) {
+          // Team 1 (Italy) scores!
+          teams[1].score++;
+          const timeStr = `${Math.floor((90 - this._timerSecs) / 60)}'${Math.floor((90 - this._timerSecs) % 60).toString().padStart(2, '0')}`;
+          this._goalLog.push({ team: 1, timeStr });
+          this._goalFlash = 1.0;
+          playNote(15, 'triangle', 0.5, 0.2);
+          await sleep(1500);
+          resetPositions();
+          this._kickoff = true; this._kickoffTimer = 60;
+          continue;
+        }
+        // Right goal (team 1 defends): ball crosses x > cx + r
+        if (fb.x + fb.r > cx + r) {
+          // Team 0 (Bosnia) scores!
+          teams[0].score++;
+          const timeStr = `${Math.floor((90 - this._timerSecs) / 60)}'${Math.floor((90 - this._timerSecs) % 60).toString().padStart(2, '0')}`;
+          this._goalLog.push({ team: 0, timeStr });
+          this._goalFlash = 1.0;
+          playNote(15, 'triangle', 0.5, 0.2);
+          await sleep(1500);
+          resetPositions();
+          this._kickoff = true; this._kickoffTimer = 60;
+          continue;
         }
 
-        // Update particles
-        this._particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.life -= 0.04; });
+        // Particles
+        this._particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.life -= 0.03; });
         this._particles = this._particles.filter(p => p.life > 0);
 
         await sleep(16);
       }
 
-      // End of match
-      if (this._ended) {
-        playNote(8, 'triangle', 0.5, 0.15);
-        await sleep(300);
-        playNote(12, 'triangle', 0.5, 0.15);
-        await sleep(300);
-        playNote(15, 'triangle', 0.8, 0.15);
-        await sleep(4000);
-      }
+      // Full time
+      playNote(8, 'triangle', 0.5, 0.15);
+      await sleep(300);
+      playNote(12, 'triangle', 0.5, 0.15);
+      await sleep(300);
+      playNote(15, 'triangle', 0.8, 0.15);
+      await sleep(5000);
     }
   },
 

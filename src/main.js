@@ -2009,6 +2009,821 @@ const ALGORITHMS = {
       await sleep(2000);
     },
   },
+
+  balloon: {
+    type: 'simulation',
+    title: 'Balloon vs Needles',
+    badge: 'Survival',
+    desc: 'A balloon bounces in a room. Every few seconds a new spike appears. How long until POP?',
+    tiktokDesc: 'Le ballon survit combien de temps ? A chaque seconde un nouveau pic apparait... #balloon #survival #tension #satisfying',
+    tiktokTags: '#balloon #survival #simulation #tension #viral #satisfying #pop #howlong',
+    init: function () {
+      this._balloon = { x: WIDTH / 2, y: 650, vx: 3, vy: -2, r: 30 };
+      this._spikes = [];
+      this._popped = false;
+      this._step = 0;
+      this._survivalTime = 0;
+      this._roomTop = 250;
+      this._roomBot = 1150;
+      this._roomLeft = 80;
+      this._roomRight = WIDTH - 80;
+    },
+    draw: function (c) {
+      c.fillStyle = Theme.primaryText;
+      c.textAlign = 'center';
+      c.font = 'bold 60px Inter, sans-serif';
+      c.fillText('Balloon vs Needles', WIDTH / 2, 140);
+      c.font = 'bold 32px Inter, sans-serif';
+      c.fillStyle = Theme.barActive;
+      c.fillText(`Spikes: ${this._spikes ? this._spikes.length : 0}`, WIDTH / 2, 190);
+
+      if (!this._balloon) return;
+      const { _roomTop: rt, _roomBot: rb, _roomLeft: rl, _roomRight: rr } = this;
+
+      // Room
+      c.strokeStyle = Theme.codeBorder;
+      c.lineWidth = 3;
+      c.strokeRect(rl, rt, rr - rl, rb - rt);
+
+      // Spikes (triangles)
+      if (this._spikes) {
+        this._spikes.forEach(s => {
+          c.fillStyle = Theme.barActive;
+          c.beginPath();
+          if (s.wall === 'top') { c.moveTo(s.x - 10, rt); c.lineTo(s.x + 10, rt); c.lineTo(s.x, rt + 25); }
+          else if (s.wall === 'bottom') { c.moveTo(s.x - 10, rb); c.lineTo(s.x + 10, rb); c.lineTo(s.x, rb - 25); }
+          else if (s.wall === 'left') { c.moveTo(rl, s.y - 10); c.lineTo(rl, s.y + 10); c.lineTo(rl + 25, s.y); }
+          else { c.moveTo(rr, s.y - 10); c.lineTo(rr, s.y + 10); c.lineTo(rr - 25, s.y); }
+          c.closePath();
+          c.fill();
+        });
+      }
+
+      // Balloon
+      const b = this._balloon;
+      if (!this._popped) {
+        c.fillStyle = '#EF4444';
+        c.beginPath();
+        c.ellipse(b.x, b.y, b.r, b.r * 1.2, 0, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = 'rgba(255,255,255,0.3)';
+        c.beginPath();
+        c.ellipse(b.x - b.r * 0.3, b.y - b.r * 0.3, b.r * 0.3, b.r * 0.4, -0.3, 0, Math.PI * 2);
+        c.fill();
+        // String
+        c.strokeStyle = Theme.secondaryText;
+        c.lineWidth = 2;
+        c.beginPath();
+        c.moveTo(b.x, b.y + b.r * 1.2);
+        c.quadraticCurveTo(b.x + 10, b.y + b.r * 1.6, b.x - 5, b.y + b.r * 2);
+        c.stroke();
+      }
+
+      // Timer
+      const secs = (this._survivalTime / 1000).toFixed(1);
+      c.fillStyle = Theme.primaryText;
+      c.textAlign = 'center';
+      c.font = 'bold 80px Inter, sans-serif';
+      c.fillText(`${secs}s`, WIDTH / 2, rb + 120);
+      c.font = '28px Inter, sans-serif';
+      c.fillStyle = Theme.secondaryText;
+      c.fillText('survival time', WIDTH / 2, rb + 160);
+
+      if (this._popped) {
+        c.fillStyle = Theme.barActive;
+        c.font = 'bold 72px Inter, sans-serif';
+        c.fillText('POP!', WIDTH / 2, 700);
+      }
+    },
+    run: async function (runId) {
+      this.init();
+      initAudio();
+      const b = this._balloon;
+      const { _roomTop: rt, _roomBot: rb, _roomLeft: rl, _roomRight: rr } = this;
+      const startMs = Date.now();
+
+      while (activeRunId === runId && !this._popped) {
+        this._step++;
+        this._survivalTime = Date.now() - startMs;
+
+        // Move balloon
+        b.vy += 0.05; // slight gravity
+        b.x += b.vx; b.y += b.vy;
+
+        // Bounce off walls
+        if (b.x - b.r < rl) { b.x = rl + b.r; b.vx = Math.abs(b.vx); playNote(8, 'sine', 0.03, 0.02); }
+        if (b.x + b.r > rr) { b.x = rr - b.r; b.vx = -Math.abs(b.vx); playNote(8, 'sine', 0.03, 0.02); }
+        if (b.y - b.r * 1.2 < rt) { b.y = rt + b.r * 1.2; b.vy = Math.abs(b.vy); playNote(10, 'sine', 0.03, 0.02); }
+        if (b.y + b.r * 1.2 > rb) { b.y = rb - b.r * 1.2; b.vy = -Math.abs(b.vy) * 0.9; playNote(6, 'sine', 0.03, 0.02); }
+
+        // Add speed wobble
+        b.vx += (Math.random() - 0.5) * 0.2;
+
+        // New spike every 60 frames (~1 sec)
+        if (this._step % 60 === 0) {
+          const walls = ['top', 'bottom', 'left', 'right'];
+          const wall = walls[Math.floor(Math.random() * 4)];
+          let spike;
+          if (wall === 'top' || wall === 'bottom') spike = { wall, x: rl + 30 + Math.random() * (rr - rl - 60) };
+          else spike = { wall, y: rt + 30 + Math.random() * (rb - rt - 60) };
+          this._spikes.push(spike);
+          playNote(2, 'square', 0.05, 0.04);
+        }
+
+        // Check spike collision
+        for (const s of this._spikes) {
+          let sx, sy;
+          if (s.wall === 'top') { sx = s.x; sy = rt + 12; }
+          else if (s.wall === 'bottom') { sx = s.x; sy = rb - 12; }
+          else if (s.wall === 'left') { sx = rl + 12; sy = s.y; }
+          else { sx = rr - 12; sy = s.y; }
+          const dx = b.x - sx, dy = b.y - sy;
+          if (Math.sqrt(dx * dx + dy * dy) < b.r + 8) {
+            this._popped = true;
+            playNoise(0.5, 0.4);
+            break;
+          }
+        }
+
+        await sleep(16);
+      }
+      await sleep(3000);
+    },
+  },
+
+  birthmonth: {
+    type: 'simulation',
+    title: 'Birth Month Battle',
+    badge: '12 Months',
+    desc: '12 months fight. Stats randomized each round. Which month survives?',
+    tiktokDesc: 'Quel mois de naissance va gagner ? Commente ton mois ! #birthdaymonth #battle #simulation #viral',
+    tiktokTags: '#birthday #month #battle #simulation #viral #elimination #horoscope #satisfying',
+    init: function () {
+      const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const colors = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#F97316', '#06B6D4', '#84CC16', '#A855F6', '#14B8A6', '#E11D48'];
+      this._months = names.map((n, i) => ({
+        name: n, color: colors[i], hp: 100, alive: true,
+        power: 30 + Math.floor(Math.random() * 40),
+      }));
+      this._alive = 12;
+      this._round = 0;
+      this._log = '';
+      this._winner = null;
+    },
+    draw: function (c) {
+      c.fillStyle = Theme.primaryText;
+      c.textAlign = 'center';
+      c.font = 'bold 56px Inter, sans-serif';
+      c.fillText('Birth Month Battle', WIDTH / 2, 140);
+      c.font = 'bold 30px Inter, sans-serif';
+      c.fillStyle = Theme.barActive;
+      c.fillText(`Round ${this._round}  |  ${this._alive} alive`, WIDTH / 2, 185);
+
+      if (!this._months) return;
+
+      // Grid of month cards — 3 columns, 4 rows
+      const startY = 220;
+      const cardW = 280;
+      const cardH = 140;
+      const gapX = 30;
+      const gapY = 16;
+      const gridLeft = (WIDTH - (3 * cardW + 2 * gapX)) / 2;
+
+      this._months.forEach((m, i) => {
+        const col = i % 3;
+        const row = Math.floor(i / 3);
+        const x = gridLeft + col * (cardW + gapX);
+        const y = startY + row * (cardH + gapY);
+
+        c.globalAlpha = m.alive ? 1 : 0.25;
+        c.fillStyle = Theme.codeBg;
+        if (c.roundRect) { c.beginPath(); c.roundRect(x, y, cardW, cardH, 12); c.fill(); }
+
+        // Color bar
+        c.fillStyle = m.color;
+        c.fillRect(x, y, 8, cardH);
+
+        // Name
+        c.fillStyle = m.alive ? Theme.primaryText : Theme.secondaryText;
+        c.textAlign = 'left';
+        c.font = 'bold 32px Inter, sans-serif';
+        c.fillText(m.name, x + 20, y + 40);
+
+        // HP bar
+        const hpW = cardW - 30;
+        const hpH = 16;
+        const hpX = x + 20;
+        const hpY = y + 55;
+        c.fillStyle = Theme.codeBorder;
+        c.fillRect(hpX, hpY, hpW, hpH);
+        if (m.alive) {
+          c.fillStyle = m.hp > 50 ? Theme.barValid : m.hp > 25 ? '#F59E0B' : Theme.barActive;
+          c.fillRect(hpX, hpY, hpW * (m.hp / 100), hpH);
+        }
+
+        // Stats
+        c.fillStyle = Theme.secondaryText;
+        c.font = '22px Inter, sans-serif';
+        c.fillText(`HP: ${Math.max(0, Math.floor(m.hp))}  PWR: ${m.power}`, x + 20, y + 100);
+        if (!m.alive) {
+          c.fillStyle = Theme.barActive;
+          c.font = 'bold 24px Inter, sans-serif';
+          c.fillText('ELIMINATED', x + 20, y + 125);
+        }
+      });
+      c.globalAlpha = 1;
+
+      // Log
+      if (this._log) {
+        c.fillStyle = Theme.codeBg;
+        if (c.roundRect) { c.beginPath(); c.roundRect(60, HEIGHT - 350, WIDTH - 120, 60, 12); c.fill(); }
+        c.fillStyle = Theme.primaryText;
+        c.textAlign = 'center';
+        c.font = '26px Inter, sans-serif';
+        c.fillText(this._log, WIDTH / 2, HEIGHT - 312);
+      }
+
+      // Winner
+      if (this._winner) {
+        c.fillStyle = 'rgba(0,0,0,0.7)';
+        c.fillRect(0, HEIGHT / 2 - 80, WIDTH, 160);
+        c.fillStyle = this._winner.color;
+        c.textAlign = 'center';
+        c.font = 'bold 72px Inter, sans-serif';
+        c.fillText(`${this._winner.name} wins!`, WIDTH / 2, HEIGHT / 2 + 10);
+        c.fillStyle = '#FFD700';
+        c.font = 'bold 36px Inter, sans-serif';
+        c.fillText('CHAMPION', WIDTH / 2, HEIGHT / 2 + 55);
+      }
+    },
+    run: async function (runId) {
+      this.init();
+      initAudio();
+
+      while (activeRunId === runId && this._alive > 1) {
+        this._round++;
+        const alive = this._months.filter(m => m.alive);
+        // Pick two random fighters
+        const i1 = Math.floor(Math.random() * alive.length);
+        let i2 = Math.floor(Math.random() * (alive.length - 1));
+        if (i2 >= i1) i2++;
+        const a = alive[i1], b = alive[i2];
+
+        // Fight
+        const aDmg = a.power * (0.5 + Math.random());
+        const bDmg = b.power * (0.5 + Math.random());
+        b.hp -= aDmg;
+        a.hp -= bDmg;
+
+        this._log = `${a.name} (${Math.floor(aDmg)} dmg) vs ${b.name} (${Math.floor(bDmg)} dmg)`;
+        playNote(Math.floor(Math.random() * 12) + 1, 'square', 0.08, 0.04);
+        await sleep(600);
+
+        if (b.hp <= 0) { b.alive = false; b.hp = 0; this._alive--; playNoise(0.2, 0.15); this._log = `${b.name} ELIMINATED by ${a.name}!`; }
+        if (a.hp <= 0) { a.alive = false; a.hp = 0; this._alive--; playNoise(0.2, 0.15); this._log = `${a.name} ELIMINATED by ${b.name}!`; }
+
+        // Randomize power each round for variety
+        alive.forEach(m => { if (m.alive) m.power = 30 + Math.floor(Math.random() * 40); });
+
+        await sleep(800);
+      }
+
+      const winner = this._months.find(m => m.alive);
+      if (winner) this._winner = winner;
+      playNote(8, 'triangle', 0.5, 0.15);
+      await sleep(300);
+      playNote(12, 'triangle', 0.5, 0.15);
+      await sleep(300);
+      playNote(15, 'triangle', 0.8, 0.15);
+      await sleep(3000);
+    },
+  },
+
+  holeinone: {
+    type: 'simulation',
+    title: 'Hole in One',
+    badge: 'Near Miss',
+    desc: 'A ball launches at a tiny hole. Misses by millimeters. Again and again. Will it ever go in?',
+    tiktokDesc: 'Attempt #1... #2... #347... QUAND est-ce que ca rentre ?! #holeinone #nearmiss #satisfying #impossible',
+    tiktokTags: '#holeinone #golf #simulation #satisfying #viral #nearmiss #impossible #tension',
+    init: function () {
+      this._holeX = WIDTH / 2;
+      this._holeY = 500;
+      this._holeR = 15;
+      this._ball = null;
+      this._attempt = 0;
+      this._success = false;
+      this._trail = [];
+      this._bestDist = Infinity;
+    },
+    draw: function (c) {
+      c.fillStyle = Theme.primaryText;
+      c.textAlign = 'center';
+      c.font = 'bold 60px Inter, sans-serif';
+      c.fillText('Hole in One', WIDTH / 2, 140);
+
+      if (this._attempt === undefined) return;
+
+      c.font = 'bold 40px Inter, sans-serif';
+      c.fillStyle = Theme.barActive;
+      c.fillText(`Attempt #${this._attempt}`, WIDTH / 2, 195);
+
+      // Play area
+      const areaTop = 250;
+      const areaBot = 1100;
+      c.fillStyle = Theme.codeBg;
+      c.fillRect(80, areaTop, WIDTH - 160, areaBot - areaTop);
+      c.strokeStyle = Theme.codeBorder;
+      c.lineWidth = 2;
+      c.strokeRect(80, areaTop, WIDTH - 160, areaBot - areaTop);
+
+      // Hole
+      c.fillStyle = '#111';
+      c.beginPath();
+      c.arc(this._holeX, this._holeY, this._holeR, 0, Math.PI * 2);
+      c.fill();
+      c.strokeStyle = Theme.barValid;
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(this._holeX, this._holeY, this._holeR + 5, 0, Math.PI * 2);
+      c.stroke();
+
+      // Trail
+      if (this._trail.length > 1) {
+        c.strokeStyle = 'rgba(239,68,68,0.3)';
+        c.lineWidth = 2;
+        c.beginPath();
+        c.moveTo(this._trail[0].x, this._trail[0].y);
+        for (let i = 1; i < this._trail.length; i++) c.lineTo(this._trail[i].x, this._trail[i].y);
+        c.stroke();
+      }
+
+      // Ball
+      if (this._ball) {
+        c.fillStyle = '#EF4444';
+        c.beginPath();
+        c.arc(this._ball.x, this._ball.y, 10, 0, Math.PI * 2);
+        c.fill();
+      }
+
+      // Stats
+      const panelY = areaBot + 30;
+      c.fillStyle = Theme.codeBg;
+      if (c.roundRect) { c.beginPath(); c.roundRect(80, panelY, WIDTH - 160, 140, 12); c.fill(); }
+      c.fillStyle = Theme.primaryText;
+      c.textAlign = 'center';
+      c.font = 'bold 32px Inter, sans-serif';
+      const bd = this._bestDist === Infinity ? '---' : `${this._bestDist.toFixed(1)}px`;
+      c.fillText(`Best miss: ${bd}`, WIDTH / 2, panelY + 45);
+      c.font = '26px Inter, sans-serif';
+      c.fillStyle = Theme.secondaryText;
+      c.fillText(`${this._attempt} attempts`, WIDTH / 2, panelY + 85);
+
+      if (this._success) {
+        c.fillStyle = 'rgba(0,0,0,0.7)';
+        c.fillRect(0, HEIGHT / 2 - 80, WIDTH, 160);
+        c.fillStyle = '#FFD700';
+        c.textAlign = 'center';
+        c.font = 'bold 72px Inter, sans-serif';
+        c.fillText('HOLE IN ONE!', WIDTH / 2, HEIGHT / 2 + 10);
+        c.fillStyle = Theme.barValid;
+        c.font = 'bold 36px Inter, sans-serif';
+        c.fillText(`After ${this._attempt} attempts`, WIDTH / 2, HEIGHT / 2 + 55);
+      }
+    },
+    run: async function (runId) {
+      this.init();
+      initAudio();
+      const maxAttempts = 200;
+      // success on a random attempt between 30 and 180
+      const successAttempt = 30 + Math.floor(Math.random() * 150);
+
+      for (let a = 1; a <= maxAttempts; a++) {
+        if (activeRunId !== runId) return;
+        this._attempt = a;
+        this._trail = [];
+
+        // Launch from bottom with random angle
+        const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.8;
+        const speed = 6 + Math.random() * 4;
+        this._ball = { x: WIDTH / 2 + (Math.random() - 0.5) * 300, y: 1050, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed };
+
+        // If this is THE attempt, aim more accurately
+        if (a === successAttempt) {
+          const dx = this._holeX - this._ball.x;
+          const dy = this._holeY - this._ball.y;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          this._ball.vx = (dx / d) * speed + (Math.random() - 0.5) * 0.5;
+          this._ball.vy = (dy / d) * speed + (Math.random() - 0.5) * 0.5;
+        }
+
+        // Simulate ball flight
+        for (let t = 0; t < 120; t++) {
+          this._ball.x += this._ball.vx;
+          this._ball.y += this._ball.vy;
+          this._ball.vy += 0.08; // gravity
+          this._trail.push({ x: this._ball.x, y: this._ball.y });
+
+          // Bounce off walls
+          if (this._ball.x < 90) { this._ball.x = 90; this._ball.vx *= -0.7; }
+          if (this._ball.x > WIDTH - 90) { this._ball.x = WIDTH - 90; this._ball.vx *= -0.7; }
+          if (this._ball.y < 260) { this._ball.y = 260; this._ball.vy *= -0.7; }
+          if (this._ball.y > 1090) { this._ball.y = 1090; this._ball.vy *= -0.7; }
+
+          // Check hole
+          const hd = Math.sqrt((this._ball.x - this._holeX) ** 2 + (this._ball.y - this._holeY) ** 2);
+          if (hd < this._holeR + 5) {
+            this._success = true;
+            playNote(15, 'triangle', 0.8, 0.2);
+            await sleep(100);
+            playNote(12, 'triangle', 0.5, 0.15);
+            await sleep(100);
+            playNote(8, 'triangle', 0.5, 0.15);
+            break;
+          }
+          if (hd < this._bestDist) this._bestDist = hd;
+
+          await sleep(8);
+        }
+
+        if (this._success) break;
+        playNote(Math.floor(Math.random() * 5) + 1, 'sine', 0.03, 0.02);
+        await sleep(200);
+      }
+
+      await sleep(3000);
+    },
+  },
+
+  forestfire: {
+    type: 'simulation',
+    title: 'Forest vs Fire',
+    badge: 'Nature',
+    desc: 'A forest grows peacefully. Then fire starts. Trees vs flames. Who wins?',
+    tiktokDesc: 'La foret pousse tranquillement... puis le feu demarre. Qui gagne ? #forest #fire #nature #simulation #tension',
+    tiktokTags: '#forest #fire #nature #simulation #viral #satisfying #tension #survival',
+    init: function () {
+      this._cols = 80;
+      this._rows = 80;
+      this._grid = new Uint8Array(this._cols * this._rows); // 0=empty, 1=tree, 2=fire, 3=ash
+      this._step = 0;
+      this._fireStarted = false;
+      this._trees = 0;
+      this._fires = 0;
+    },
+    draw: function (c) {
+      c.fillStyle = Theme.primaryText;
+      c.textAlign = 'center';
+      c.font = 'bold 60px Inter, sans-serif';
+      c.fillText('Forest vs Fire', WIDTH / 2, 140);
+      c.font = 'bold 30px Inter, sans-serif';
+      c.fillStyle = this._fireStarted ? Theme.barActive : Theme.barValid;
+      c.fillText(this._fireStarted ? `Trees: ${this._trees} | Fire: ${this._fires}` : `Growing... Trees: ${this._trees}`, WIDTH / 2, 185);
+
+      if (!this._grid) return;
+      const cols = this._cols, rows = this._rows;
+      const SAFE_X = 60;
+      const gridY = 210;
+      const gridW = WIDTH - SAFE_X * 2;
+      const gridH = gridW;
+      const cellW = gridW / cols;
+      const cellH = gridH / rows;
+
+      c.fillStyle = Theme.codeBg;
+      c.fillRect(SAFE_X, gridY, gridW, gridH);
+
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const v = this._grid[y * cols + x];
+          if (v === 0) continue;
+          if (v === 1) c.fillStyle = '#22C55E';
+          else if (v === 2) c.fillStyle = '#EF4444';
+          else c.fillStyle = '#6B7280';
+          c.fillRect(SAFE_X + x * cellW, gridY + y * cellH, cellW, cellH);
+        }
+      }
+
+      c.strokeStyle = Theme.codeBorder;
+      c.lineWidth = 2;
+      c.strokeRect(SAFE_X, gridY, gridW, gridH);
+
+      // Stats bar at bottom
+      const barY = gridY + gridH + 30;
+      const barW = gridW;
+      const total = cols * rows;
+      const treePct = this._trees / total;
+      const firePct = this._fires / total;
+
+      c.fillStyle = Theme.codeBg;
+      c.fillRect(SAFE_X, barY, barW, 30);
+      c.fillStyle = '#22C55E';
+      c.fillRect(SAFE_X, barY, barW * treePct, 30);
+      c.fillStyle = '#EF4444';
+      c.fillRect(SAFE_X + barW * treePct, barY, barW * firePct, 30);
+
+      c.fillStyle = Theme.primaryText;
+      c.textAlign = 'center';
+      c.font = '26px Inter, sans-serif';
+      c.fillText(`Step ${this._step}`, WIDTH / 2, barY + 70);
+
+      if (this._fireStarted && this._fires === 0 && this._step > 200) {
+        c.fillStyle = 'rgba(0,0,0,0.7)';
+        c.fillRect(0, HEIGHT / 2 - 60, WIDTH, 120);
+        c.fillStyle = this._trees > 0 ? '#22C55E' : '#6B7280';
+        c.font = 'bold 60px Inter, sans-serif';
+        c.fillText(this._trees > 0 ? 'Forest survives!' : 'Everything burned.', WIDTH / 2, HEIGHT / 2 + 15);
+      }
+    },
+    run: async function (runId) {
+      this.init();
+      initAudio();
+      const cols = this._cols, rows = this._rows;
+      const grid = this._grid;
+
+      // Phase 1: Forest grows for ~150 steps
+      for (let s = 0; s < 150; s++) {
+        if (activeRunId !== runId) return;
+        this._step = s;
+        // Random tree growth
+        for (let i = 0; i < 20; i++) {
+          const x = Math.floor(Math.random() * cols);
+          const y = Math.floor(Math.random() * rows);
+          if (grid[y * cols + x] === 0) grid[y * cols + x] = 1;
+        }
+        // Trees spread to neighbors
+        for (let y = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++) {
+            if (grid[y * cols + x] === 1 && Math.random() < 0.02) {
+              const nx = x + Math.floor(Math.random() * 3) - 1;
+              const ny = y + Math.floor(Math.random() * 3) - 1;
+              if (nx >= 0 && nx < cols && ny >= 0 && ny < rows && grid[ny * cols + nx] === 0) {
+                grid[ny * cols + nx] = 1;
+              }
+            }
+          }
+        }
+        this._trees = Array.from(grid).filter(v => v === 1).length;
+        if (s % 20 === 0) playNote(Math.min(15, Math.floor(this._trees / 200) + 1), 'sine', 0.1, 0.02);
+        await sleep(30);
+      }
+
+      // Phase 2: FIRE
+      this._fireStarted = true;
+      // Start fire at a random edge
+      const fx = Math.random() < 0.5 ? 0 : cols - 1;
+      const fy = Math.floor(Math.random() * rows);
+      grid[fy * cols + fx] = 2;
+      playNoise(0.3, 0.2);
+
+      // Wind direction (random)
+      const windX = (Math.random() - 0.5) * 0.3;
+      const windY = (Math.random() - 0.5) * 0.3;
+
+      for (let s = 150; s < 800; s++) {
+        if (activeRunId !== runId) return;
+        this._step = s;
+
+        // Fire spreads
+        const newFires = [];
+        for (let y = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++) {
+            if (grid[y * cols + x] !== 2) continue;
+            for (let dy = -1; dy <= 1; dy++) {
+              for (let dx = -1; dx <= 1; dx++) {
+                if (dx === 0 && dy === 0) continue;
+                const nx = x + dx, ny = y + dy;
+                if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+                if (grid[ny * cols + nx] === 1) {
+                  // Wind affects spread probability
+                  const prob = 0.05 + (dx * windX + dy * windY > 0 ? 0.1 : 0);
+                  if (Math.random() < prob) newFires.push(ny * cols + nx);
+                }
+              }
+            }
+            // Fire burns out
+            if (Math.random() < 0.03) grid[y * cols + x] = 3;
+          }
+        }
+        newFires.forEach(i => { grid[i] = 2; });
+
+        // Trees regrow slowly
+        if (Math.random() < 0.3) {
+          const rx = Math.floor(Math.random() * cols);
+          const ry = Math.floor(Math.random() * rows);
+          if (grid[ry * cols + rx] === 0) grid[ry * cols + rx] = 1;
+        }
+
+        this._trees = Array.from(grid).filter(v => v === 1).length;
+        this._fires = Array.from(grid).filter(v => v === 2).length;
+
+        if (this._fires === 0 && s > 200) break;
+
+        if (s % 10 === 0 && this._fires > 0) playNote(2, 'square', 0.03, 0.02);
+        await sleep(30);
+      }
+
+      playNote(8, 'triangle', 0.5, 0.1);
+      await sleep(300);
+      playNote(12, 'triangle', 0.5, 0.1);
+      await sleep(3000);
+    },
+  },
+
+  lonelydot: {
+    type: 'simulation',
+    title: 'The Lonely Dot',
+    badge: 'Emotional',
+    desc: 'One dot separated from the group by a wall. Will it find a way back?',
+    tiktokDesc: 'Ce point est tout seul... il essaie de retrouver les autres. Regarde jusqu\'au bout. #lonelydot #emotional #simulation',
+    tiktokTags: '#lonely #dot #emotional #simulation #viral #satisfying #wholesome #journey',
+    init: function () {
+      // Maze-like walls with one guaranteed path
+      this._dot = { x: 150, y: 500, targetX: 0, targetY: 0 };
+      this._group = [];
+      for (let i = 0; i < 15; i++) {
+        this._group.push({ x: 800 + (Math.random() - 0.5) * 100, y: 500 + (Math.random() - 0.5) * 100 });
+      }
+      // Walls with gaps
+      this._walls = [
+        { x: 400, y: 300, w: 10, h: 250 },
+        { x: 400, y: 600, w: 10, h: 250 },
+        { x: 600, y: 200, w: 10, h: 300 },
+        { x: 600, y: 600, w: 10, h: 300 },
+      ];
+      this._path = [];
+      this._reunited = false;
+      this._step = 0;
+    },
+    draw: function (c) {
+      c.fillStyle = Theme.primaryText;
+      c.textAlign = 'center';
+      c.font = 'bold 60px Inter, sans-serif';
+      c.fillText('The Lonely Dot', WIDTH / 2, 140);
+      c.font = '28px Inter, sans-serif';
+      c.fillStyle = Theme.secondaryText;
+      c.fillText('Will it find its way back?', WIDTH / 2, 180);
+
+      if (!this._dot) return;
+
+      // Play area
+      const ox = 40, oy = 250, ow = WIDTH - 80, oh = 700;
+      c.fillStyle = Theme.codeBg;
+      c.fillRect(ox, oy, ow, oh);
+      c.strokeStyle = Theme.codeBorder;
+      c.lineWidth = 2;
+      c.strokeRect(ox, oy, ow, oh);
+
+      // Scale positions to play area
+      const sx = (px) => ox + (px / 1000) * ow;
+      const sy = (py) => oy + (py / 1000) * oh;
+      const sw = (pw) => (pw / 1000) * ow;
+      const sh = (ph) => (ph / 1000) * oh;
+
+      // Walls
+      this._walls.forEach(w => {
+        c.fillStyle = Theme.primaryText;
+        c.fillRect(sx(w.x), sy(w.y), sw(w.w), sh(w.h));
+      });
+
+      // Trail
+      if (this._path.length > 1) {
+        c.strokeStyle = 'rgba(96, 165, 250, 0.2)';
+        c.lineWidth = 3;
+        c.beginPath();
+        c.moveTo(sx(this._path[0].x), sy(this._path[0].y));
+        for (let i = 1; i < this._path.length; i++) c.lineTo(sx(this._path[i].x), sy(this._path[i].y));
+        c.stroke();
+      }
+
+      // Group dots
+      this._group.forEach(g => {
+        c.fillStyle = Theme.barValid;
+        c.beginPath();
+        c.arc(sx(g.x), sy(g.y), 10, 0, Math.PI * 2);
+        c.fill();
+      });
+
+      // Lonely dot (bigger, different color)
+      c.fillStyle = '#3B82F6';
+      c.beginPath();
+      c.arc(sx(this._dot.x), sy(this._dot.y), 14, 0, Math.PI * 2);
+      c.fill();
+      // Sad/happy face
+      c.fillStyle = '#fff';
+      c.beginPath();
+      c.arc(sx(this._dot.x) - 4, sy(this._dot.y) - 3, 3, 0, Math.PI * 2);
+      c.fill();
+      c.beginPath();
+      c.arc(sx(this._dot.x) + 4, sy(this._dot.y) - 3, 3, 0, Math.PI * 2);
+      c.fill();
+      // Mouth
+      c.strokeStyle = '#fff';
+      c.lineWidth = 2;
+      c.beginPath();
+      if (this._reunited) {
+        c.arc(sx(this._dot.x), sy(this._dot.y) + 4, 5, 0, Math.PI);
+      } else {
+        c.arc(sx(this._dot.x), sy(this._dot.y) + 8, 5, Math.PI, 0);
+      }
+      c.stroke();
+
+      // Step
+      c.fillStyle = Theme.secondaryText;
+      c.textAlign = 'center';
+      c.font = '24px Inter, sans-serif';
+      c.fillText(`Step ${this._step}`, WIDTH / 2, oy + oh + 40);
+
+      // Reunion
+      if (this._reunited) {
+        c.fillStyle = 'rgba(0,0,0,0.6)';
+        c.fillRect(0, HEIGHT / 2 + 200, WIDTH, 100);
+        c.fillStyle = '#FFD700';
+        c.textAlign = 'center';
+        c.font = 'bold 48px Inter, sans-serif';
+        c.fillText('Reunited!', WIDTH / 2, HEIGHT / 2 + 265);
+      }
+    },
+    run: async function (runId) {
+      this.init();
+      initAudio();
+      const dot = this._dot;
+      const group = this._group;
+      const target = { x: group[0].x, y: group[0].y };
+
+      // Path: go right, find gaps in walls, navigate through
+      const waypoints = [
+        { x: 380, y: 500 },  // approach first wall
+        { x: 380, y: 560 },  // go to gap
+        { x: 420, y: 560 },  // through gap
+        { x: 580, y: 560 },  // approach second wall
+        { x: 580, y: 520 },  // go to gap
+        { x: 620, y: 520 },  // through gap
+        { x: target.x, y: target.y }, // reach group
+      ];
+
+      // Add some exploration dead ends for drama
+      const fullPath = [
+        { x: 380, y: 500 }, { x: 380, y: 350 }, // try top — blocked!
+        { x: 380, y: 500 }, { x: 380, y: 800 }, // try bottom — blocked!
+        { x: 380, y: 560 }, // find the gap
+        { x: 420, y: 560 }, // through!
+        { x: 580, y: 560 }, { x: 580, y: 200 }, // try top — blocked!
+        { x: 580, y: 520 }, // find gap
+        { x: 620, y: 520 }, // through!
+        { x: target.x, y: target.y }, // HOME
+      ];
+
+      for (const wp of fullPath) {
+        if (activeRunId !== runId) return;
+
+        // Move toward waypoint
+        while (Math.abs(dot.x - wp.x) > 3 || Math.abs(dot.y - wp.y) > 3) {
+          if (activeRunId !== runId) return;
+          this._step++;
+          const dx = wp.x - dot.x, dy = wp.y - dot.y;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          const speed = 3;
+          dot.x += (dx / d) * Math.min(speed, d);
+          dot.y += (dy / d) * Math.min(speed, d);
+          this._path.push({ x: dot.x, y: dot.y });
+
+          // Group gently sways
+          group.forEach(g => {
+            g.x += (Math.random() - 0.5) * 0.5;
+            g.y += (Math.random() - 0.5) * 0.5;
+          });
+
+          if (this._step % 15 === 0) playNote(Math.floor(Math.random() * 5) + 3, 'sine', 0.15, 0.015);
+          await sleep(16);
+        }
+
+        // Hit a wall? Pause and "think"
+        if (wp.y === 350 || wp.y === 800 || wp.y === 200) {
+          playNote(2, 'square', 0.1, 0.03);
+          await sleep(500);
+        }
+      }
+
+      // Reunion!
+      this._reunited = true;
+      playNote(8, 'triangle', 0.6, 0.12);
+      await sleep(400);
+      playNote(12, 'triangle', 0.6, 0.12);
+      await sleep(400);
+      playNote(15, 'triangle', 0.8, 0.15);
+
+      // Group gravitates toward dot
+      for (let i = 0; i < 60; i++) {
+        group.forEach(g => {
+          g.x += (dot.x - g.x) * 0.05;
+          g.y += (dot.y - g.y) * 0.05;
+        });
+        await sleep(30);
+      }
+
+      await sleep(3000);
+    },
+  },
 };
 
 // --- NAVIGATION ---

@@ -14,11 +14,12 @@ const metaBox = document.getElementById('tiktok-meta');
 const metaDesc = document.getElementById('meta-desc');
 const metaTags = document.getElementById('meta-tags');
 
-// --- CANVAS METRICS (9:16 TikTok native) ---
-const WIDTH = 1080;
+// --- CANVAS METRICS (4K display, 1080p recording) ---
+const WIDTH = 1080;   // logical size used by all draw code
 const HEIGHT = 1920;
-canvas.width = WIDTH;
-canvas.height = HEIGHT;
+const SCALE = 2;      // 2x for 4K sharpness on screen
+canvas.width = WIDTH * SCALE;   // 2160 physical pixels
+canvas.height = HEIGHT * SCALE; // 3840 physical pixels
 
 // --- STATE ---
 let audioCtx = null;
@@ -27,6 +28,8 @@ let recorderDest = null;
 let silenceNode = null;
 let recVideoTrack = null;
 let recAudioDelay = null;
+let recCanvas = null;
+let recCtx = null;
 let mediaRecorder = null;
 let recordedChunks = [];
 let isRecording = false;
@@ -161,10 +164,15 @@ async function startRecording() {
   if (algo.type === 'sort') generateArray();
   else if (algo.type === 'simulation' && algo.init) algo.init();
 
-  // captureStream(0) = mode manuel : on pousse une frame dans drawLoop
-  // exactement au moment du rendu = parfaitement synchro avec le son
+  // Canvas de recording cache a 1080x1920 (le 4K main canvas est trop lourd pour l'encodeur)
+  recCanvas = document.createElement('canvas');
+  recCanvas.width = WIDTH;
+  recCanvas.height = HEIGHT;
+  recCtx = recCanvas.getContext('2d');
+
+  // captureStream(0) sur le recCanvas — mode manuel, on pousse une frame dans drawLoop
   recorderDest = audioCtx.createMediaStreamDestination();
-  const videoStream = canvas.captureStream(0);
+  const videoStream = recCanvas.captureStream(0);
   recVideoTrack = videoStream.getVideoTracks()[0];
   const combined = new MediaStream([...videoStream.getTracks(), ...recorderDest.stream.getTracks()]);
 
@@ -247,6 +255,8 @@ async function stopRecording() {
   }
   recorderDest = null;
   recVideoTrack = null;
+  recCanvas = null;
+  recCtx = null;
 
   recBtn.textContent = '\u23FA REC';
   recBtn.disabled = false;
@@ -431,10 +441,14 @@ function drawLoop() {
   Theme.codeHighlight = isDark ? 'rgba(239, 68, 68, 0.2)' : 'rgba(217, 127, 107, 0.2)';
 
   ctx.fillStyle = Theme.bg;
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   const algo = ALGORITHMS[currentAlgoId];
   if (!algo) return requestAnimationFrame(drawLoop);
+
+  // Scale 2x for 4K sharpness — all draw code uses 1080x1920 logical coords
+  ctx.save();
+  ctx.scale(SCALE, SCALE);
 
   if (algo.type === 'simulation' && algo.draw) {
     algo.draw(ctx);
@@ -442,9 +456,15 @@ function drawLoop() {
     drawSortView(algo);
   }
 
+  ctx.restore();
+
   if (isRecording) {
     recStatus.innerText = `\u25CF REC ${formatTime(Date.now() - startTime)}`;
-    // Pousser cette frame au recorder au moment exact du rendu
+    // Downscale 4K canvas → 1080p recorder canvas (GPU-accelere)
+    if (recCtx) {
+      recCtx.drawImage(canvas, 0, 0, WIDTH, HEIGHT);
+    }
+    // Pousser la frame downscalee au recorder
     if (recVideoTrack && recVideoTrack.requestFrame) {
       recVideoTrack.requestFrame();
     }

@@ -320,118 +320,85 @@ function twGetCell(x, y) {
   return twGrid[y * TW_SIZE + x];
 }
 
-// Count reachable empty cells from position (x,y) via flood fill
-function twFloodCount(x, y) {
-  if (twGetCell(x, y) !== -1) return 0;
+// BFS from head through own territory + empty cells, find nearest empty cell
+// Returns the first-step direction toward that empty cell, or -1 if none reachable
+function twBFS(owner, strategy) {
+  const s = TW_STRATEGIES[owner];
   const visited = new Set();
-  const stack = [y * TW_SIZE + x];
-  visited.add(stack[0]);
-  let count = 0;
-  while (stack.length > 0) {
-    const k = stack.pop();
-    count++;
-    const cx = k % TW_SIZE, cy = Math.floor(k / TW_SIZE);
-    for (const [dx, dy] of TW_DIRS) {
-      const nx = cx + dx, ny = cy + dy;
+  const queue = [{ x: s.headX, y: s.headY, firstDir: -1 }];
+  visited.add(s.headY * TW_SIZE + s.headX);
+
+  // Collect ALL reachable empty cells
+  const targets = [];
+
+  while (queue.length > 0) {
+    const cur = queue.shift();
+    for (let d = 0; d < 4; d++) {
+      const nx = cur.x + TW_DIRS[d][0];
+      const ny = cur.y + TW_DIRS[d][1];
       if (nx < 0 || nx >= TW_SIZE || ny < 0 || ny >= TW_SIZE) continue;
-      const nk = ny * TW_SIZE + nx;
-      if (visited.has(nk)) continue;
-      if (twGrid[nk] !== -1) continue;
-      visited.add(nk);
-      stack.push(nk);
-    }
-    // Early exit: if we've found enough space, no need to count everything
-    if (count > 200) return count;
-  }
-  return count;
-}
+      const key = ny * TW_SIZE + nx;
+      if (visited.has(key)) continue;
+      visited.add(key);
 
-// Get valid moves (empty adjacent cells) sorted by safety (most reachable space first)
-function twSafeMoves(s) {
-  const moves = [];
-  for (let d = 0; d < 4; d++) {
-    const nx = s.headX + TW_DIRS[d][0];
-    const ny = s.headY + TW_DIRS[d][1];
-    if (twGetCell(nx, ny) === -1) {
-      // Temporarily occupy the cell to check reachable space FROM the new position
-      twGrid[ny * TW_SIZE + nx] = 99; // temp block
-      let space = 0;
-      for (const [dx2, dy2] of TW_DIRS) {
-        const nnx = nx + dx2, nny = ny + dy2;
-        space = Math.max(space, twFloodCount(nnx, nny));
+      const cell = twGrid[key];
+      const fd = cur.firstDir === -1 ? d : cur.firstDir;
+
+      if (cell === -1) {
+        // Empty cell found — this is a potential target
+        targets.push({ x: nx, y: ny, firstDir: fd, dist: targets.length });
+        // Also continue BFS through it to find more
+        queue.push({ x: nx, y: ny, firstDir: fd });
+        // For speed: if we have enough targets, pick one
+        if (targets.length >= 20) break;
+      } else if (cell === owner) {
+        // Own territory — can traverse but doesn't count as a claim
+        queue.push({ x: nx, y: ny, firstDir: fd });
       }
-      twGrid[ny * TW_SIZE + nx] = -1; // restore
-      moves.push({ d, x: nx, y: ny, space });
+      // Enemy territory — blocked, don't explore
     }
+    if (targets.length >= 20) break;
   }
-  // Sort by space descending — safest direction first
-  moves.sort((a, b) => b.space - a.space);
-  return moves;
-}
 
-// Strategy functions: pick from safe moves (already sorted by safety)
-function twMoveGreedy(s) {
-  const moves = twSafeMoves(s);
-  if (moves.length === 0) return -1;
-  // Among safe moves, prefer direction toward center
-  const cx = TW_SIZE / 2, cy = TW_SIZE / 2;
-  // Only consider moves that have at least 50% of the safest option's space
-  const threshold = moves[0].space * 0.5;
-  const good = moves.filter(m => m.space >= threshold);
-  good.sort((a, b) => {
-    const da = Math.abs(a.x - cx) + Math.abs(a.y - cy);
-    const db = Math.abs(b.x - cx) + Math.abs(b.y - cy);
-    return da - db;
-  });
-  return good[0].d;
-}
+  if (targets.length === 0) return -1;
 
-function twMoveSpiral(s) {
-  const moves = twSafeMoves(s);
-  if (moves.length === 0) return -1;
-  // Wall-hugger: prefer left turn, then straight, then right
-  const leftDir = (s.dir + 3) % 4;
-  const preferred = [leftDir, s.dir, (s.dir + 1) % 4, (s.dir + 2) % 4];
-  const threshold = moves[0].space * 0.3;
-  for (const pd of preferred) {
-    const m = moves.find(m => m.d === pd && m.space >= threshold);
-    if (m) return m.d;
+  // Strategy picks which target to go for
+  let pick;
+  if (strategy === 0) {
+    // Greedy: nearest empty cell to center
+    const cx = TW_SIZE / 2, cy = TW_SIZE / 2;
+    targets.sort((a, b) => (Math.abs(a.x - cx) + Math.abs(a.y - cy)) - (Math.abs(b.x - cx) + Math.abs(b.y - cy)));
+    pick = targets[0];
+  } else if (strategy === 1) {
+    // Spiral: prefer cells adjacent to own border (wall-hugger)
+    targets.sort((a, b) => {
+      let na = 0, nb = 0;
+      for (const [dx, dy] of TW_DIRS) {
+        const ax = a.x + dx, ay = a.y + dy;
+        if (ax >= 0 && ax < TW_SIZE && ay >= 0 && ay < TW_SIZE && twGrid[ay * TW_SIZE + ax] === owner) na++;
+        const bx = b.x + dx, by = b.y + dy;
+        if (bx >= 0 && bx < TW_SIZE && by >= 0 && by < TW_SIZE && twGrid[by * TW_SIZE + bx] === owner) nb++;
+      }
+      return nb - na; // more neighbors = more wall-hugging
+    });
+    pick = targets[0];
+  } else if (strategy === 2) {
+    // Hunter: nearest empty cell to nearest enemy head
+    let tx = TW_SIZE / 2, ty = TW_SIZE / 2, md = Infinity;
+    TW_STRATEGIES.forEach((o, j) => {
+      if (j === owner || !o.alive) return;
+      const d = Math.abs(o.headX - s.headX) + Math.abs(o.headY - s.headY);
+      if (d < md) { md = d; tx = o.headX; ty = o.headY; }
+    });
+    targets.sort((a, b) => (Math.abs(a.x - tx) + Math.abs(a.y - ty)) - (Math.abs(b.x - tx) + Math.abs(b.y - ty)));
+    pick = targets[0];
+  } else {
+    // Random
+    pick = targets[Math.floor(Math.random() * targets.length)];
   }
-  return moves[0].d; // fallback to safest
-}
 
-function twMoveHunter(s, idx) {
-  const moves = twSafeMoves(s);
-  if (moves.length === 0) return -1;
-  // Find nearest enemy head
-  let targetX = TW_SIZE / 2, targetY = TW_SIZE / 2;
-  let minDist = Infinity;
-  TW_STRATEGIES.forEach((other, i) => {
-    if (i === idx || !other.alive) return;
-    const dist = Math.abs(other.headX - s.headX) + Math.abs(other.headY - s.headY);
-    if (dist < minDist) { minDist = dist; targetX = other.headX; targetY = other.headY; }
-  });
-  // Among safe moves, prefer direction toward target
-  const threshold = moves[0].space * 0.5;
-  const good = moves.filter(m => m.space >= threshold);
-  good.sort((a, b) => {
-    const da = Math.abs(a.x - targetX) + Math.abs(a.y - targetY);
-    const db = Math.abs(b.x - targetX) + Math.abs(b.y - targetY);
-    return da - db;
-  });
-  return good[0].d;
+  return pick.firstDir;
 }
-
-function twMoveRandom(s) {
-  const moves = twSafeMoves(s);
-  if (moves.length === 0) return -1;
-  // Random but avoid obviously bad moves (< 30% of safest)
-  const threshold = moves[0].space * 0.3;
-  const safe = moves.filter(m => m.space >= threshold);
-  return safe[Math.floor(Math.random() * safe.length)].d;
-}
-
-const TW_AI = [twMoveGreedy, twMoveSpiral, twMoveHunter, twMoveRandom];
 
 function twStepOnce() {
   let anyAlive = false;
@@ -439,7 +406,7 @@ function twStepOnce() {
   TW_STRATEGIES.forEach((s, i) => {
     if (!s.alive) return;
 
-    const dir = TW_AI[i](s, i);
+    const dir = twBFS(i, i);
     if (dir === -1) {
       s.alive = false;
       return;
@@ -447,8 +414,10 @@ function twStepOnce() {
 
     const nx = s.headX + TW_DIRS[dir][0];
     const ny = s.headY + TW_DIRS[dir][1];
+    const cell = twGetCell(nx, ny);
 
-    if (twGetCell(nx, ny) !== -1) {
+    // Can move to empty cells OR own territory
+    if (cell !== -1 && cell !== i) {
       s.alive = false;
       return;
     }
@@ -456,8 +425,13 @@ function twStepOnce() {
     s.dir = dir;
     s.headX = nx;
     s.headY = ny;
-    twGrid[ny * TW_SIZE + nx] = i;
-    twScores[i]++;
+
+    // Only claim if empty
+    if (cell === -1) {
+      twGrid[ny * TW_SIZE + nx] = i;
+      twScores[i]++;
+    }
+
     anyAlive = true;
   });
 

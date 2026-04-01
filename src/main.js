@@ -30,6 +30,7 @@ let recVideoTrack = null;
 let recAudioDelay = null;
 let recCanvas = null;
 let recCtx = null;
+let recFrameCount = 0;
 let mediaRecorder = null;
 let recordedChunks = [];
 let isRecording = false;
@@ -168,10 +169,11 @@ async function startRecording() {
   if (algo.type === 'sort') generateArray();
   else if (algo.type === 'simulation' && algo.init) algo.init();
 
-  // Canvas de recording cache a 1080x1920 (le 4K main canvas est trop lourd pour l'encodeur)
+  // Recording canvas at 4K (2160x3840) for sharp output
+  recFrameCount = 0;
   recCanvas = document.createElement('canvas');
-  recCanvas.width = WIDTH;
-  recCanvas.height = HEIGHT;
+  recCanvas.width = WIDTH * SCALE;
+  recCanvas.height = HEIGHT * SCALE;
   recCtx = recCanvas.getContext('2d');
 
   // captureStream(0) sur le recCanvas — mode manuel, on pousse une frame dans drawLoop
@@ -540,13 +542,14 @@ function drawLoop() {
 
   if (isRecording) {
     recStatus.innerText = `\u25CF REC ${formatTime(Date.now() - startTime)}`;
-    // Downscale 4K canvas → 1080p recorder canvas (GPU-accelere)
+    // Copy 4K canvas to 4K recorder canvas (same resolution = sharp)
     if (recCtx) {
-      recCtx.drawImage(canvas, 0, 0, WIDTH, HEIGHT);
+      recCtx.drawImage(canvas, 0, 0, WIDTH * SCALE, HEIGHT * SCALE);
     }
-    // Pousser la frame downscalee au recorder
+    // Push frame at ~30fps (skip every other frame from 60fps rAF)
     if (recVideoTrack && recVideoTrack.requestFrame) {
-      recVideoTrack.requestFrame();
+      recFrameCount++;
+      if (recFrameCount % 2 === 0) recVideoTrack.requestFrame();
     }
   }
 
@@ -2912,75 +2915,81 @@ const ALGORITHMS = {
       c.fillStyle = '#1B7339';
       c.fillRect(0, 0, WIDTH, HEIGHT);
 
-      // --- SCOREBOARD (modern design) ---
-      const sbY = 135, sbW = 800, sbH = 80;
+      // --- SCOREBOARD (large, prominent) ---
+      const sbY = 140, sbW = 920, sbH = 100;
       const sx = WIDTH / 2 - sbW / 2;
-      // Background
-      c.fillStyle = 'rgba(0,0,0,0.85)';
-      if (c.roundRect) { c.beginPath(); c.roundRect(sx, sbY, sbW, sbH, 16); c.fill(); }
-      // Team colors as accent bars
+      c.fillStyle = 'rgba(0,0,0,0.9)';
+      if (c.roundRect) { c.beginPath(); c.roundRect(sx, sbY, sbW, sbH, 18); c.fill(); }
+      // Team color accent bars (thicker)
       c.fillStyle = t[0].color;
-      c.fillRect(sx + 4, sbY + 4, 6, sbH - 8);
+      if (c.roundRect) { c.beginPath(); c.roundRect(sx, sbY, 12, sbH, [18, 0, 0, 18]); c.fill(); }
       c.fillStyle = t[1].color;
-      c.fillRect(sx + sbW - 10, sbY + 4, 6, sbH - 8);
-      // Team names
-      c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = 'bold 28px Inter, sans-serif';
-      c.fillText(t[0].shortName, sx + 25, sbY + 50);
+      if (c.roundRect) { c.beginPath(); c.roundRect(sx + sbW - 12, sbY, 12, sbH, [0, 18, 18, 0]); c.fill(); }
+      // Team names (large)
+      c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = 'bold 36px Inter, sans-serif';
+      c.fillText(t[0].shortName, sx + 30, sbY + 62);
       c.textAlign = 'right';
-      c.fillText(t[1].shortName, sx + sbW - 25, sbY + 50);
-      // Scores (large)
-      c.textAlign = 'center'; c.font = 'bold 52px Inter, sans-serif';
-      c.fillText(t[0].score, sx + sbW / 2 - 70, sbY + 56);
-      c.fillStyle = '#666'; c.font = 'bold 36px Inter, sans-serif';
-      c.fillText('-', sx + sbW / 2, sbY + 52);
-      c.fillStyle = '#fff'; c.font = 'bold 52px Inter, sans-serif';
-      c.fillText(t[1].score, sx + sbW / 2 + 70, sbY + 56);
-      // Timer (top center pill)
+      c.fillText(t[1].shortName, sx + sbW - 30, sbY + 62);
+      // Scores (very large)
+      c.textAlign = 'center'; c.font = 'bold 64px Inter, sans-serif';
+      c.fillText(t[0].score, sx + sbW / 2 - 80, sbY + 68);
+      c.fillStyle = '#555'; c.font = 'bold 40px Inter, sans-serif';
+      c.fillText('-', sx + sbW / 2, sbY + 64);
+      c.fillStyle = '#fff'; c.font = 'bold 64px Inter, sans-serif';
+      c.fillText(t[1].score, sx + sbW / 2 + 80, sbY + 68);
+      // Timer (top center pill, larger)
       const mins = Math.floor(Math.max(0, this._timerSecs) / 60).toString().padStart(2, '0');
       const secs = Math.floor(Math.max(0, this._timerSecs) % 60).toString().padStart(2, '0');
-      c.fillStyle = '#1a1a1a';
-      if (c.roundRect) { c.beginPath(); c.roundRect(sx + sbW / 2 - 50, sbY - 10, 100, 28, 10); c.fill(); }
-      c.fillStyle = '#4ADE80'; c.font = 'bold 20px Fira Code, monospace';
-      c.fillText(`${mins}:${secs}`, sx + sbW / 2, sbY + 12);
+      c.fillStyle = '#111';
+      if (c.roundRect) { c.beginPath(); c.roundRect(sx + sbW / 2 - 55, sbY - 14, 110, 34, 12); c.fill(); }
+      c.fillStyle = '#4ADE80'; c.font = 'bold 24px Fira Code, monospace';
+      c.fillText(`${mins}:${secs}`, sx + sbW / 2, sbY + 14);
 
       // --- PITCH ---
       c.fillStyle = '#22883F';
       c.fillRect(p.x, p.y, p.w, p.h);
-      // Pitch lines (thick and visible)
-      c.strokeStyle = 'rgba(255,255,255,0.7)'; c.lineWidth = 4;
+      // Neon glow pitch lines
+      c.save();
+      c.shadowColor = 'rgba(255,255,255,0.6)';
+      c.shadowBlur = 12;
+      c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = 3;
       c.strokeRect(p.x, p.y, p.w, p.h);
       // Center line
       c.beginPath(); c.moveTo(midX, p.y); c.lineTo(midX, p.y + p.h); c.stroke();
       // Center circle
-      c.lineWidth = 3;
       c.beginPath(); c.arc(midX, midY, 60, 0, Math.PI * 2); c.stroke();
       // Center dot
-      c.fillStyle = 'rgba(255,255,255,0.7)';
+      c.fillStyle = '#fff';
       c.beginPath(); c.arc(midX, midY, 5, 0, Math.PI * 2); c.fill();
       // Penalty areas
       const penW = 100, penH = 300;
-      c.strokeStyle = 'rgba(255,255,255,0.5)'; c.lineWidth = 3;
       c.strokeRect(p.x, midY - penH / 2, penW, penH);
       c.strokeRect(p.x + p.w - penW, midY - penH / 2, penW, penH);
+      c.restore(); // reset shadow
 
-      // --- GOALS (white cages with net) ---
+      // --- GOALS (white cages with neon glow + net) ---
       const gH = this._goalH, gW = this._goalW;
       const gTop = midY - gH / 2;
       // Left goal
-      c.fillStyle = 'rgba(255,255,255,0.08)';
+      c.fillStyle = 'rgba(255,255,255,0.06)';
       c.fillRect(p.x - gW, gTop, gW, gH);
+      c.save();
+      c.shadowColor = 'rgba(255,255,255,0.5)'; c.shadowBlur = 10;
       c.strokeStyle = '#fff'; c.lineWidth = 4;
-      // Goal frame: 3 sides (no right side = opening)
       c.beginPath(); c.moveTo(p.x, gTop); c.lineTo(p.x - gW, gTop); c.lineTo(p.x - gW, gTop + gH); c.lineTo(p.x, gTop + gH); c.stroke();
+      c.restore();
       // Net pattern
       c.strokeStyle = 'rgba(255,255,255,0.25)'; c.lineWidth = 1;
       for (let ny = gTop + 12; ny < gTop + gH; ny += 12) { c.beginPath(); c.moveTo(p.x - gW, ny); c.lineTo(p.x, ny); c.stroke(); }
       for (let nx = p.x - gW + 8; nx < p.x; nx += 8) { c.beginPath(); c.moveTo(nx, gTop); c.lineTo(nx, gTop + gH); c.stroke(); }
       // Right goal
-      c.fillStyle = 'rgba(255,255,255,0.08)';
+      c.fillStyle = 'rgba(255,255,255,0.06)';
       c.fillRect(p.x + p.w, gTop, gW, gH);
+      c.save();
+      c.shadowColor = 'rgba(255,255,255,0.5)'; c.shadowBlur = 10;
       c.strokeStyle = '#fff'; c.lineWidth = 4;
       c.beginPath(); c.moveTo(p.x + p.w, gTop); c.lineTo(p.x + p.w + gW, gTop); c.lineTo(p.x + p.w + gW, gTop + gH); c.lineTo(p.x + p.w, gTop + gH); c.stroke();
+      c.restore();
       c.strokeStyle = 'rgba(255,255,255,0.25)'; c.lineWidth = 1;
       for (let ny = gTop + 12; ny < gTop + gH; ny += 12) { c.beginPath(); c.moveTo(p.x + p.w, ny); c.lineTo(p.x + p.w + gW, ny); c.stroke(); }
       for (let nx = p.x + p.w + 8; nx < p.x + p.w + gW; nx += 8) { c.beginPath(); c.moveTo(nx, gTop); c.lineTo(nx, gTop + gH); c.stroke(); }
@@ -3064,24 +3073,24 @@ const ALGORITHMS = {
         this._foulFlash -= 0.02;
       }
 
-      // --- GOAL LOG (modern cards) ---
+      // --- GOAL LOG (large cards) ---
       if (this._goalLog.length > 0) {
-        const logY = p.y + p.h + 25;
+        const logY = p.y + p.h + 20;
         this._goalLog.forEach((g, i) => {
-          const cardY = logY + i * 50;
-          c.fillStyle = 'rgba(0,0,0,0.75)';
-          if (c.roundRect) { c.beginPath(); c.roundRect(100, cardY, WIDTH - 200, 42, 10); c.fill(); }
+          const cardY = logY + i * 60;
+          c.fillStyle = 'rgba(0,0,0,0.8)';
+          if (c.roundRect) { c.beginPath(); c.roundRect(70, cardY, WIDTH - 140, 52, 12); c.fill(); }
           // Color accent
           c.fillStyle = t[g.team].color;
-          c.fillRect(100, cardY, 5, 42);
+          if (c.roundRect) { c.beginPath(); c.roundRect(70, cardY, 8, 52, [12, 0, 0, 12]); c.fill(); }
           // Time badge
-          c.fillStyle = 'rgba(255,255,255,0.15)';
-          if (c.roundRect) { c.beginPath(); c.roundRect(120, cardY + 8, 60, 26, 6); c.fill(); }
-          c.fillStyle = '#4ADE80'; c.font = 'bold 18px Fira Code, monospace'; c.textAlign = 'center';
-          c.fillText(g.timeStr, 150, cardY + 27);
+          c.fillStyle = 'rgba(255,255,255,0.12)';
+          if (c.roundRect) { c.beginPath(); c.roundRect(95, cardY + 10, 72, 32, 8); c.fill(); }
+          c.fillStyle = '#4ADE80'; c.font = 'bold 22px Fira Code, monospace'; c.textAlign = 'center';
+          c.fillText(g.timeStr, 131, cardY + 33);
           // Team + GOAL
-          c.fillStyle = '#fff'; c.font = 'bold 24px Inter, sans-serif'; c.textAlign = 'left';
-          c.fillText(`\u26BD  ${t[g.team].shortName} GOAL!`, 195, cardY + 29);
+          c.fillStyle = '#fff'; c.font = 'bold 30px Inter, sans-serif'; c.textAlign = 'left';
+          c.fillText(`\u26BD  ${t[g.team].shortName} GOAL!`, 185, cardY + 36);
         });
       }
 

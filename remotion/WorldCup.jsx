@@ -151,8 +151,15 @@ function stepSim(s) {
 
   ball.vx *= 0.997; ball.vy *= 0.997; ball.x += ball.vx; ball.y += ball.vy;
   if (bounceRect(ball, s)) s.events.push('bounce');
-  players.forEach(pl => { bounceRect(pl, s); if (collide(pl, ball)) s.events.push('kick'); });
-  for (let i = 0; i < players.length; i++) for (let j = i + 1; j < players.length; j++) collide(players[i], players[j]);
+  players.forEach(pl => {
+    bounceRect(pl, s);
+    if (collide(pl, ball)) s.events.push('kick');
+  });
+  for (let i = 0; i < players.length; i++) {
+    for (let j = i + 1; j < players.length; j++) {
+      if (collide(players[i], players[j])) s.events.push('kick');
+    }
+  }
   if (collide(referee, ball)) s.events.push('kick');
   players.forEach(pl => collide(referee, pl));
 
@@ -177,7 +184,7 @@ function stepSim(s) {
 function simulateAll(seed, home, away, info, totalFrames) {
   const s = initState(seed, home, away, info);
   const snapshots = [];
-  const allEvents = [];
+  const allEvents = [{ type: 'whistle', frame: 1 }]; // opening whistle
 
   for (let f = 0; f < totalFrames; f++) {
     stepSim(s);
@@ -435,6 +442,7 @@ export const WorldCup = ({ homeTeam = 'FRA', awayTeam = 'SEN', seed = 42, matchI
   const goalSrc = new URL('./audio/goal.wav', import.meta.url).href;
   const whistleSrc = new URL('./audio/whistle.wav', import.meta.url).href;
   const kickSrc = new URL('./audio/kick.wav', import.meta.url).href;
+  const bounceSrc = new URL('./audio/bounce.wav', import.meta.url).href;
 
   return (
     <>
@@ -446,7 +454,8 @@ export const WorldCup = ({ homeTeam = 'FRA', awayTeam = 'SEN', seed = 42, matchI
       {allEvents.map((e, i) => {
         if (e.type === 'goal') return <Sequence key={`g${i}`} from={e.frame} durationInFrames={75}><Audio src={goalSrc} volume={0.55} /></Sequence>;
         if (e.type === 'whistle') return <Sequence key={`w${i}`} from={e.frame} durationInFrames={25}><Audio src={whistleSrc} volume={0.45} /></Sequence>;
-        if (e.type === 'kick' && i % 3 === 0) return <Sequence key={`k${i}`} from={e.frame} durationInFrames={5}><Audio src={kickSrc} volume={0.2} /></Sequence>;
+        if (e.type === 'kick') return <Sequence key={`k${i}`} from={e.frame} durationInFrames={5}><Audio src={kickSrc} volume={0.3} /></Sequence>;
+        if (e.type === 'bounce') return <Sequence key={`b${i}`} from={e.frame} durationInFrames={4}><Audio src={bounceSrc} volume={0.25} /></Sequence>;
         return null;
       })}
     </>

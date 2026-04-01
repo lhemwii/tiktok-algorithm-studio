@@ -6,9 +6,17 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "studio": "remotion studio remotion/index.jsx",
+    "render": "remotion render remotion/index.jsx WorldCup out/worldcup_4k.mp4 --codec h264 --crf 18 --image-format jpeg --jpeg-quality 95",
+    "render:all": "remotion render remotion/index.jsx"
   },
   "devDependencies": {
     "vite": "^8.0.3"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.443",
+    "@remotion/renderer": "^4.0.443",
+    "remotion": "^4.0.443"
   }
 }

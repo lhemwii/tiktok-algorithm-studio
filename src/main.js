@@ -2867,7 +2867,7 @@ const ALGORITHMS = {
     init: function () {
       // Rectangular pitch
       const px = 80, py = 240, pw = WIDTH - 160, ph = 700;
-      const goalW = 50, goalH = 220; // bigger goals with proper nets
+      const goalW = 60, goalH = 300; // large goals
       this._pitch = { x: px, y: py, w: pw, h: ph };
       this._goalH = goalH;
       this._goalW = goalW;
@@ -2899,7 +2899,7 @@ const ALGORITHMS = {
       this._kickoffTimer = 0;
       this._goalLog = [];
       this._stuckTimer = 0;
-      this._lastBallZone = { x: 0, y: 0 };
+      this._lastBallPos = { x: 0, y: 0 };
       this._foulFlash = 0;
     },
     draw: function (c) {
@@ -2912,39 +2912,56 @@ const ALGORITHMS = {
       c.fillStyle = '#1B7339';
       c.fillRect(0, 0, WIDTH, HEIGHT);
 
-      // --- SCOREBOARD ---
-      const sbY = 130, sbW = 700, sbH = 65;
+      // --- SCOREBOARD (modern design) ---
+      const sbY = 135, sbW = 800, sbH = 80;
       const sx = WIDTH / 2 - sbW / 2;
+      // Background
+      c.fillStyle = 'rgba(0,0,0,0.85)';
+      if (c.roundRect) { c.beginPath(); c.roundRect(sx, sbY, sbW, sbH, 16); c.fill(); }
+      // Team colors as accent bars
       c.fillStyle = t[0].color;
-      if (c.roundRect) { c.beginPath(); c.roundRect(sx, sbY, sbW / 2, sbH, [12, 0, 0, 12]); c.fill(); }
+      c.fillRect(sx + 4, sbY + 4, 6, sbH - 8);
       c.fillStyle = t[1].color;
-      if (c.roundRect) { c.beginPath(); c.roundRect(sx + sbW / 2, sbY, sbW / 2, sbH, [0, 12, 12, 0]); c.fill(); }
-      c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = 'bold 26px Inter, sans-serif';
-      c.fillText(t[0].shortName, sx + 70, sbY + 42);
-      c.fillText(t[1].shortName, sx + sbW - 70, sbY + 42);
-      c.font = 'bold 42px Inter, sans-serif';
-      c.fillText(t[0].score, sx + sbW / 2 - 55, sbY + 47);
-      c.fillText(t[1].score, sx + sbW / 2 + 55, sbY + 47);
+      c.fillRect(sx + sbW - 10, sbY + 4, 6, sbH - 8);
+      // Team names
+      c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = 'bold 28px Inter, sans-serif';
+      c.fillText(t[0].shortName, sx + 25, sbY + 50);
+      c.textAlign = 'right';
+      c.fillText(t[1].shortName, sx + sbW - 25, sbY + 50);
+      // Scores (large)
+      c.textAlign = 'center'; c.font = 'bold 52px Inter, sans-serif';
+      c.fillText(t[0].score, sx + sbW / 2 - 70, sbY + 56);
+      c.fillStyle = '#666'; c.font = 'bold 36px Inter, sans-serif';
+      c.fillText('-', sx + sbW / 2, sbY + 52);
+      c.fillStyle = '#fff'; c.font = 'bold 52px Inter, sans-serif';
+      c.fillText(t[1].score, sx + sbW / 2 + 70, sbY + 56);
+      // Timer (top center pill)
       const mins = Math.floor(Math.max(0, this._timerSecs) / 60).toString().padStart(2, '0');
       const secs = Math.floor(Math.max(0, this._timerSecs) % 60).toString().padStart(2, '0');
-      c.fillStyle = '#111';
-      if (c.roundRect) { c.beginPath(); c.roundRect(sx + sbW / 2 - 38, sbY - 4, 76, 26, 6); c.fill(); }
-      c.fillStyle = '#0F0'; c.font = 'bold 20px Fira Code, monospace';
-      c.fillText(`${mins}:${secs}`, sx + sbW / 2, sbY + 16);
+      c.fillStyle = '#1a1a1a';
+      if (c.roundRect) { c.beginPath(); c.roundRect(sx + sbW / 2 - 50, sbY - 10, 100, 28, 10); c.fill(); }
+      c.fillStyle = '#4ADE80'; c.font = 'bold 20px Fira Code, monospace';
+      c.fillText(`${mins}:${secs}`, sx + sbW / 2, sbY + 12);
 
       // --- PITCH ---
       c.fillStyle = '#22883F';
       c.fillRect(p.x, p.y, p.w, p.h);
-      // Pitch lines
-      c.strokeStyle = 'rgba(255,255,255,0.5)'; c.lineWidth = 2;
+      // Pitch lines (thick and visible)
+      c.strokeStyle = 'rgba(255,255,255,0.7)'; c.lineWidth = 4;
       c.strokeRect(p.x, p.y, p.w, p.h);
       // Center line
       c.beginPath(); c.moveTo(midX, p.y); c.lineTo(midX, p.y + p.h); c.stroke();
       // Center circle
+      c.lineWidth = 3;
       c.beginPath(); c.arc(midX, midY, 60, 0, Math.PI * 2); c.stroke();
       // Center dot
-      c.fillStyle = 'rgba(255,255,255,0.5)';
-      c.beginPath(); c.arc(midX, midY, 4, 0, Math.PI * 2); c.fill();
+      c.fillStyle = 'rgba(255,255,255,0.7)';
+      c.beginPath(); c.arc(midX, midY, 5, 0, Math.PI * 2); c.fill();
+      // Penalty areas
+      const penW = 100, penH = 300;
+      c.strokeStyle = 'rgba(255,255,255,0.5)'; c.lineWidth = 3;
+      c.strokeRect(p.x, midY - penH / 2, penW, penH);
+      c.strokeRect(p.x + p.w - penW, midY - penH / 2, penW, penH);
 
       // --- GOALS (white cages with net) ---
       const gH = this._goalH, gW = this._goalW;
@@ -3047,14 +3064,24 @@ const ALGORITHMS = {
         this._foulFlash -= 0.02;
       }
 
-      // --- GOAL LOG ---
+      // --- GOAL LOG (modern cards) ---
       if (this._goalLog.length > 0) {
-        const logY = p.y + p.h + 30;
-        c.fillStyle = 'rgba(0,0,0,0.5)';
-        if (c.roundRect) { c.beginPath(); c.roundRect(80, logY, WIDTH - 160, this._goalLog.length * 34 + 16, 10); c.fill(); }
+        const logY = p.y + p.h + 25;
         this._goalLog.forEach((g, i) => {
-          c.fillStyle = t[g.team].color; c.font = 'bold 24px Inter, sans-serif'; c.textAlign = 'left';
-          c.fillText(`\u26BD ${g.timeStr}  ${t[g.team].shortName} GOAL!`, 110, logY + 28 + i * 34);
+          const cardY = logY + i * 50;
+          c.fillStyle = 'rgba(0,0,0,0.75)';
+          if (c.roundRect) { c.beginPath(); c.roundRect(100, cardY, WIDTH - 200, 42, 10); c.fill(); }
+          // Color accent
+          c.fillStyle = t[g.team].color;
+          c.fillRect(100, cardY, 5, 42);
+          // Time badge
+          c.fillStyle = 'rgba(255,255,255,0.15)';
+          if (c.roundRect) { c.beginPath(); c.roundRect(120, cardY + 8, 60, 26, 6); c.fill(); }
+          c.fillStyle = '#4ADE80'; c.font = 'bold 18px Fira Code, monospace'; c.textAlign = 'center';
+          c.fillText(g.timeStr, 150, cardY + 27);
+          // Team + GOAL
+          c.fillStyle = '#fff'; c.font = 'bold 24px Inter, sans-serif'; c.textAlign = 'left';
+          c.fillText(`\u26BD  ${t[g.team].shortName} GOAL!`, 195, cardY + 29);
         });
       }
 
@@ -3191,11 +3218,11 @@ const ALGORITHMS = {
           }
 
           const dx = tx - pl.x, dy = ty - pl.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
-          const acc = pl.role === 'gk' ? 0.5 : 0.5;
+          const acc = pl.role === 'gk' ? 0.55 : 0.6;
           pl.vx += (dx / d) * acc; pl.vy += (dy / d) * acc;
-          pl.vx += (Math.random() - 0.5) * 0.15; pl.vy += (Math.random() - 0.5) * 0.15;
-          pl.vx *= 0.94; pl.vy *= 0.94;
-          const ms = pl.role === 'gk' ? 5.5 : 7;
+          pl.vx += (Math.random() - 0.5) * 0.2; pl.vy += (Math.random() - 0.5) * 0.2;
+          pl.vx *= 0.93; pl.vy *= 0.93;
+          const ms = pl.role === 'gk' ? 6 : 8;
           const sp = Math.sqrt(pl.vx * pl.vx + pl.vy * pl.vy);
           if (sp > ms) { pl.vx = (pl.vx / sp) * ms; pl.vy = (pl.vy / sp) * ms; }
           pl.x += pl.vx; pl.y += pl.vy;
@@ -3215,31 +3242,48 @@ const ALGORITHMS = {
         ref.x += ref.vx; ref.y += ref.vy;
         bounceRect(ref);
 
-        // Stuck detection: if ball stays in same ~80px zone for 5 seconds → foul
-        const zoneX = Math.floor(fb.x / 80);
-        const zoneY = Math.floor(fb.y / 80);
-        if (zoneX === this._lastBallZone.x && zoneY === this._lastBallZone.y) {
+        // Stuck detection: if ball moves less than 1 radius in 2 seconds → foul
+        const ballMoveDist = Math.sqrt((fb.x - this._lastBallPos.x) ** 2 + (fb.y - this._lastBallPos.y) ** 2);
+        if (ballMoveDist < fb.r) {
           this._stuckTimer += 1 / 60;
         } else {
           this._stuckTimer = 0;
-          this._lastBallZone = { x: zoneX, y: zoneY };
         }
-        if (this._stuckTimer >= 5) {
+        // Update last position every 0.5s
+        if (Math.floor(this._stuckTimer * 2) !== Math.floor((this._stuckTimer - 1/60) * 2)) {
+          // Only update if ball actually moved significantly
+          if (ballMoveDist > fb.r * 3) {
+            this._lastBallPos = { x: fb.x, y: fb.y };
+          }
+        }
+        if (this._stuckTimer === 0) this._lastBallPos = { x: fb.x, y: fb.y };
+
+        if (this._stuckTimer >= 2) {
           this._foulFlash = 1.5;
           playNoise(0.15, 0.15);
           playNote(15, 'square', 0.2, 0.1);
-          // Kick ball toward center with force
-          const toCenterX = midX - fb.x, toCenterY = midY - fb.y;
-          const tcD = Math.sqrt(toCenterX * toCenterX + toCenterY * toCenterY) || 1;
-          fb.vx = (toCenterX / tcD) * 6 + (Math.random() - 0.5) * 3;
-          fb.vy = (toCenterY / tcD) * 6 + (Math.random() - 0.5) * 3;
-          // Push all players away from ball
+
+          // Ball goes to team in the camp where the ball is
+          const ballInLeftHalf = fb.x < midX;
+          const attackingTeam = ballInLeftHalf ? 0 : 1; // team defending that half gets the ball
+
+          // Place ball at foul spot, kick toward opponent goal
+          const oppGoalX = attackingTeam === 0 ? pi.x + pi.w : pi.x;
+          fb.vx = attackingTeam === 0 ? 5 : -5;
+          fb.vy = (Math.random() - 0.5) * 4;
+
+          // Opponent team goes back to their half
           players.forEach(pl => {
-            const dx = pl.x - fb.x, dy = pl.y - fb.y;
-            const d = Math.sqrt(dx * dx + dy * dy) || 1;
-            pl.vx += (dx / d) * 4; pl.vy += (dy / d) * 4;
+            if (pl.team !== attackingTeam) {
+              const theirHalf = pl.team === 0 ? pi.x + pi.w / 4 : pi.x + pi.w * 3 / 4;
+              pl.x = theirHalf + (Math.random() - 0.5) * 80;
+              pl.y = midY + (Math.random() - 0.5) * 200;
+              pl.vx = 0; pl.vy = 0;
+            }
           });
+
           this._stuckTimer = 0;
+          this._lastBallPos = { x: fb.x, y: fb.y };
         }
 
         fb.vx *= 0.997; fb.vy *= 0.997;

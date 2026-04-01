@@ -403,11 +403,55 @@ function drawFrame(ctx, state, frameNum) {
   c.restore();
 }
 
+// --- PRE-COMPUTE EVENTS FOR AUDIO ---
+function precomputeEvents(seed, homeTeam, awayTeam, matchInfo, totalFrames) {
+  const state = createState(seed, homeTeam, awayTeam, matchInfo);
+  const events = [];
+  let lastGoalCount = 0;
+  let lastFoulFlash = 0;
+
+  for (let f = 0; f < totalFrames; f++) {
+    const prevBallX = state.ball.x;
+    const prevBallY = state.ball.y;
+    stepSimulation(state);
+
+    // Detect goal (score changed)
+    const totalGoals = state.teams[0].score + state.teams[1].score;
+    if (totalGoals > lastGoalCount) {
+      events.push({ type: 'goal', frame: f });
+      lastGoalCount = totalGoals;
+    }
+
+    // Detect foul (foulFlash went from 0 to >0)
+    if (state.foulFlash > 0 && lastFoulFlash === 0) {
+      events.push({ type: 'whistle', frame: f });
+    }
+    lastFoulFlash = state.foulFlash;
+
+    // Detect ball-wall bounce (ball position snapped)
+    const ballMoved = Math.abs(state.ball.x - prevBallX) + Math.abs(state.ball.y - prevBallY);
+    if (ballMoved > 10 && f % 3 === 0) {
+      // Sample some kicks/bounces (not every frame to avoid overload)
+      events.push({ type: 'kick', frame: f });
+    }
+  }
+
+  // Kickoff whistle at start
+  events.unshift({ type: 'whistle', frame: 25 });
+
+  return events;
+}
+
 // --- REACT COMPONENT ---
 export const WorldCup = ({ homeTeam = 'FRA', awayTeam = 'SEN', seed = 42, matchInfo = '' }) => {
   const frame = useCurrentFrame();
-  const { width, height } = useVideoConfig();
+  const { width, height, durationInFrames } = useVideoConfig();
   const canvasRef = useRef(null);
+
+  // Pre-compute all audio events ONCE
+  const audioEvents = useMemo(() => {
+    return precomputeEvents(seed, homeTeam, awayTeam, matchInfo, durationInFrames);
+  }, [seed, homeTeam, awayTeam, matchInfo, durationInFrames]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -423,14 +467,60 @@ export const WorldCup = ({ homeTeam = 'FRA', awayTeam = 'SEN', seed = 42, matchI
     // Draw
     ctx.clearRect(0, 0, width, height);
     drawFrame(ctx, state, frame);
-  }, [frame, width, height]);
+  }, [frame, width, height, seed, homeTeam, awayTeam, matchInfo]);
+
+  // Audio file paths (staticFile resolves from public/)
+  const bgmSrc = new URL('./audio/bgm.wav', import.meta.url).href;
+  const crowdSrc = new URL('./audio/crowd.wav', import.meta.url).href;
+  const goalSrc = new URL('./audio/goal.wav', import.meta.url).href;
+  const whistleSrc = new URL('./audio/whistle.wav', import.meta.url).href;
+  const kickSrc = new URL('./audio/kick.wav', import.meta.url).href;
+  const bounceSrc = new URL('./audio/bounce.wav', import.meta.url).href;
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={width}
-      height={height}
-      style={{ width: '100%', height: '100%' }}
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        width={width}
+        height={height}
+        style={{ width: '100%', height: '100%' }}
+      />
+
+      {/* Background music — full duration */}
+      <Audio src={bgmSrc} volume={0.25} />
+
+      {/* Crowd ambiance — looped (10s file, repeated) */}
+      {Array.from({ length: 7 }).map((_, i) => (
+        <Sequence key={`crowd-${i}`} from={i * 300} durationInFrames={300}>
+          <Audio src={crowdSrc} volume={0.15} />
+        </Sequence>
+      ))}
+
+      {/* Dynamic events — goals, whistles, kicks */}
+      {audioEvents.map((evt, i) => {
+        if (evt.type === 'goal') {
+          return (
+            <Sequence key={`goal-${i}`} from={evt.frame} durationInFrames={75}>
+              <Audio src={goalSrc} volume={0.6} />
+            </Sequence>
+          );
+        }
+        if (evt.type === 'whistle') {
+          return (
+            <Sequence key={`whistle-${i}`} from={evt.frame} durationInFrames={25}>
+              <Audio src={whistleSrc} volume={0.5} />
+            </Sequence>
+          );
+        }
+        if (evt.type === 'kick') {
+          return (
+            <Sequence key={`kick-${i}`} from={evt.frame} durationInFrames={5}>
+              <Audio src={kickSrc} volume={0.3} />
+            </Sequence>
+          );
+        }
+        return null;
+      })}
+    </>
   );
 };

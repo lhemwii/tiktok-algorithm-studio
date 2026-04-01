@@ -294,21 +294,25 @@ function twInit() {
   twScores = [0, 0, 0, 0];
   twWinner = null;
   twStep = 0;
-
-  // Corners: TL, TR, BL, BR
-  const corners = [[1, 1], [TW_SIZE - 2, 1], [1, TW_SIZE - 2], [TW_SIZE - 2, TW_SIZE - 2]];
-
   twRunning = true;
 
-  // Snake state for each strategy
+  // Start positions: inset from corners so no one is trapped
+  // Directions point TOWARD center so they don't hit walls immediately
+  const spawns = [
+    { x: 5,            y: 5,            dir: 1 }, // TL → go right
+    { x: TW_SIZE - 6,  y: 5,            dir: 2 }, // TR → go down
+    { x: 5,            y: TW_SIZE - 6,  dir: 1 }, // BL → go right
+    { x: TW_SIZE - 6,  y: TW_SIZE - 6,  dir: 0 }, // BR → go up
+  ];
+
   TW_STRATEGIES.forEach((s, i) => {
-    const [cx, cy] = corners[i];
-    s.headX = cx;
-    s.headY = cy;
-    s.dir = i; // initial direction varies per corner
+    const sp = spawns[i];
+    s.headX = sp.x;
+    s.headY = sp.y;
+    s.dir = sp.dir;
     s.alive = true;
-    s.trail = [{ x: cx, y: cy }];
-    twGrid[cy * TW_SIZE + cx] = i;
+    s.trail = [{ x: sp.x, y: sp.y }];
+    twGrid[sp.y * TW_SIZE + sp.x] = i;
     twScores[i] = 1;
   });
 }
@@ -319,10 +323,30 @@ function twGetCell(x, y) {
 }
 
 function twMoveGreedy(s) {
-  // Find nearest empty cell via BFS, move one step toward it
+  // Find nearest REACHABLE empty cell via BFS through empty cells only
+  // First: check immediate neighbors (most common case)
+  for (let d = 0; d < 4; d++) {
+    const nx = s.headX + TW_DIRS[d][0];
+    const ny = s.headY + TW_DIRS[d][1];
+    if (twGetCell(nx, ny) === -1) return d; // adjacent empty = go there
+  }
+
+  // No adjacent empty: BFS through empty cells to find a path
   const visited = new Set();
-  const queue = [{ x: s.headX, y: s.headY, firstDir: -1 }];
+  const queue = [];
   visited.add(s.headY * TW_SIZE + s.headX);
+
+  // Seed BFS from all empty neighbors (there are none if we get here,
+  // but this handles the theoretical case)
+  for (let d = 0; d < 4; d++) {
+    const nx = s.headX + TW_DIRS[d][0];
+    const ny = s.headY + TW_DIRS[d][1];
+    const cell = twGetCell(nx, ny);
+    if (cell === -1) {
+      queue.push({ x: nx, y: ny, firstDir: d });
+      visited.add(ny * TW_SIZE + nx);
+    }
+  }
 
   while (queue.length > 0) {
     const cur = queue.shift();
@@ -333,16 +357,14 @@ function twMoveGreedy(s) {
       if (visited.has(key)) continue;
       visited.add(key);
       const cell = twGetCell(nx, ny);
-      if (cell === -2) continue; // wall
-      const fd = cur.firstDir === -1 ? d : cur.firstDir;
+      // Only traverse empty cells — can't go through occupied territory
       if (cell === -1) {
-        // Found empty — move in firstDir
-        return fd;
+        queue.push({ x: nx, y: ny, firstDir: cur.firstDir });
       }
-      queue.push({ x: nx, y: ny, firstDir: fd });
     }
   }
-  return -1; // stuck
+
+  return -1; // truly stuck — no reachable empty cells
 }
 
 function twMoveSpiral(s) {
@@ -360,7 +382,7 @@ function twMoveSpiral(s) {
 }
 
 function twMoveHunter(s, idx) {
-  // Chase nearest enemy head
+  // Chase nearest enemy head — but only move to EMPTY cells
   let minDist = Infinity;
   let targetX = s.headX, targetY = s.headY;
 
@@ -374,17 +396,20 @@ function twMoveHunter(s, idx) {
     }
   });
 
-  // Move toward target, prefer direction that reduces distance most
-  let bestDir = -1;
-  let bestDist = Infinity;
+  // Collect all valid (empty) moves
+  const validMoves = [];
   for (let d = 0; d < 4; d++) {
     const nx = s.headX + TW_DIRS[d][0];
     const ny = s.headY + TW_DIRS[d][1];
-    if (twGetCell(nx, ny) !== -1) continue;
-    const dist = Math.abs(targetX - nx) + Math.abs(targetY - ny);
-    if (dist < bestDist) { bestDist = dist; bestDir = d; }
+    if (twGetCell(nx, ny) === -1) {
+      validMoves.push({ d, dist: Math.abs(targetX - nx) + Math.abs(targetY - ny) });
+    }
   }
-  return bestDir;
+  if (validMoves.length === 0) return -1;
+
+  // Pick the one closest to target
+  validMoves.sort((a, b) => a.dist - b.dist);
+  return validMoves[0].d;
 }
 
 function twMoveRandom(s) {
@@ -411,11 +436,20 @@ function twStepOnce() {
       return;
     }
 
+    const nx = s.headX + TW_DIRS[dir][0];
+    const ny = s.headY + TW_DIRS[dir][1];
+
+    // Double-check: only move to empty cells
+    if (twGetCell(nx, ny) !== -1) {
+      s.alive = false;
+      return;
+    }
+
     s.dir = dir;
-    s.headX += TW_DIRS[dir][0];
-    s.headY += TW_DIRS[dir][1];
-    twGrid[s.headY * TW_SIZE + s.headX] = i;
-    s.trail.push({ x: s.headX, y: s.headY });
+    s.headX = nx;
+    s.headY = ny;
+    twGrid[ny * TW_SIZE + nx] = i;
+    s.trail.push({ x: nx, y: ny });
     twScores[i]++;
     anyAlive = true;
   });

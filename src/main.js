@@ -2860,37 +2860,27 @@ const ALGORITHMS = {
   worldcup: {
     type: 'simulation',
     title: 'World Cup Arena',
-    badge: 'Bosnia vs Italy',
-    desc: 'Two country balls fight over a football in a circular arena. Push it into the goal!',
-    tiktokDesc: 'Bosnie vs Italie ! Qui pousse le ballon dans le but ? 90 secondes de chaos #worldcup #football #countryball',
+    badge: 'BOS vs ITA',
+    desc: 'Country balls battle in a circular arena. Push the football into the opponent\'s goal!',
+    tiktokDesc: 'Bosnie vs Italie dans l\'arene ! Qui marque le plus ? #worldcup #countryball #football #simulation',
     tiktokTags: '#worldcup #football #countryball #bosnia #italy #satisfying #simulation #physics',
     init: function () {
-      // Rectangular pitch
-      const px = 80, py = 240, pw = WIDTH - 160, ph = 700;
-      const goalW = 60, goalH = 300; // large goals
-      this._pitch = { x: px, y: py, w: pw, h: ph };
-      this._goalH = goalH;
-      this._goalW = goalW;
+      // Circular arena like the reference
+      const cx = WIDTH / 2, cy = 700, ar = 350;
+      this._arena = { cx, cy, r: ar };
+      // Goals: arcs outside the circle at left and right
+      this._goalAngleSize = 0.55; // radians — goal arc opening
+      this._goalDepth = 55;
       this._teams = [
-        { name: 'BOSNIA', shortName: 'BOS', color: '#002395', altColor: '#FFC107', score: 0 },
-        { name: 'ITALY', shortName: 'ITA', color: '#008C45', altColor: '#fff', score: 0 },
+        { name: 'BOSNIA & HER.', shortName: 'BOS', color: '#002395', altColor: '#FFC107', score: 0, goalAngle: Math.PI },
+        { name: 'ITALY', shortName: 'ITA', color: '#008C45', altColor: '#CE2B37', score: 0, goalAngle: 0 },
       ];
-      const midX = px + pw / 2, midY = py + ph / 2;
-      const goalMidY = midY;
-      const PR = 22; // all players same size
+      const PR = 28;
       this._players = [
-        // Bosnia: GK + 2 field
-        { x: px + 40, y: midY, vx: 0, vy: 0, r: PR, team: 0, role: 'gk' },
-        { x: midX - 140, y: midY - 100, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
-        { x: midX - 140, y: midY + 100, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
-        // Italy: GK + 2 field
-        { x: px + pw - 40, y: midY, vx: 0, vy: 0, r: PR, team: 1, role: 'gk' },
-        { x: midX + 140, y: midY - 100, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
-        { x: midX + 140, y: midY + 100, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
+        { x: cx - 100, y: cy, vx: 3, vy: -2, r: PR, team: 0 },
+        { x: cx + 100, y: cy, vx: -3, vy: 2, r: PR, team: 1 },
       ];
-      // Referee — follows the action, can bounce the ball
-      this._referee = { x: midX, y: midY + 50, vx: 0, vy: 0, r: 18 };
-      this._ball = { x: midX, y: midY, vx: 0, vy: 0, r: 12 };
+      this._ball = { x: cx, y: cy, vx: 0, vy: 0, r: 14 };
       this._particles = [];
       this._timerSecs = 90;
       this._goalFlash = 0;
@@ -2903,87 +2893,91 @@ const ALGORITHMS = {
       this._foulFlash = 0;
     },
     draw: function (c) {
-      const p = this._pitch;
+      const { cx, cy, r } = this._arena;
       const t = this._teams;
       const fb = this._ball;
-      const midX = p.x + p.w / 2, midY = p.y + p.h / 2;
+      const gs = this._goalAngleSize;
+      const gd = this._goalDepth;
 
-      // Green background
       c.fillStyle = '#1B7339';
       c.fillRect(0, 0, WIDTH, HEIGHT);
 
-      // --- SCOREBOARD (modern design) ---
-      const sbY = 135, sbW = 800, sbH = 80;
+      // --- ARENA (circle with glow) ---
+      c.save();
+      c.shadowBlur = 30; c.shadowColor = 'rgba(255,255,255,0.5)';
+      c.strokeStyle = '#fff'; c.lineWidth = 8;
+      // Draw circle but skip the goal openings
+      const goalAngles = [t[0].goalAngle, t[1].goalAngle];
+      for (let ga of goalAngles) {
+        c.beginPath();
+        c.arc(cx, cy, r, ga + gs / 2, ga + Math.PI * 2 - gs / 2);
+        c.stroke();
+      }
+      c.restore();
+
+      // --- GOALS (net arcs outside circle) ---
+      for (let ti = 0; ti < 2; ti++) {
+        const ga = t[ti].goalAngle;
+        c.save(); c.translate(cx, cy);
+        // Goal frame
+        c.strokeStyle = '#fff'; c.lineWidth = 4;
+        c.beginPath(); c.arc(0, 0, r + gd, ga - gs / 2, ga + gs / 2); c.stroke();
+        // Side posts
+        for (const side of [-1, 1]) {
+          const a = ga + side * gs / 2;
+          c.beginPath();
+          c.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+          c.lineTo(Math.cos(a) * (r + gd), Math.sin(a) * (r + gd));
+          c.stroke();
+        }
+        // Net pattern
+        c.strokeStyle = 'rgba(255,255,255,0.2)'; c.lineWidth = 1;
+        for (let d = 10; d < gd; d += 10) {
+          c.beginPath(); c.arc(0, 0, r + d, ga - gs / 2, ga + gs / 2); c.stroke();
+        }
+        for (let i = -4; i <= 4; i++) {
+          const a = ga + i * (gs / 8);
+          c.beginPath(); c.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+          c.lineTo(Math.cos(a) * (r + gd), Math.sin(a) * (r + gd)); c.stroke();
+        }
+        c.restore();
+      }
+
+      // --- SCOREBOARD (reference style with flag bars) ---
+      const sbY = 160, sbW = 700, sbH = 70;
       const sx = WIDTH / 2 - sbW / 2;
-      // Background
-      c.fillStyle = 'rgba(0,0,0,0.85)';
-      if (c.roundRect) { c.beginPath(); c.roundRect(sx, sbY, sbW, sbH, 16); c.fill(); }
-      // Team colors as accent bars
+      // Left team bg
       c.fillStyle = t[0].color;
-      c.fillRect(sx + 4, sbY + 4, 6, sbH - 8);
-      c.fillStyle = t[1].color;
-      c.fillRect(sx + sbW - 10, sbY + 4, 6, sbH - 8);
-      // Team names
-      c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = 'bold 28px Inter, sans-serif';
-      c.fillText(t[0].shortName, sx + 25, sbY + 50);
-      c.textAlign = 'right';
-      c.fillText(t[1].shortName, sx + sbW - 25, sbY + 50);
-      // Scores (large)
-      c.textAlign = 'center'; c.font = 'bold 52px Inter, sans-serif';
-      c.fillText(t[0].score, sx + sbW / 2 - 70, sbY + 56);
-      c.fillStyle = '#666'; c.font = 'bold 36px Inter, sans-serif';
-      c.fillText('-', sx + sbW / 2, sbY + 52);
-      c.fillStyle = '#fff'; c.font = 'bold 52px Inter, sans-serif';
-      c.fillText(t[1].score, sx + sbW / 2 + 70, sbY + 56);
-      // Timer (top center pill)
+      if (c.roundRect) { c.beginPath(); c.roundRect(sx, sbY, sbW * 0.35, sbH, [12, 0, 0, 12]); c.fill(); }
+      // Left flag pattern
+      c.save(); c.beginPath(); if (c.roundRect) c.roundRect(sx, sbY, sbW * 0.35, sbH, [12, 0, 0, 12]); c.clip();
+      c.fillStyle = '#FFC107'; c.beginPath(); c.moveTo(sx, sbY); c.lineTo(sx + sbW * 0.35, sbY + sbH); c.lineTo(sx, sbY + sbH); c.fill();
+      c.restore();
+      // Score left
+      c.fillStyle = t[0].color;
+      c.fillRect(sx + sbW * 0.35, sbY, sbW * 0.1, sbH);
+      c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = 'bold 44px Inter, sans-serif';
+      c.fillText(t[0].score, sx + sbW * 0.4, sbY + 50);
+      // Timer center
+      c.fillStyle = '#C4A000';
+      c.fillRect(sx + sbW * 0.45, sbY, sbW * 0.1, sbH);
       const mins = Math.floor(Math.max(0, this._timerSecs) / 60).toString().padStart(2, '0');
       const secs = Math.floor(Math.max(0, this._timerSecs) % 60).toString().padStart(2, '0');
-      c.fillStyle = '#1a1a1a';
-      if (c.roundRect) { c.beginPath(); c.roundRect(sx + sbW / 2 - 50, sbY - 10, 100, 28, 10); c.fill(); }
-      c.fillStyle = '#4ADE80'; c.font = 'bold 20px Fira Code, monospace';
-      c.fillText(`${mins}:${secs}`, sx + sbW / 2, sbY + 12);
-
-      // --- PITCH ---
-      c.fillStyle = '#22883F';
-      c.fillRect(p.x, p.y, p.w, p.h);
-      // Pitch lines (thick and visible)
-      c.strokeStyle = 'rgba(255,255,255,0.7)'; c.lineWidth = 4;
-      c.strokeRect(p.x, p.y, p.w, p.h);
-      // Center line
-      c.beginPath(); c.moveTo(midX, p.y); c.lineTo(midX, p.y + p.h); c.stroke();
-      // Center circle
-      c.lineWidth = 3;
-      c.beginPath(); c.arc(midX, midY, 60, 0, Math.PI * 2); c.stroke();
-      // Center dot
-      c.fillStyle = 'rgba(255,255,255,0.7)';
-      c.beginPath(); c.arc(midX, midY, 5, 0, Math.PI * 2); c.fill();
-      // Penalty areas
-      const penW = 100, penH = 300;
-      c.strokeStyle = 'rgba(255,255,255,0.5)'; c.lineWidth = 3;
-      c.strokeRect(p.x, midY - penH / 2, penW, penH);
-      c.strokeRect(p.x + p.w - penW, midY - penH / 2, penW, penH);
-
-      // --- GOALS (white cages with net) ---
-      const gH = this._goalH, gW = this._goalW;
-      const gTop = midY - gH / 2;
-      // Left goal
-      c.fillStyle = 'rgba(255,255,255,0.08)';
-      c.fillRect(p.x - gW, gTop, gW, gH);
-      c.strokeStyle = '#fff'; c.lineWidth = 4;
-      // Goal frame: 3 sides (no right side = opening)
-      c.beginPath(); c.moveTo(p.x, gTop); c.lineTo(p.x - gW, gTop); c.lineTo(p.x - gW, gTop + gH); c.lineTo(p.x, gTop + gH); c.stroke();
-      // Net pattern
-      c.strokeStyle = 'rgba(255,255,255,0.25)'; c.lineWidth = 1;
-      for (let ny = gTop + 12; ny < gTop + gH; ny += 12) { c.beginPath(); c.moveTo(p.x - gW, ny); c.lineTo(p.x, ny); c.stroke(); }
-      for (let nx = p.x - gW + 8; nx < p.x; nx += 8) { c.beginPath(); c.moveTo(nx, gTop); c.lineTo(nx, gTop + gH); c.stroke(); }
-      // Right goal
-      c.fillStyle = 'rgba(255,255,255,0.08)';
-      c.fillRect(p.x + p.w, gTop, gW, gH);
-      c.strokeStyle = '#fff'; c.lineWidth = 4;
-      c.beginPath(); c.moveTo(p.x + p.w, gTop); c.lineTo(p.x + p.w + gW, gTop); c.lineTo(p.x + p.w + gW, gTop + gH); c.lineTo(p.x + p.w, gTop + gH); c.stroke();
-      c.strokeStyle = 'rgba(255,255,255,0.25)'; c.lineWidth = 1;
-      for (let ny = gTop + 12; ny < gTop + gH; ny += 12) { c.beginPath(); c.moveTo(p.x + p.w, ny); c.lineTo(p.x + p.w + gW, ny); c.stroke(); }
-      for (let nx = p.x + p.w + 8; nx < p.x + p.w + gW; nx += 8) { c.beginPath(); c.moveTo(nx, gTop); c.lineTo(nx, gTop + gH); c.stroke(); }
+      c.fillStyle = '#fff'; c.font = 'bold 24px Fira Code, monospace';
+      c.fillText(`${mins}:${secs}`, sx + sbW * 0.5, sbY + 46);
+      // Score right
+      c.fillStyle = t[1].color;
+      c.fillRect(sx + sbW * 0.55, sbY, sbW * 0.1, sbH);
+      c.fillStyle = '#fff'; c.font = 'bold 44px Inter, sans-serif';
+      c.fillText(t[1].score, sx + sbW * 0.6, sbY + 50);
+      // Right team bg (Italy flag)
+      c.save();
+      if (c.roundRect) { c.beginPath(); c.roundRect(sx + sbW * 0.65, sbY, sbW * 0.35, sbH, [0, 12, 12, 0]); c.clip(); }
+      const rfw = sbW * 0.35 / 3;
+      c.fillStyle = '#008C45'; c.fillRect(sx + sbW * 0.65, sbY, rfw, sbH);
+      c.fillStyle = '#fff'; c.fillRect(sx + sbW * 0.65 + rfw, sbY, rfw, sbH);
+      c.fillStyle = '#CE2B37'; c.fillRect(sx + sbW * 0.65 + rfw * 2, sbY, rfw, sbH);
+      c.restore();
 
       // --- PARTICLES ---
       this._particles.forEach(pt => {
@@ -2995,108 +2989,96 @@ const ALGORITHMS = {
       // --- FOOTBALL ---
       c.fillStyle = '#fff';
       c.beginPath(); c.arc(fb.x, fb.y, fb.r, 0, Math.PI * 2); c.fill();
-      c.strokeStyle = '#333'; c.lineWidth = 1.5;
+      c.strokeStyle = '#555'; c.lineWidth = 1;
       c.beginPath(); c.arc(fb.x, fb.y, fb.r, 0, Math.PI * 2); c.stroke();
-      c.fillStyle = '#333';
-      for (let i = 0; i < 5; i++) {
-        const a = i * Math.PI * 2 / 5 - Math.PI / 2;
-        c.beginPath(); c.arc(fb.x + Math.cos(a) * fb.r * 0.5, fb.y + Math.sin(a) * fb.r * 0.5, 2, 0, Math.PI * 2); c.fill();
-      }
 
-      // --- PLAYERS ---
+      // --- PLAYERS (countryballs with eyes) ---
       this._players.forEach(pl => {
         const tm = t[pl.team];
         c.save(); c.translate(pl.x, pl.y);
-        c.fillStyle = tm.color;
+        // Shadow
+        c.fillStyle = 'rgba(0,0,0,0.2)';
+        c.beginPath(); c.ellipse(3, pl.r + 8, pl.r * 0.8, 6, 0, 0, Math.PI * 2); c.fill();
+        // Body with gradient
+        const grad = c.createRadialGradient(-pl.r * 0.3, -pl.r * 0.3, pl.r * 0.1, 0, 0, pl.r);
+        grad.addColorStop(0, '#fff'); grad.addColorStop(0.3, tm.color); grad.addColorStop(1, '#000');
+        c.fillStyle = grad;
         c.beginPath(); c.arc(0, 0, pl.r, 0, Math.PI * 2); c.fill();
+        // Flag pattern clipped
         c.save(); c.beginPath(); c.arc(0, 0, pl.r, 0, Math.PI * 2); c.clip();
         if (pl.team === 0) {
           c.fillStyle = '#FFC107';
           c.beginPath(); c.moveTo(-pl.r, -pl.r); c.lineTo(pl.r, pl.r); c.lineTo(-pl.r, pl.r); c.fill();
+          // Stars
+          c.fillStyle = '#fff'; c.font = '12px serif';
+          c.fillText('★★★', -8, -8);
         } else {
           c.fillStyle = '#008C45'; c.fillRect(-pl.r, -pl.r, pl.r * 2 / 3, pl.r * 2);
-          c.fillStyle = '#fff'; c.fillRect(-pl.r + pl.r * 2 / 3, -pl.r, pl.r * 2 / 3, pl.r * 2);
-          c.fillStyle = '#CE2B37'; c.fillRect(-pl.r + pl.r * 4 / 3, -pl.r, pl.r * 2 / 3, pl.r * 2);
+          c.fillStyle = '#fff'; c.fillRect(-pl.r / 3, -pl.r, pl.r * 2 / 3, pl.r * 2);
+          c.fillStyle = '#CE2B37'; c.fillRect(pl.r / 3, -pl.r, pl.r * 2 / 3, pl.r * 2);
         }
         c.restore();
-        if (pl.role === 'gk') { c.strokeStyle = '#FFD700'; c.lineWidth = 3; c.beginPath(); c.arc(0, 0, pl.r + 2, 0, Math.PI * 2); c.stroke(); }
         // Eyes
         const ea = Math.atan2(fb.y - pl.y, fb.x - pl.x);
         c.fillStyle = '#fff';
-        c.beginPath(); c.ellipse(-6, -3, 8, 10, 0, 0, Math.PI * 2); c.fill();
-        c.beginPath(); c.ellipse(6, -3, 8, 10, 0, 0, Math.PI * 2); c.fill();
-        c.strokeStyle = '#000'; c.lineWidth = 1;
-        c.beginPath(); c.ellipse(-6, -3, 8, 10, 0, 0, Math.PI * 2); c.stroke();
-        c.beginPath(); c.ellipse(6, -3, 8, 10, 0, 0, Math.PI * 2); c.stroke();
+        c.beginPath(); c.ellipse(-8, -6, 10, 13, 0, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.ellipse(8, -6, 10, 13, 0, 0, Math.PI * 2); c.fill();
+        c.strokeStyle = '#000'; c.lineWidth = 1.5;
+        c.beginPath(); c.ellipse(-8, -6, 10, 13, 0, 0, Math.PI * 2); c.stroke();
+        c.beginPath(); c.ellipse(8, -6, 10, 13, 0, 0, Math.PI * 2); c.stroke();
         c.fillStyle = '#000';
-        c.beginPath(); c.arc(-6 + Math.cos(ea) * 3, -3 + Math.sin(ea) * 3, 3.5, 0, Math.PI * 2); c.fill();
-        c.beginPath(); c.arc(6 + Math.cos(ea) * 3, -3 + Math.sin(ea) * 3, 3.5, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.arc(-8 + Math.cos(ea) * 4, -6 + Math.sin(ea) * 4, 5, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.arc(8 + Math.cos(ea) * 4, -6 + Math.sin(ea) * 4, 5, 0, Math.PI * 2); c.fill();
         c.restore();
       });
 
-      // --- REFEREE ---
-      if (this._referee) {
-        const ref = this._referee;
-        c.save(); c.translate(ref.x, ref.y);
-        c.fillStyle = '#111';
-        c.beginPath(); c.arc(0, 0, ref.r, 0, Math.PI * 2); c.fill();
-        // Yellow stripe (referee shirt)
-        c.fillStyle = '#FFD700';
-        c.fillRect(-ref.r, -4, ref.r * 2, 8);
-        // Eyes follow ball
-        const rea = Math.atan2(fb.y - ref.y, fb.x - ref.x);
-        c.fillStyle = '#fff';
-        c.beginPath(); c.ellipse(-5, -4, 6, 8, 0, 0, Math.PI * 2); c.fill();
-        c.beginPath(); c.ellipse(5, -4, 6, 8, 0, 0, Math.PI * 2); c.fill();
-        c.fillStyle = '#000';
-        c.beginPath(); c.arc(-5 + Math.cos(rea) * 2.5, -4 + Math.sin(rea) * 2.5, 3, 0, Math.PI * 2); c.fill();
-        c.beginPath(); c.arc(5 + Math.cos(rea) * 2.5, -4 + Math.sin(rea) * 2.5, 3, 0, Math.PI * 2); c.fill();
-        c.restore();
-      }
-
-      // --- FOUL FLASH ---
+      // --- FOUL ---
       if (this._foulFlash > 0) {
-        c.fillStyle = `rgba(255,255,0,${this._foulFlash * 0.2})`;
-        c.fillRect(0, 0, WIDTH, HEIGHT);
-        c.fillStyle = '#FFD700'; c.textAlign = 'center';
-        c.font = 'bold 50px Inter, sans-serif';
-        c.fillText('FOUL!', WIDTH / 2, midY - 30);
+        c.fillStyle = `rgba(255,255,0,${this._foulFlash * 0.15})`; c.fillRect(0, 0, WIDTH, HEIGHT);
+        c.fillStyle = '#FFD700'; c.textAlign = 'center'; c.font = 'bold 50px Inter, sans-serif';
+        c.fillText('FOUL!', WIDTH / 2, cy);
         this._foulFlash -= 0.02;
       }
 
-      // --- GOAL LOG (modern cards) ---
+      // --- GOAL LOG ---
       if (this._goalLog.length > 0) {
-        const logY = p.y + p.h + 25;
+        const logY = cy + r + gd + 30;
         this._goalLog.forEach((g, i) => {
-          const cardY = logY + i * 50;
-          c.fillStyle = 'rgba(0,0,0,0.75)';
-          if (c.roundRect) { c.beginPath(); c.roundRect(100, cardY, WIDTH - 200, 42, 10); c.fill(); }
-          // Color accent
-          c.fillStyle = t[g.team].color;
-          c.fillRect(100, cardY, 5, 42);
-          // Time badge
-          c.fillStyle = 'rgba(255,255,255,0.15)';
-          if (c.roundRect) { c.beginPath(); c.roundRect(120, cardY + 8, 60, 26, 6); c.fill(); }
+          c.fillStyle = 'rgba(0,0,0,0.6)';
+          if (c.roundRect) { c.beginPath(); c.roundRect(120, logY + i * 44, WIDTH - 240, 38, 8); c.fill(); }
+          c.fillStyle = t[g.team].color; c.fillRect(120, logY + i * 44, 4, 38);
           c.fillStyle = '#4ADE80'; c.font = 'bold 18px Fira Code, monospace'; c.textAlign = 'center';
-          c.fillText(g.timeStr, 150, cardY + 27);
-          // Team + GOAL
-          c.fillStyle = '#fff'; c.font = 'bold 24px Inter, sans-serif'; c.textAlign = 'left';
-          c.fillText(`\u26BD  ${t[g.team].shortName} GOAL!`, 195, cardY + 29);
+          c.fillText(g.timeStr, 165, logY + i * 44 + 26);
+          c.fillStyle = '#fff'; c.font = 'bold 22px Inter, sans-serif'; c.textAlign = 'left';
+          c.fillText(`\u26BD ${t[g.team].shortName} GOAL!`, 200, logY + i * 44 + 26);
         });
       }
 
+      // --- BOTTOM INFO CARD ---
+      const ibY = HEIGHT - 250, ibW = 600, ibH = 140;
+      const ibx = WIDTH / 2 - ibW / 2;
+      c.fillStyle = '#fff';
+      if (c.roundRect) { c.beginPath(); c.roundRect(ibx, ibY, ibW, ibH, 20); c.fill(); }
+      c.fillStyle = '#111'; c.textAlign = 'center'; c.font = 'bold 20px Inter, sans-serif';
+      c.fillText('MILLI TAKIMLAR', ibx + ibW / 2, ibY + 35);
+      c.font = '16px Inter, sans-serif'; c.fillStyle = '#888';
+      c.fillText('31/03 TUE', ibx + ibW / 2, ibY + 55);
+      c.font = 'bold 44px serif'; c.fillStyle = '#222';
+      c.fillText('qualifiers', ibx + ibW / 2, ibY + 100);
+      c.font = 'bold 14px Inter, sans-serif'; c.fillStyle = '#555';
+      c.textAlign = 'left'; c.fillText(t[0].name, ibx + 30, ibY + 125);
+      c.textAlign = 'right'; c.fillText(t[1].name, ibx + ibW - 30, ibY + 125);
+
       // Kickoff
       if (this._kickoff && this._kickoffTimer > 0) {
-        c.fillStyle = 'rgba(0,0,0,0.5)'; c.fillRect(p.x, midY - 40, p.w, 80);
+        c.fillStyle = 'rgba(0,0,0,0.5)'; c.fillRect(0, cy - 40, WIDTH, 80);
         c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = 'bold 50px Inter, sans-serif';
-        c.fillText(this._kickoffTimer > 45 ? 'KICK OFF!' : this._kickoffTimer > 15 ? '3' : this._kickoffTimer > 10 ? '2' : '1', midX, midY + 16);
+        c.fillText(this._kickoffTimer > 45 ? 'KICK OFF!' : this._kickoffTimer > 15 ? '3' : this._kickoffTimer > 10 ? '2' : '1', WIDTH / 2, cy + 16);
       }
-
       if (this._goalFlash > 0) { c.fillStyle = `rgba(255,255,255,${this._goalFlash * 0.3})`; c.fillRect(0, 0, WIDTH, HEIGHT); this._goalFlash -= 0.03; }
-
       if (this._ended) {
         c.fillStyle = 'rgba(0,0,0,0.75)'; c.fillRect(0, HEIGHT / 2 - 100, WIDTH, 200);
-        c.textAlign = 'center'; c.font = 'bold 32px Inter, sans-serif'; c.fillStyle = '#aaa'; c.fillText('FULL TIME', WIDTH / 2, HEIGHT / 2 - 55);
+        c.textAlign = 'center'; c.font = 'bold 30px Inter, sans-serif'; c.fillStyle = '#aaa'; c.fillText('FULL TIME', WIDTH / 2, HEIGHT / 2 - 55);
         c.font = 'bold 70px Inter, sans-serif'; c.fillStyle = '#fff'; c.fillText(`${t[0].score} - ${t[1].score}`, WIDTH / 2, HEIGHT / 2 + 10);
         c.font = 'bold 36px Inter, sans-serif'; c.fillStyle = '#FFD700';
         const w = t[0].score > t[1].score ? t[0].name : t[1].score > t[0].score ? t[1].name : 'DRAW';
@@ -3105,12 +3087,11 @@ const ALGORITHMS = {
     },
     run: async function (runId) {
       this.init(); initAudio();
-      const pi = this._pitch;
+      const { cx, cy, r } = this._arena;
       const players = this._players;
       const fb = this._ball;
       const teams = this._teams;
-      const midX = pi.x + pi.w / 2, midY = pi.y + pi.h / 2;
-      const gH = this._goalH, gTop = midY - gH / 2, gBot = midY + gH / 2;
+      const gs = this._goalAngleSize;
 
       const collide = (a, b) => {
         const dx = b.x - a.x, dy = b.y - a.y, dist = Math.sqrt(dx * dx + dy * dy);
@@ -3129,32 +3110,32 @@ const ALGORITHMS = {
         return false;
       };
 
-      const bounceRect = (b) => {
-        let hit = false;
-        // Top/bottom walls
-        if (b.y - b.r < pi.y) { b.y = pi.y + b.r; b.vy = Math.abs(b.vy); hit = true; }
-        if (b.y + b.r > pi.y + pi.h) { b.y = pi.y + pi.h - b.r; b.vy = -Math.abs(b.vy); hit = true; }
-        // Left wall — but not in goal zone
-        if (b.x - b.r < pi.x) {
-          if (b.y > gTop && b.y < gBot) { /* in goal zone, don't bounce */ }
-          else { b.x = pi.x + b.r; b.vx = Math.abs(b.vx); hit = true; }
+      // Bounce off circular arena — but let ball through goal openings
+      const bounceCircle = (b) => {
+        const dx = b.x - cx, dy = b.y - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist + b.r > r) {
+          const angle = Math.atan2(dy, dx);
+          // Check if in a goal opening
+          for (const tm of teams) {
+            let relA = angle - tm.goalAngle;
+            while (relA > Math.PI) relA -= Math.PI * 2;
+            while (relA < -Math.PI) relA += Math.PI * 2;
+            if (Math.abs(relA) < gs / 2) return false; // in goal opening, don't bounce
+          }
+          const nx = dx / dist, ny = dy / dist;
+          const dot = b.vx * nx + b.vy * ny;
+          b.vx -= 2 * dot * nx; b.vy -= 2 * dot * ny;
+          b.x = cx + nx * (r - b.r - 1); b.y = cy + ny * (r - b.r - 1);
+          return true;
         }
-        // Right wall — but not in goal zone
-        if (b.x + b.r > pi.x + pi.w) {
-          if (b.y > gTop && b.y < gBot) { /* in goal zone, don't bounce */ }
-          else { b.x = pi.x + pi.w - b.r; b.vx = -Math.abs(b.vx); hit = true; }
-        }
-        return hit;
+        return false;
       };
 
       const resetPositions = () => {
-        fb.x = midX; fb.y = midY; fb.vx = 0; fb.vy = 0;
-        players[0].x = pi.x + 40; players[0].y = midY;
-        players[1].x = midX - 140; players[1].y = midY - 100;
-        players[2].x = midX - 140; players[2].y = midY + 100;
-        players[3].x = pi.x + pi.w - 40; players[3].y = midY;
-        players[4].x = midX + 140; players[4].y = midY - 100;
-        players[5].x = midX + 140; players[5].y = midY + 100;
+        fb.x = cx; fb.y = cy; fb.vx = 0; fb.vy = 0;
+        players[0].x = cx - 100; players[0].y = cy;
+        players[1].x = cx + 100; players[1].y = cy;
         players.forEach(p => { p.vx = 0; p.vy = 0; });
       };
 
@@ -3167,170 +3148,106 @@ const ALGORITHMS = {
           this._kickoffTimer--;
           if (this._kickoffTimer <= 0) {
             this._kickoff = false;
-            fb.vx = (Math.random() - 0.5) * 2;
-            fb.vy = (Math.random() - 0.5) * 2;
+            fb.vx = (Math.random() - 0.5) * 3;
+            fb.vy = (Math.random() - 0.5) * 3;
             playNote(12, 'triangle', 0.15, 0.1);
           }
-          await sleep(16);
-          continue;
+          await sleep(16); continue;
         }
 
         this._timerSecs -= 1 / 60;
         if (this._timerSecs <= 0) { this._timerSecs = 0; this._ended = true; }
 
-        // AI
+        // AI: both players ALWAYS rush toward the ball to push it into opponent's goal
         players.forEach(pl => {
-          const oppGoalX = pl.team === 0 ? pi.x + pi.w : pi.x;
-          const ownGoalX = pl.team === 0 ? pi.x : pi.x + pi.w;
-          let tx, ty;
+          const oppGoalAngle = teams[pl.team === 0 ? 1 : 0].goalAngle;
+          const oppGoalX = cx + Math.cos(oppGoalAngle) * r;
+          const oppGoalY = cy + Math.sin(oppGoalAngle) * r;
 
-          if (pl.role === 'gk') {
-            // GK: stay on goal line, track ball Y
-            tx = ownGoalX + (pl.team === 0 ? 35 : -35);
-            ty = midY + (fb.y - midY) * 0.7;
-            ty = Math.max(gTop + 20, Math.min(gBot - 20, ty));
-            // Rush if ball is dangerously close
-            if (Math.abs(fb.x - ownGoalX) < 150) { tx = fb.x; ty = fb.y; }
-          } else {
-            // Field player: ALWAYS chase the ball aggressively
-            // Get behind ball relative to opponent's goal
-            const gdx = oppGoalX - fb.x, gdy = midY - fb.y;
-            const gd = Math.sqrt(gdx * gdx + gdy * gdy) || 1;
-            tx = fb.x - (gdx / gd) * (fb.r + pl.r + 8);
-            ty = fb.y - (gdy / gd) * (fb.r + pl.r + 8);
+          // Get behind ball relative to opponent's goal
+          const gdx = oppGoalX - fb.x, gdy = oppGoalY - fb.y;
+          const gd = Math.sqrt(gdx * gdx + gdy * gdy) || 1;
+          let tx = fb.x - (gdx / gd) * (fb.r + pl.r + 5);
+          let ty = fb.y - (gdy / gd) * (fb.r + pl.r + 5);
 
-            // If close enough to ball, rush directly at it
-            const distToBall = Math.sqrt((pl.x - fb.x) ** 2 + (pl.y - fb.y) ** 2);
-            if (distToBall < 80) {
-              tx = fb.x + (oppGoalX - fb.x) * 0.1;
-              ty = fb.y;
-            }
-
-            // Anti-corner: if player is stuck near a corner, push toward center
-            const nearLeft = pl.x < pi.x + 40;
-            const nearRight = pl.x > pi.x + pi.w - 40;
-            const nearTop = pl.y < pi.y + 40;
-            const nearBot = pl.y > pi.y + pi.h - 40;
-            if ((nearLeft || nearRight) && (nearTop || nearBot)) {
-              tx = midX + (Math.random() - 0.5) * 100;
-              ty = midY + (Math.random() - 0.5) * 100;
-            }
+          // If very close, just ram the ball
+          const distToBall = Math.sqrt((pl.x - fb.x) ** 2 + (pl.y - fb.y) ** 2);
+          if (distToBall < 60) {
+            tx = fb.x + (gdx / gd) * 10;
+            ty = fb.y + (gdy / gd) * 10;
           }
 
           const dx = tx - pl.x, dy = ty - pl.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
-          const acc = pl.role === 'gk' ? 0.55 : 0.6;
-          pl.vx += (dx / d) * acc; pl.vy += (dy / d) * acc;
-          pl.vx += (Math.random() - 0.5) * 0.2; pl.vy += (Math.random() - 0.5) * 0.2;
+          pl.vx += (dx / d) * 0.7; pl.vy += (dy / d) * 0.7;
+          pl.vx += (Math.random() - 0.5) * 0.3; pl.vy += (Math.random() - 0.5) * 0.3;
           pl.vx *= 0.93; pl.vy *= 0.93;
-          const ms = pl.role === 'gk' ? 6 : 8;
           const sp = Math.sqrt(pl.vx * pl.vx + pl.vy * pl.vy);
-          if (sp > ms) { pl.vx = (pl.vx / sp) * ms; pl.vy = (pl.vy / sp) * ms; }
+          if (sp > 8) { pl.vx = (pl.vx / sp) * 8; pl.vy = (pl.vy / sp) * 8; }
           pl.x += pl.vx; pl.y += pl.vy;
         });
 
-        // Referee AI: follows the ball at a distance, stays offset
-        const ref = this._referee;
-        const refTargetX = fb.x + (fb.x > midX ? -60 : 60);
-        const refTargetY = fb.y + 40;
-        const rdx = refTargetX - ref.x, rdy = refTargetY - ref.y;
-        const rd = Math.sqrt(rdx * rdx + rdy * rdy) || 1;
-        ref.vx += (rdx / rd) * 0.25;
-        ref.vy += (rdy / rd) * 0.25;
-        ref.vx *= 0.94; ref.vy *= 0.94;
-        const rspd = Math.sqrt(ref.vx * ref.vx + ref.vy * ref.vy);
-        if (rspd > 4) { ref.vx = (ref.vx / rspd) * 4; ref.vy = (ref.vy / rspd) * 4; }
-        ref.x += ref.vx; ref.y += ref.vy;
-        bounceRect(ref);
-
-        // Stuck detection: if ball moves less than 1 radius in 2 seconds → foul
-        const ballMoveDist = Math.sqrt((fb.x - this._lastBallPos.x) ** 2 + (fb.y - this._lastBallPos.y) ** 2);
-        if (ballMoveDist < fb.r) {
-          this._stuckTimer += 1 / 60;
-        } else {
-          this._stuckTimer = 0;
-        }
-        // Update last position every 0.5s
-        if (Math.floor(this._stuckTimer * 2) !== Math.floor((this._stuckTimer - 1/60) * 2)) {
-          // Only update if ball actually moved significantly
-          if (ballMoveDist > fb.r * 3) {
-            this._lastBallPos = { x: fb.x, y: fb.y };
-          }
-        }
-        if (this._stuckTimer === 0) this._lastBallPos = { x: fb.x, y: fb.y };
-
-        if (this._stuckTimer >= 2) {
-          this._foulFlash = 1.5;
-          playNoise(0.15, 0.15);
-          playNote(15, 'square', 0.2, 0.1);
-
-          // Ball goes to team in the camp where the ball is
-          const ballInLeftHalf = fb.x < midX;
-          const attackingTeam = ballInLeftHalf ? 0 : 1; // team defending that half gets the ball
-
-          // Place ball at foul spot, kick toward opponent goal
-          const oppGoalX = attackingTeam === 0 ? pi.x + pi.w : pi.x;
-          fb.vx = attackingTeam === 0 ? 5 : -5;
-          fb.vy = (Math.random() - 0.5) * 4;
-
-          // Opponent team goes back to their half
-          players.forEach(pl => {
-            if (pl.team !== attackingTeam) {
-              const theirHalf = pl.team === 0 ? pi.x + pi.w / 4 : pi.x + pi.w * 3 / 4;
-              pl.x = theirHalf + (Math.random() - 0.5) * 80;
-              pl.y = midY + (Math.random() - 0.5) * 200;
-              pl.vx = 0; pl.vy = 0;
-            }
-          });
-
-          this._stuckTimer = 0;
-          this._lastBallPos = { x: fb.x, y: fb.y };
-        }
-
-        fb.vx *= 0.997; fb.vy *= 0.997;
+        fb.vx *= 0.998; fb.vy *= 0.998;
         fb.x += fb.vx; fb.y += fb.vy;
 
-        // Bounces
-        if (bounceRect(fb)) {
-          for (let i = 0; i < 4; i++) this._particles.push({ x: fb.x, y: fb.y, vx: (Math.random() - 0.5) * 4, vy: (Math.random() - 0.5) * 4, size: 2, color: '#fff', life: 0.7 });
-          playNote(6, 'sine', 0.03, 0.03);
+        // Stuck detection
+        const bmd = Math.sqrt((fb.x - this._lastBallPos.x) ** 2 + (fb.y - this._lastBallPos.y) ** 2);
+        if (bmd < fb.r) { this._stuckTimer += 1 / 60; } else { this._stuckTimer = 0; this._lastBallPos = { x: fb.x, y: fb.y }; }
+        if (this._stuckTimer >= 2) {
+          this._foulFlash = 1.5;
+          playNoise(0.15, 0.15); playNote(15, 'square', 0.2, 0.1);
+          fb.vx = (cx - fb.x) * 0.05 + (Math.random() - 0.5) * 6;
+          fb.vy = (cy - fb.y) * 0.05 + (Math.random() - 0.5) * 6;
+          this._stuckTimer = 0; this._lastBallPos = { x: fb.x, y: fb.y };
         }
-        players.forEach(pl => bounceRect(pl));
+
+        // Bounces
+        if (bounceCircle(fb)) {
+          for (let i = 0; i < 6; i++) this._particles.push({ x: fb.x, y: fb.y, vx: (Math.random() - 0.5) * 5, vy: (Math.random() - 0.5) * 5, size: 3, color: '#fff', life: 0.8 });
+          playNote(6, 'sine', 0.03, 0.04);
+        }
+        players.forEach(pl => bounceCircle(pl));
 
         // Collisions
         players.forEach(pl => {
           if (collide(pl, fb)) {
             for (let i = 0; i < 5; i++) this._particles.push({ x: fb.x, y: fb.y, vx: (Math.random() - 0.5) * 5, vy: (Math.random() - 0.5) * 5, size: 3, color: teams[pl.team].color, life: 0.7 });
-            playNote(8, 'square', 0.04, 0.05);
+            playNote(8, 'square', 0.04, 0.06);
           }
         });
-        for (let i = 0; i < players.length; i++) for (let j = i + 1; j < players.length; j++) collide(players[i], players[j]);
+        collide(players[0], players[1]);
 
-        // Referee-ball collision (ball bounces off referee — funny moments!)
-        if (collide(ref, fb)) {
-          for (let i = 0; i < 8; i++) this._particles.push({ x: fb.x, y: fb.y, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6, size: 2, color: '#FFD700', life: 0.8 });
-          playNote(3, 'square', 0.06, 0.08);
-        }
-        // Referee-player collisions
-        players.forEach(pl => collide(ref, pl));
+        // Goal detection: ball goes past arena radius through goal opening
+        const fbDist = Math.sqrt((fb.x - cx) ** 2 + (fb.y - cy) ** 2);
+        if (fbDist > r + 20) {
+          const fbAngle = Math.atan2(fb.y - cy, fb.x - cx);
+          let scored = -1;
+          for (let ti = 0; ti < 2; ti++) {
+            let relA = fbAngle - teams[ti].goalAngle;
+            while (relA > Math.PI) relA -= Math.PI * 2;
+            while (relA < -Math.PI) relA += Math.PI * 2;
+            if (Math.abs(relA) < gs / 2) {
+              // Ball went through this team's goal → other team scores
+              scored = ti === 0 ? 1 : 0;
+              break;
+            }
+          }
 
-        // Goal detection — ball fully inside goal box
-        let scored = -1;
-        if (fb.x < pi.x && fb.y > gTop && fb.y < gBot) scored = 1; // Italy scores
-        if (fb.x > pi.x + pi.w && fb.y > gTop && fb.y < gBot) scored = 0; // Bosnia scores
-
-        if (scored >= 0) {
-          teams[scored].score++;
-          const el = 90 - this._timerSecs;
-          this._goalLog.push({ team: scored, timeStr: `${Math.floor(el / 60)}'${Math.floor(el % 60).toString().padStart(2, '0')}` });
-          this._goalFlash = 1.0;
-          this._stuckTimer = 0; // reset foul timer
-          playNote(15, 'triangle', 0.5, 0.2);
-          await sleep(1500);
-          resetPositions();
-          // Reset referee to center too
-          ref.x = midX; ref.y = midY + 50; ref.vx = 0; ref.vy = 0;
-          this._kickoff = true; this._kickoffTimer = 60;
-          continue;
+          if (scored >= 0) {
+            teams[scored].score++;
+            const el = 90 - this._timerSecs;
+            this._goalLog.push({ team: scored, timeStr: `${Math.floor(el / 60)}'${Math.floor(el % 60).toString().padStart(2, '0')}` });
+            this._goalFlash = 1.0; this._stuckTimer = 0;
+            playNote(15, 'triangle', 0.5, 0.2);
+            await sleep(1500);
+            resetPositions();
+            this._kickoff = true; this._kickoffTimer = 60;
+            continue;
+          } else {
+            // Ball went out of bounds but not through a goal — bounce it back
+            const nx = (fb.x - cx) / fbDist, ny = (fb.y - cy) / fbDist;
+            fb.x = cx + nx * (r - fb.r); fb.y = cy + ny * (r - fb.r);
+            fb.vx *= -0.5; fb.vy *= -0.5;
+          }
         }
 
         this._particles.forEach(pt => { pt.x += pt.vx; pt.y += pt.vy; pt.life -= 0.03; });

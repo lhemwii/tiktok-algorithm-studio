@@ -49,6 +49,10 @@ let twRunning = false;
 let twScores = null;
 let twWinner = null;
 let twStep = 0;
+let twPop = null;       // Pop animation intensity for each cell
+let twParticles = [];   // Particles for eliminated bots
+let twRanks = [0, 1, 2, 3]; // Current ranks for leaderboard sliding
+let twRankY = [0, 1, 2, 3]; // Animated Y positions for leaderboard
 
 const sleep = ms => new Promise(res => setTimeout(res, ms));
 
@@ -279,29 +283,34 @@ function generateArray(count = numBars) {
 function highlightLine(lineNum) { activeLine = lineNum; }
 
 // --- TERRITORY WAR: FRONTIER EXPANSION 4 STRATEGIES ---
-const TW_SIZE = 50;
+const TW_COLS = 60;
+const TW_ROWS = 100;
 const TW_DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 
 const TW_STRATEGIES = [
-  { name: 'Greedy',  desc: 'Nearest empty cell',    color: '#E8985A', eyeColor: '#fff' },
-  { name: 'Spiral',  desc: 'Clockwise wall-hugger', color: '#3D3D3D', eyeColor: '#fff' },
-  { name: 'Hunter',  desc: 'Chase nearest enemy',   color: '#5BC5A7', eyeColor: '#fff' },
-  { name: 'Random',  desc: 'Random walk',           color: '#8B7EC8', eyeColor: '#fff' },
+  { name: 'Greedy',  desc: 'Nearest empty cell',    color: '#EF4444', eyeColor: '#fff' }, // Red
+  { name: 'Spiral',  desc: 'Clockwise wall-hugger', color: '#3B82F6', eyeColor: '#fff' }, // Blue
+  { name: 'Hunter',  desc: 'Chase nearest enemy',   color: '#10B981', eyeColor: '#fff' }, // Green
+  { name: 'Random',  desc: 'Random walk',           color: '#F59E0B', eyeColor: '#fff' }, // Orange
 ];
 
 function twInit() {
-  twGrid = new Int8Array(TW_SIZE * TW_SIZE).fill(-1);
+  twGrid = new Int8Array(TW_COLS * TW_ROWS).fill(-1);
+  twPop = new Float32Array(TW_COLS * TW_ROWS).fill(0);
+  twParticles = [];
   twScores = [0, 0, 0, 0];
+  twRanks = [0, 1, 2, 3];
+  twRankY = [0, 1, 2, 3];
   twWinner = null;
   twStep = 0;
   twRunning = true;
 
   // Each AI starts from a corner exactly
   const corners = [
-    { x: 0, y: 0, dir: 1 },                          // TL → right
-    { x: TW_SIZE - 1, y: 0, dir: 2 },                // TR → down
-    { x: 0, y: TW_SIZE - 1, dir: 0 },                // BL → up
-    { x: TW_SIZE - 1, y: TW_SIZE - 1, dir: 3 },      // BR → left
+    { x: 0, y: 0, dir: 1 },                             // TL → right
+    { x: TW_COLS - 1, y: 0, dir: 2 },                   // TR → down
+    { x: 0, y: TW_ROWS - 1, dir: 0 },                   // BL → up
+    { x: TW_COLS - 1, y: TW_ROWS - 1, dir: 3 },         // BR → left
   ];
 
   TW_STRATEGIES.forEach((s, i) => {
@@ -310,14 +319,15 @@ function twInit() {
     s.headY = c.y;
     s.dir = c.dir;
     s.alive = true;
-    twGrid[c.y * TW_SIZE + c.x] = i;
+    twGrid[c.y * TW_COLS + c.x] = i;
     twScores[i] = 1;
+    twPop[c.y * TW_COLS + c.x] = 1.5;
   });
 }
 
 function twGetCell(x, y) {
-  if (x < 0 || x >= TW_SIZE || y < 0 || y >= TW_SIZE) return -2;
-  return twGrid[y * TW_SIZE + x];
+  if (x < 0 || x >= TW_COLS || y < 0 || y >= TW_ROWS) return -2;
+  return twGrid[y * TW_COLS + x];
 }
 
 // BFS from head through own territory + empty cells, find nearest empty cell
@@ -326,7 +336,7 @@ function twBFS(owner, strategy) {
   const s = TW_STRATEGIES[owner];
   const visited = new Set();
   const queue = [{ x: s.headX, y: s.headY, firstDir: -1 }];
-  visited.add(s.headY * TW_SIZE + s.headX);
+  visited.add(s.headY * TW_COLS + s.headX);
 
   // Collect ALL reachable empty cells
   const targets = [];
@@ -336,8 +346,8 @@ function twBFS(owner, strategy) {
     for (let d = 0; d < 4; d++) {
       const nx = cur.x + TW_DIRS[d][0];
       const ny = cur.y + TW_DIRS[d][1];
-      if (nx < 0 || nx >= TW_SIZE || ny < 0 || ny >= TW_SIZE) continue;
-      const key = ny * TW_SIZE + nx;
+      if (nx < 0 || nx >= TW_COLS || ny < 0 || ny >= TW_ROWS) continue;
+      const key = ny * TW_COLS + nx;
       if (visited.has(key)) continue;
       visited.add(key);
 
@@ -366,7 +376,7 @@ function twBFS(owner, strategy) {
   let pick;
   if (strategy === 0) {
     // Greedy: nearest empty cell to center
-    const cx = TW_SIZE / 2, cy = TW_SIZE / 2;
+    const cx = TW_COLS / 2, cy = TW_ROWS / 2;
     targets.sort((a, b) => (Math.abs(a.x - cx) + Math.abs(a.y - cy)) - (Math.abs(b.x - cx) + Math.abs(b.y - cy)));
     pick = targets[0];
   } else if (strategy === 1) {
@@ -375,22 +385,29 @@ function twBFS(owner, strategy) {
       let na = 0, nb = 0;
       for (const [dx, dy] of TW_DIRS) {
         const ax = a.x + dx, ay = a.y + dy;
-        if (ax >= 0 && ax < TW_SIZE && ay >= 0 && ay < TW_SIZE && twGrid[ay * TW_SIZE + ax] === owner) na++;
+        if (ax >= 0 && ax < TW_COLS && ay >= 0 && ay < TW_ROWS && twGrid[ay * TW_COLS + ax] === owner) na++;
         const bx = b.x + dx, by = b.y + dy;
-        if (bx >= 0 && bx < TW_SIZE && by >= 0 && by < TW_SIZE && twGrid[by * TW_SIZE + bx] === owner) nb++;
+        if (bx >= 0 && bx < TW_COLS && by >= 0 && by < TW_ROWS && twGrid[by * TW_COLS + bx] === owner) nb++;
       }
       return nb - na; // more neighbors = more wall-hugging
     });
     pick = targets[0];
   } else if (strategy === 2) {
     // Hunter: nearest empty cell to nearest enemy head
-    let tx = TW_SIZE / 2, ty = TW_SIZE / 2, md = Infinity;
+    let tx = TW_COLS / 2, ty = TW_ROWS / 2, md = Infinity;
     TW_STRATEGIES.forEach((o, j) => {
       if (j === owner || !o.alive) return;
       const d = Math.abs(o.headX - s.headX) + Math.abs(o.headY - s.headY);
       if (d < md) { md = d; tx = o.headX; ty = o.headY; }
     });
     targets.sort((a, b) => (Math.abs(a.x - tx) + Math.abs(a.y - ty)) - (Math.abs(b.x - tx) + Math.abs(b.y - ty)));
+    pick = targets[0];
+  } else if (strategy === 3) {
+    // Mimic: nearest empty cell to current leader's head
+    let maxS = -1, leaderIdx = 0;
+    twScores.forEach((sc, idx) => { if (sc > maxS) { maxS = sc; leaderIdx = idx; } });
+    const l = TW_STRATEGIES[leaderIdx];
+    targets.sort((a, b) => (Math.abs(a.x - l.headX) + Math.abs(a.y - l.headY)) - (Math.abs(b.x - l.headX) + Math.abs(b.y - l.headY)));
     pick = targets[0];
   } else {
     // Random
@@ -409,6 +426,14 @@ function twStepOnce() {
     const dir = twBFS(i, i);
     if (dir === -1) {
       s.alive = false;
+      // Explode into particles
+      for (let p = 0; p < 30; p++) {
+        twParticles.push({
+          x: s.headX, y: s.headY,
+          vx: (Math.random() - 0.5) * 0.5, vy: (Math.random() - 0.5) * 0.5,
+          color: s.color, life: 1.0
+        });
+      }
       return;
     }
 
@@ -419,6 +444,14 @@ function twStepOnce() {
     // Can move to empty cells OR own territory
     if (cell !== -1 && cell !== i) {
       s.alive = false;
+      // Explode
+      for (let p = 0; p < 30; p++) {
+        twParticles.push({
+          x: s.headX, y: s.headY,
+          vx: (Math.random() - 0.5) * 0.5, vy: (Math.random() - 0.5) * 0.5,
+          color: s.color, life: 1.0
+        });
+      }
       return;
     }
 
@@ -428,15 +461,42 @@ function twStepOnce() {
 
     // Only claim if empty
     if (cell === -1) {
-      twGrid[ny * TW_SIZE + nx] = i;
+      twGrid[ny * TW_COLS + nx] = i;
+      twPop[ny * TW_COLS + nx] = 1.4; // Initial pop scale
       twScores[i]++;
     }
 
     anyAlive = true;
   });
 
+  // Update leaderboard ranks
+  const sorted = TW_STRATEGIES.map((s, i) => ({ idx: i, score: twScores[i] }))
+    .sort((a, b) => b.score - a.score);
+  sorted.forEach((s, rank) => {
+    twRanks[s.idx] = rank;
+    // Smoothly interpolate twRankY toward rank
+    twRankY[s.idx] += (rank - twRankY[s.idx]) * 0.1;
+  });
+
   twStep++;
   return anyAlive;
+}
+
+function updateTWAnimations() {
+  if (!twPop) return;
+  // Decay pops
+  for (let i = 0; i < twPop.length; i++) {
+    if (twPop[i] > 1.0) twPop[i] -= 0.02; // Slower decay for 60fps
+    else twPop[i] = 1.0;
+  }
+
+  // Update particles
+  twParticles.forEach(p => {
+    p.x += p.vx; p.y += p.vy;
+    p.vy += 0.01; // Gravity
+    p.life -= 0.02;
+  });
+  twParticles = twParticles.filter(p => p.life > 0);
 }
 
 // --- RENDER ENGINE (60fps Canvas Loop) ---
@@ -460,6 +520,11 @@ function drawLoop() {
 
   const algo = ALGORITHMS[currentAlgoId];
   if (!algo) return requestAnimationFrame(drawLoop);
+
+  // Update animations
+  if (currentAlgoId === 'territory' || currentAlgoId === 'mimicwar') {
+    updateTWAnimations();
+  }
 
   // Scale 2x for 4K sharpness — all draw code uses 1080x1920 logical coords
   ctx.save();
@@ -1040,209 +1105,71 @@ const ALGORITHMS = {
   // =================== SIMULATIONS ===================
   territory: {
     type: 'simulation',
-    title: 'Territory War',
-    badge: '4 Strategies',
-    desc: '4 strategies fight for space on a grid. Each leaves a permanent trail. Who dominates?',
-    tiktokDesc: '4 IA s\'affrontent sur une grille. Greedy, Spiral, Hunter ou Random : qui va dominer ? #territorywar #simulation #strategy',
-    tiktokTags: '#simulation #strategy #viral #satisfying #coding #algorithm #ai #territory',
-    init: twInit,
+    title: 'Arena War',
+    badge: '4 Algos',
+    desc: 'Exact clone of the viral Arena War. Circular grid and minimalist UI.',
+    tiktokDesc: '4 algorithmes s\'affrontent pour l\'espace. Qui va gagner ? #arenawar #simulation #algorithm',
+    tiktokTags: '#arenawar #simulation #strategy #viral #satisfying #coding #ai #territory',
+    init: function() {
+      twInit();
+      // Adjust strategies to match video exactly
+      TW_STRATEGIES[0] = { name: 'Greedy', desc: 'Nearest empty cell', color: '#E8985A', eyeColor: '#fff' }; // Orange
+      TW_STRATEGIES[1] = { name: 'Spiral', desc: 'Clockwise sweep', color: '#111', eyeColor: '#fff' };      // Black
+      TW_STRATEGIES[2] = { name: 'Random', desc: 'Pure chaos', color: '#8B7EC8', eyeColor: '#fff' };       // Purple
+      TW_STRATEGIES[3] = { name: 'Mimic', desc: 'Copy leading strategy', color: '#5BC5A7', eyeColor: '#fff' }; // Cyan
+    },
     draw: function (c) {
-      const SAFE_TOP = 130;
-      const SAFE_X = 60;
-
-      // Title
-      c.fillStyle = Theme.primaryText;
-      c.textAlign = 'center';
-      c.font = 'bold 64px Inter, sans-serif';
-      c.fillText('Territory War', WIDTH / 2, SAFE_TOP);
-
-      c.font = '30px Inter, sans-serif';
-      c.fillStyle = Theme.secondaryText;
-      c.fillText('4 strategies fight for space', WIDTH / 2, SAFE_TOP + 45);
+      c.fillStyle = '#DED5C9';
+      c.fillRect(0, 0, WIDTH, HEIGHT);
+      const SAFE_TOP = 200;
+      c.fillStyle = '#111'; c.textAlign = 'center';
+      c.font = 'bold 80px Inter, sans-serif'; c.fillText('Arena War', WIDTH / 2, SAFE_TOP);
+      c.font = '32px Inter, sans-serif'; c.fillStyle = 'rgba(0,0,0,0.6)';
+      c.fillText('4 algorithms fight for space', WIDTH / 2, SAFE_TOP + 50);
 
       if (!twGrid) return;
-
-      // Draw grid — pixel art style
-      const gridX = SAFE_X;
-      const gridY = SAFE_TOP + 70;
-      const gridW = WIDTH - SAFE_X * 2;
-      const gridH = gridW; // square grid
-      const cellW = gridW / TW_SIZE;
-      const cellH = gridH / TW_SIZE;
-
-      // Grid background
-      c.fillStyle = Theme.codeBg;
-      c.fillRect(gridX, gridY, gridW, gridH);
-
-      // Subtle grid lines
-      c.strokeStyle = Theme.codeBorder;
-      c.lineWidth = 0.3;
-      for (let x = 0; x <= TW_SIZE; x++) {
-        c.beginPath();
-        c.moveTo(gridX + x * cellW, gridY);
-        c.lineTo(gridX + x * cellW, gridY + gridH);
-        c.stroke();
-      }
-      for (let y = 0; y <= TW_SIZE; y++) {
-        c.beginPath();
-        c.moveTo(gridX, gridY + y * cellH);
-        c.lineTo(gridX + gridW, gridY + y * cellH);
-        c.stroke();
-      }
-
-      // Draw territories (filled cells)
-      for (let y = 0; y < TW_SIZE; y++) {
-        for (let x = 0; x < TW_SIZE; x++) {
-          const owner = twGrid[y * TW_SIZE + x];
-          if (owner < 0) continue;
-          c.fillStyle = TW_STRATEGIES[owner].color;
-          c.fillRect(gridX + x * cellW + 0.5, gridY + y * cellH + 0.5, cellW - 0.5, cellH - 0.5);
+      const cx = WIDTH / 2, cy = HEIGHT / 2 - 50, cellSize = 14;
+      for (let y = 0; y < TW_ROWS; y++) {
+        for (let x = 0; x < TW_COLS; x++) {
+          const dx = x - TW_COLS/2, dy = y - TW_ROWS/2;
+          if (dx*dx + dy*dy > (TW_COLS/2)*(TW_COLS/2)) continue;
+          const gx = cx + (x - TW_COLS/2) * cellSize, gy = cy + (y - TW_ROWS/2) * cellSize;
+          const owner = twGrid[y * TW_COLS + x];
+          if (owner === -1) {
+            c.strokeStyle = 'rgba(0,0,0,0.05)'; c.lineWidth = 1; c.strokeRect(gx, gy, cellSize, cellSize);
+          } else {
+            c.fillStyle = TW_STRATEGIES[owner].color; c.fillRect(gx, gy, cellSize + 0.5, cellSize + 0.5);
+          }
         }
       }
-
-      // Draw creature heads with eyes
       TW_STRATEGIES.forEach((s, i) => {
-        if (!s.alive && !s.trail) return;
-        const hx = gridX + s.headX * cellW;
-        const hy = gridY + s.headY * cellH;
-        const size = cellW;
-
-        // Head square (slightly larger)
-        c.fillStyle = s.color;
-        c.fillRect(hx - 1, hy - 1, size + 2, size + 2);
-
-        // Eyes
-        const eyeSize = Math.max(2, size * 0.25);
-        const eyeOffX = size * 0.25;
-        const eyeOffY = size * 0.3;
-        c.fillStyle = s.eyeColor;
-        c.fillRect(hx + eyeOffX, hy + eyeOffY, eyeSize, eyeSize);
-        c.fillRect(hx + size - eyeOffX - eyeSize, hy + eyeOffY, eyeSize, eyeSize);
-
-        // Pupils
-        c.fillStyle = '#111';
-        const pupilSize = Math.max(1, eyeSize * 0.5);
-        // Pupils look in movement direction
-        const dx = TW_DIRS[s.dir][0] * pupilSize * 0.5;
-        const dy = TW_DIRS[s.dir][1] * pupilSize * 0.5;
-        c.fillRect(hx + eyeOffX + (eyeSize - pupilSize) / 2 + dx, hy + eyeOffY + (eyeSize - pupilSize) / 2 + dy, pupilSize, pupilSize);
-        c.fillRect(hx + size - eyeOffX - eyeSize + (eyeSize - pupilSize) / 2 + dx, hy + eyeOffY + (eyeSize - pupilSize) / 2 + dy, pupilSize, pupilSize);
+        if (!s.alive) return;
+        const gx = cx + (s.headX - TW_COLS/2) * cellSize, gy = cy + (s.headY - TW_ROWS/2) * cellSize;
+        c.fillStyle = s.color; c.fillRect(gx, gy, cellSize, cellSize);
+        c.fillStyle = '#fff'; c.fillRect(gx + 3, gy + 4, 3, 3); c.fillRect(gx + cellSize - 6, gy + 4, 3, 3);
       });
-
-      // Grid border
-      c.strokeStyle = Theme.codeBorder;
-      c.lineWidth = 2;
-      c.strokeRect(gridX, gridY, gridW, gridH);
-
-      // Dashboard — 4 strategy cards
-      const dashY = gridY + gridH + 30;
-      const dashX = SAFE_X;
-      const dashW = WIDTH - SAFE_X * 2;
-      const cardH = 70;
-      const totalCells = TW_SIZE * TW_SIZE;
-
-      // Sort by score for ranking
-      const ranked = TW_STRATEGIES.map((s, i) => ({ ...s, idx: i, score: twScores[i] }))
-        .sort((a, b) => b.score - a.score);
-
-      ranked.forEach((s, rank) => {
-        const cy = dashY + rank * (cardH + 8);
-
-        // Card background
-        c.fillStyle = Theme.codeBg;
-        if (c.roundRect) {
-          c.beginPath();
-          c.roundRect(dashX, cy, dashW, cardH, 12);
-          c.fill();
-        } else {
-          c.fillRect(dashX, cy, dashW, cardH);
-        }
-
-        // Creature icon with eyes
-        const iconX = dashX + 20;
-        const iconY = cy + 15;
-        const iconSize = 40;
-        c.fillStyle = s.color;
-        if (c.roundRect) {
-          c.beginPath();
-          c.roundRect(iconX, iconY, iconSize, iconSize, 6);
-          c.fill();
-        } else {
-          c.fillRect(iconX, iconY, iconSize, iconSize);
-        }
-        // Eyes on icon
-        c.fillStyle = '#fff';
-        c.fillRect(iconX + 8, iconY + 10, 8, 8);
-        c.fillRect(iconX + iconSize - 16, iconY + 10, 8, 8);
-        c.fillStyle = '#111';
-        c.fillRect(iconX + 10, iconY + 12, 4, 4);
-        c.fillRect(iconX + iconSize - 14, iconY + 12, 4, 4);
-
-        // Name
-        c.fillStyle = Theme.primaryText;
-        c.textAlign = 'left';
-        c.font = 'bold 28px Inter, sans-serif';
-        c.fillText(s.name, iconX + iconSize + 16, cy + 32);
-
-        // Description
-        c.fillStyle = Theme.secondaryText;
-        c.font = '20px Inter, sans-serif';
-        c.fillText(s.desc, iconX + iconSize + 16, cy + 55);
-
-        // Percentage
-        const pct = Math.floor((s.score / totalCells) * 100);
-        c.fillStyle = Theme.primaryText;
-        c.textAlign = 'right';
-        c.font = 'bold 32px Inter, sans-serif';
-        c.fillText(`${pct}%`, dashX + dashW - 20, cy + 45);
+      const lbY = HEIGHT - 450, lbW = 850, lbH = 70;
+      const sorted = TW_STRATEGIES.map((s, i) => ({ ...s, score: twScores[i] })).sort((a, b) => b.score - a.score);
+      sorted.forEach((s, rank) => {
+        const ry = lbY + rank * (lbH + 12), rx = WIDTH/2 - lbW/2;
+        c.fillStyle = '#fff'; if (c.roundRect) { c.beginPath(); c.roundRect(rx, ry, lbW, lbH, 12); c.fill(); }
+        c.fillStyle = s.color; if (c.roundRect) { c.beginPath(); c.roundRect(rx + 15, ry + 15, 40, 40, 6); c.fill(); }
+        c.fillStyle = '#fff'; c.fillRect(rx + 20, ry + 22, 4, 4); c.fillRect(rx + 42, ry + 22, 4, 4);
+        c.fillStyle = '#111'; c.textAlign = 'left'; c.font = 'bold 28px Inter, sans-serif';
+        c.fillText(s.name, rx + 75, ry + 42);
+        c.font = '22px Inter, sans-serif'; c.fillStyle = 'rgba(0,0,0,0.5)';
+        c.fillText(` — ${s.desc}`, rx + 75 + c.measureText(s.name).width, ry + 42);
+        const total = twScores.reduce((a,b)=>a+b, 0);
+        const pct = Math.floor(s.score / (total || 1) * 100);
+        c.fillStyle = s.color; c.textAlign = 'right'; c.font = 'bold 32px Inter, sans-serif';
+        c.fillText(`${pct}%`, rx + lbW - 20, ry + 45);
       });
-
-      // Winner banner
-      if (twWinner !== null) {
-        const w = TW_STRATEGIES[twWinner];
-        c.fillStyle = 'rgba(0,0,0,0.7)';
-        c.fillRect(0, HEIGHT / 2 - 80, WIDTH, 160);
-
-        c.fillStyle = w.color;
-        c.textAlign = 'center';
-        c.font = 'bold 64px Inter, sans-serif';
-        c.fillText(`${w.name} wins!`, WIDTH / 2, HEIGHT / 2 + 5);
-
-        c.fillStyle = '#FFD700';
-        c.font = 'bold 36px Inter, sans-serif';
-        c.fillText(`${Math.floor((twScores[twWinner] / totalCells) * 100)}% territory`, WIDTH / 2, HEIGHT / 2 + 55);
-      }
     },
     run: async function (runId) {
-      twInit();
-      initAudio();
-
-      while (twStepOnce() && activeRunId === runId) {
-        if (twStep % 5 === 0) {
-          const leader = twScores.indexOf(Math.max(...twScores));
-          playConquer(leader);
-        }
-        await sleep(80);
-      }
-
-      if (activeRunId !== runId) return;
-
-      // Determine winner
-      let maxScore = 0;
-      let winner = 0;
-      twScores.forEach((s, i) => {
-        if (s > maxScore) { maxScore = s; winner = i; }
-      });
-      twWinner = winner;
-
-      playNote(8, 'triangle', 0.5, 0.15);
-      await sleep(300);
-      playNote(12, 'triangle', 0.5, 0.15);
-      await sleep(300);
-      playNote(15, 'triangle', 0.8, 0.15);
-
+      twInit(); initAudio();
+      while (twStepOnce() && activeRunId === runId) { await sleep(40); }
       await sleep(3000);
-    },
+    }
   },
 
   boids: {
@@ -2891,6 +2818,648 @@ const ALGORITHMS = {
 
       await sleep(3000);
     },
+  },
+
+  mimicwar: {
+    type: 'simulation',
+    title: 'Mimic War',
+    badge: 'Adaptative AI',
+    desc: '4 strategies fight for space. One of them is a Mimic - it copies and targets the leader.',
+    tiktokDesc: 'Territory War avec un twist : l\'IA "Mimic" cible le leader ! #mimicwar #simulation #strategy',
+    tiktokTags: '#simulation #strategy #viral #satisfying #coding #algorithm #ai #territory #mimic',
+    init: function() {
+      twInit();
+      // Player 4 is the Mimic (Strategy 3 in twBFS)
+      TW_STRATEGIES[3].name = 'Mimic';
+      TW_STRATEGIES[3].desc = 'Targets the leader';
+      TW_STRATEGIES[3].color = '#F472B6'; // Pink
+    },
+    draw: function(c) {
+      // Re-use the territory draw logic (identical visuals)
+      ALGORITHMS.territory.draw(c);
+    },
+    run: async function (runId) {
+      this.init();
+      initAudio();
+      while (twStepOnce() && activeRunId === runId) {
+        if (twStep % 4 === 0) {
+          const leader = twScores.indexOf(Math.max(...twScores));
+          playConquer(leader);
+        }
+        await sleep(50);
+      }
+      if (activeRunId !== runId) return;
+      let maxScore = -1, winner = 0;
+      twScores.forEach((s, i) => { if (s > maxScore) { maxScore = s; winner = i; } });
+      twWinner = winner;
+      playNote(12, 'triangle', 0.5, 0.15);
+      await sleep(3000);
+    },
+  },
+
+  worldcup: {
+    type: 'simulation',
+    title: 'World Cup Arena',
+    badge: 'Bosnia vs Italy',
+    desc: 'Exact clone of the viral Country Ball match. Rotating goal and reactive eyes.',
+    tiktokDesc: 'Bosnie vs Italie ! Qui va marquer le plus de buts dans l\'arene tournante ? #worldcup #countryball #football',
+    tiktokTags: '#worldcup #football #countryball #bosnia #italy #satisfying #simulation #physics',
+    init: function () {
+      const cx = WIDTH / 2, cy = 720, r = 380;
+      this._arena = { cx, cy, r, goalAngle: 0, goalWidth: 0.8 };
+      this._balls = [
+        {
+          x: cx - 120, y: cy, vx: 8, vy: -6, r: 38,
+          color: '#002395', name: 'BOSNIA & HER...', score: 0, flag: '\uD83C\uDDE7\uD83C\uDDE6',
+          eyes: 'normal'
+        },
+        {
+          x: cx + 120, y: cy, vx: -6, vy: 8, r: 38,
+          color: '#008C45', name: 'ITALY', score: 0, flag: '\uD83C\uDDEE\uD83C\uDDF9',
+          eyes: 'normal'
+        },
+      ];
+      this._particles = [];
+      this._timerSecs = 120; // 120 seconds countdown
+      this._goalFlash = 0;
+      this._ended = false;
+    },
+    draw: function (c) {
+      c.fillStyle = '#1B7339';
+      c.fillRect(0, 0, WIDTH, HEIGHT);
+      const { cx, cy, r, goalAngle, goalWidth } = this._arena;
+
+      // --- TOP SCOREBOARD ---
+      const sbY = 180, sbW = 620, sbH = 75;
+      const sx = WIDTH/2 - sbW/2;
+      c.save();
+      c.fillStyle = '#002395';
+      if (c.roundRect) { c.beginPath(); c.roundRect(sx, sbY, sbW, sbH, 15); c.fill(); }
+      c.fillStyle = '#FFC107';
+      c.fillRect(sx + 180, sbY, 260, sbH);
+      c.font = '45px Inter, sans-serif'; c.textAlign = 'center';
+      c.fillText('🇧🇦', sx + 40, sbY + 52);
+      c.fillText('🇮🇹', sx + sbW - 40, sbY + 52);
+      c.fillStyle = '#fff'; c.font = 'bold 48px Inter, sans-serif';
+      c.fillText(this._balls[0].score, sx + 130, sbY + 55);
+      c.fillText(this._balls[1].score, sx + sbW - 130, sbY + 55);
+      c.fillStyle = '#fff'; c.font = 'bold 36px Inter, sans-serif';
+      const mins = Math.floor(this._timerSecs / 60).toString().padStart(2, '0');
+      const secs = Math.floor(this._timerSecs % 60).toString().padStart(2, '0');
+      c.fillText(`${mins}:${secs}`, sx + 310, sbY + 52);
+      c.restore();
+
+      // --- ARENA ---
+      c.save();
+      c.shadowBlur = 40; c.shadowColor = 'rgba(255,255,255,0.6)';
+      c.strokeStyle = '#fff'; c.lineWidth = 14;
+      c.beginPath();
+      c.arc(cx, cy, r, goalAngle + goalWidth/2, goalAngle + Math.PI * 2 - goalWidth/2);
+      c.stroke();
+      c.restore();
+
+      // --- GOAL ---
+      c.save();
+      c.translate(cx, cy);
+      c.rotate(goalAngle);
+      c.strokeStyle = 'rgba(255,255,255,0.9)';
+      c.lineWidth = 6;
+      c.beginPath(); c.arc(0, 0, r + 50, -goalWidth/2, goalWidth/2); c.stroke();
+      c.lineWidth = 2; c.globalAlpha = 0.5;
+      for (let i = -3; i <= 3; i++) {
+        const a = i * 0.12;
+        c.beginPath(); c.moveTo(Math.cos(a)*r, Math.sin(a)*r); c.lineTo(Math.cos(a)*(r+50), Math.sin(a)*(r+50)); c.stroke();
+      }
+      for (let d = 10; d <= 50; d += 15) {
+        c.beginPath(); c.arc(0, 0, r + d, -goalWidth/2, goalWidth/2); c.stroke();
+      }
+      c.restore();
+
+      // --- PARTICLES ---
+      this._particles.forEach(p => {
+        c.globalAlpha = p.life; c.fillStyle = p.color;
+        c.beginPath(); c.arc(p.x, p.y, p.size, 0, Math.PI * 2); c.fill();
+      });
+      c.globalAlpha = 1.0;
+
+      // --- BALLS ---
+      this._balls.forEach(b => {
+        c.save(); c.translate(b.x, b.y);
+        c.fillStyle = 'rgba(0,0,0,0.3)';
+        c.beginPath(); c.ellipse(0, b.r + 15, b.r * 0.9, 12, 0, 0, Math.PI * 2); c.fill();
+        const grad = c.createRadialGradient(-b.r/3, -b.r/3, b.r/5, 0, 0, b.r);
+        grad.addColorStop(0, '#fff'); grad.addColorStop(0.2, b.color); grad.addColorStop(1, '#000');
+        c.fillStyle = grad;
+        c.beginPath(); c.arc(0, 0, b.r, 0, Math.PI * 2); c.fill();
+        c.save(); c.clip();
+        if (b.name.includes('BOSNIA')) {
+          c.fillStyle = '#FFC107'; c.beginPath(); c.moveTo(-b.r, -b.r); c.lineTo(b.r, b.r); c.lineTo(-b.r, b.r); c.fill();
+        } else {
+          c.fillStyle = '#fff'; c.fillRect(-b.r/3, -b.r, b.r*2/3, b.r*2);
+          c.fillStyle = '#CE2B37'; c.fillRect(b.r/3, -b.r, b.r, b.r*2);
+        }
+        c.restore();
+        c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 2;
+        const eyeW = 14, eyeH = 18, eyeOff = 10;
+        if (b.eyes === 'angry') {
+          c.save(); c.translate(-eyeOff, -5); c.rotate(0.3); c.beginPath(); c.ellipse(0, 0, eyeW, eyeH/2, 0, 0, Math.PI*2); c.fill(); c.stroke(); c.restore();
+          c.save(); c.translate(eyeOff, -5); c.rotate(-0.3); c.beginPath(); c.ellipse(0, 0, eyeW, eyeH/2, 0, 0, Math.PI*2); c.fill(); c.stroke(); c.restore();
+        } else {
+          c.beginPath(); c.ellipse(-eyeOff, -5, eyeW, eyeH, 0, 0, Math.PI * 2); c.fill(); c.stroke();
+          c.beginPath(); c.ellipse(eyeOff, -5, eyeW, eyeH, 0, 0, Math.PI * 2); c.fill(); c.stroke();
+        }
+        c.restore();
+      });
+
+      // --- BOTTOM INFO BOX ---
+      const ibY = HEIGHT - 320, ibW = 620, ibH = 200;
+      const ibx = WIDTH/2 - ibW/2;
+      c.save(); c.translate(ibx, ibY);
+      c.shadowBlur = 30; c.shadowColor = 'rgba(0,0,0,0.2)';
+      c.fillStyle = '#fff'; if (c.roundRect) { c.beginPath(); c.roundRect(0, 0, ibW, ibH, 30); c.fill(); }
+      c.shadowBlur = 0;
+      c.fillStyle = '#111'; c.textAlign = 'center';
+      c.font = 'bold 22px Inter, sans-serif'; c.fillText('MILLI TAKIMLAR', ibW/2, 45);
+      c.font = '20px Inter, sans-serif'; c.fillStyle = '#666'; c.fillText('31/03 TUE', ibW/2, 75);
+      c.font = 'bold 54px serif'; c.fillStyle = '#111'; c.fillText('qualifiers', ibW/2, 140);
+      c.font = '40px Inter, sans-serif';
+      c.fillText('🇧🇦', 80, 100); c.fillText('🇮🇹', ibW - 80, 100);
+      c.font = 'bold 16px Inter, sans-serif'; c.fillStyle = '#444';
+      c.fillText('BOSNIA & HER...', 80, 150); c.fillText('ITALY', ibW - 80, 150);
+      c.restore();
+
+      if (this._goalFlash > 0) {
+        c.fillStyle = `rgba(255,255,255,${this._goalFlash * 0.4})`;
+        c.fillRect(0, 0, WIDTH, HEIGHT);
+        this._goalFlash -= 0.04;
+      }
+
+      // End of match overlay
+      if (this._ended) {
+        c.fillStyle = 'rgba(0,0,0,0.7)';
+        c.fillRect(0, HEIGHT / 2 - 100, WIDTH, 200);
+        c.fillStyle = '#FFD700';
+        c.textAlign = 'center';
+        c.font = 'bold 52px Inter, sans-serif';
+        const b0 = this._balls[0], b1 = this._balls[1];
+        const winner = b0.score > b1.score ? b0.name : b1.score > b0.score ? b1.name : 'DRAW';
+        c.fillText(winner === 'DRAW' ? 'DRAW!' : `${winner} WINS!`, WIDTH / 2, HEIGHT / 2 - 20);
+        c.fillStyle = '#fff';
+        c.font = 'bold 40px Inter, sans-serif';
+        c.fillText(`${b0.score} - ${b1.score}`, WIDTH / 2, HEIGHT / 2 + 40);
+        c.font = '28px Inter, sans-serif';
+        c.fillText('FULL TIME', WIDTH / 2, HEIGHT / 2 + 80);
+      }
+    },
+    run: async function (runId) {
+      this.init(); initAudio();
+      const { cx, cy, r } = this._arena;
+      const balls = this._balls;
+
+      while (activeRunId === runId && !this._ended) {
+        // Timer countdown
+        this._timerSecs -= 1 / 60;
+        if (this._timerSecs <= 0) {
+          this._timerSecs = 0;
+          this._ended = true;
+        }
+
+        // Rotate goal slowly
+        this._arena.goalAngle += 0.008;
+
+        // Move balls — ZERO gravity (air hockey)
+        balls.forEach((b, idx) => {
+          b.x += b.vx;
+          b.y += b.vy;
+
+          // Wall collision
+          const dx = b.x - cx, dy = b.y - cy;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist + b.r > r) {
+            const angle = Math.atan2(dy, dx);
+            const relAng = ((angle - this._arena.goalAngle) % (Math.PI * 2) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
+
+            if (Math.abs(relAng) < this._arena.goalWidth / 2) {
+              // GOAL — point for the OTHER team
+              const otherIdx = idx === 0 ? 1 : 0;
+              balls[otherIdx].score++;
+              this._goalFlash = 1.0;
+              playNote(15, 'triangle', 0.5, 0.2);
+
+              // Reset both balls to center
+              balls[0].x = cx - 60; balls[0].y = cy;
+              balls[0].vx = 6 + Math.random() * 4; balls[0].vy = (Math.random() - 0.5) * 8;
+              balls[1].x = cx + 60; balls[1].y = cy;
+              balls[1].vx = -(6 + Math.random() * 4); balls[1].vy = (Math.random() - 0.5) * 8;
+            } else {
+              // Bounce off wall
+              const nx = dx / dist, ny = dy / dist;
+              const dot = b.vx * nx + b.vy * ny;
+              b.vx -= 2 * dot * nx;
+              b.vy -= 2 * dot * ny;
+              b.x = cx + nx * (r - b.r - 1);
+              b.y = cy + ny * (r - b.r - 1);
+
+              // Particles
+              for (let i = 0; i < 8; i++) {
+                this._particles.push({
+                  x: b.x + nx * b.r, y: b.y + ny * b.r,
+                  vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6,
+                  size: Math.random() * 4 + 2, color: b.color, life: 1.0,
+                });
+              }
+              playNote(Math.floor(Math.random() * 5) + 4, 'square', 0.05, 0.05);
+            }
+          }
+
+          // Speed limit
+          const spd = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+          if (spd > 12) { b.vx = (b.vx / spd) * 12; b.vy = (b.vy / spd) * 12; }
+          if (spd < 3) { b.vx *= 1.05; b.vy *= 1.05; } // minimum speed
+
+          // Add slight random perturbation for chaos
+          b.vx += (Math.random() - 0.5) * 0.15;
+          b.vy += (Math.random() - 0.5) * 0.15;
+        });
+
+        // Ball-ball collision
+        const b0 = balls[0], b1 = balls[1];
+        const bdx = b1.x - b0.x, bdy = b1.y - b0.y;
+        const bdist = Math.sqrt(bdx * bdx + bdy * bdy);
+        if (bdist < b0.r + b1.r && bdist > 0) {
+          // Normal vector
+          const bnx = bdx / bdist, bny = bdy / bdist;
+          // Relative velocity
+          const relV = (b0.vx - b1.vx) * bnx + (b0.vy - b1.vy) * bny;
+          if (relV > 0) { // Only if approaching
+            b0.vx -= relV * bnx; b0.vy -= relV * bny;
+            b1.vx += relV * bnx; b1.vy += relV * bny;
+            // Separate balls
+            const overlap = (b0.r + b1.r - bdist) / 2;
+            b0.x -= bnx * overlap; b0.y -= bny * overlap;
+            b1.x += bnx * overlap; b1.y += bny * overlap;
+
+            // Particles at collision point
+            const px = (b0.x + b1.x) / 2, py = (b0.y + b1.y) / 2;
+            for (let i = 0; i < 6; i++) {
+              this._particles.push({
+                x: px, y: py,
+                vx: (Math.random() - 0.5) * 8, vy: (Math.random() - 0.5) * 8,
+                size: Math.random() * 3 + 1, color: '#FFD700', life: 1.0,
+              });
+            }
+            b0.eyes = 'angry'; b1.eyes = 'angry';
+            playNote(10, 'square', 0.08, 0.08);
+          }
+        } else {
+          b0.eyes = 'normal'; b1.eyes = 'normal';
+        }
+
+        // Update particles
+        this._particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.life -= 0.04; });
+        this._particles = this._particles.filter(p => p.life > 0);
+
+        await sleep(16);
+      }
+
+      // End of match
+      if (this._ended) {
+        playNote(8, 'triangle', 0.5, 0.15);
+        await sleep(300);
+        playNote(12, 'triangle', 0.5, 0.15);
+        await sleep(300);
+        playNote(15, 'triangle', 0.8, 0.15);
+        await sleep(4000);
+      }
+    }
+  },
+
+  ballmultiply: {
+    type: 'simulation',
+    title: 'Ball Multiplication',
+    badge: 'Exponential',
+    desc: 'Every bounce against the wall spawns a new ball. Watch them multiply!',
+    tiktokDesc: '1 rebond = 1 nouvelle balle ! La croissance est folle. #satisfying #physics #multiply',
+    tiktokTags: '#satisfying #physics #viral #exponential #simulation #balls #asmr',
+    init: function () {
+      const cx = WIDTH / 2, cy = HEIGHT / 2, r = 400;
+      this._arena = { cx, cy, r };
+      this._balls = [
+        { x: cx - 50, y: cy, vx: 5, vy: 4, r: 10, color: '#EF4444' },
+        { x: cx + 50, y: cy, vx: -5, vy: -4, r: 10, color: '#3B82F6' },
+      ];
+      this._max = 2500;
+    },
+    draw: function (c) {
+      c.fillStyle = '#000';
+      c.fillRect(0, 0, WIDTH, HEIGHT);
+
+      c.fillStyle = '#fff'; c.textAlign = 'center';
+      c.font = 'bold 60px Inter, sans-serif';
+      c.fillText('Every bounce = new ball \ud83e\udd2f', WIDTH / 2, 250);
+      
+      c.font = 'bold 40px Inter, sans-serif'; c.fillStyle = '#94A3B8';
+      c.fillText(`${this._balls.length} Balls`, WIDTH / 2, 330);
+
+      const { cx, cy, r } = this._arena;
+      c.strokeStyle = '#60A5FA'; c.lineWidth = 4;
+      c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.stroke();
+
+      this._balls.forEach(b => {
+        c.fillStyle = b.color;
+        c.beginPath(); c.arc(b.x, b.y, b.r, 0, Math.PI * 2); c.fill();
+      });
+    },
+    run: async function (runId) {
+      this.init(); initAudio();
+      const { cx, cy, r } = this._arena;
+      while (activeRunId === runId && this._balls.length < this._max) {
+        const toAdd = [];
+        for (let i = 0; i < this._balls.length; i++) {
+          const b = this._balls[i];
+          b.x += b.vx; b.y += b.vy;
+          const dx = b.x - cx, dy = b.y - cy;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist + b.r > r) {
+            // Bounce
+            const nx = dx / dist, ny = dy / dist;
+            const dot = b.vx * nx + b.vy * ny;
+            b.vx -= 2 * dot * nx; b.vy -= 2 * dot * ny;
+            b.x = cx + nx * (r - b.r - 1); b.y = cy + ny * (r - b.r - 1);
+            // Spawn!
+            if (this._balls.length + toAdd.length < this._max) {
+              toAdd.push({
+                x: b.x, y: b.y,
+                vx: (Math.random() - 0.5) * 10, vy: (Math.random() - 0.5) * 10,
+                r: b.r, color: `hsl(${Math.random() * 360}, 70%, 50%)`
+              });
+              if (this._balls.length % 20 === 0) playNote(Math.floor(Math.random()*5)+5, 'sine', 0.05, 0.01);
+            }
+          }
+        }
+        toAdd.forEach(nb => this._balls.push(nb));
+        await sleep(16);
+      }
+      await sleep(3000);
+    }
+  },
+
+  escapeordie: {
+    type: 'simulation',
+    title: 'Escape or Die',
+    badge: 'Hardcore',
+    desc: 'Bounced inside a spiked rotating ring. Find the exit before losing all hearts.',
+    tiktokDesc: 'S\'échapper ou mourir ? Les pics ne pardonnent pas. #escapeordie #physics #hardcore',
+    tiktokTags: '#simulation #hardcore #viral #satisfying #physics #escape #died #asmr',
+    init: function () {
+      const cx = WIDTH / 2, cy = HEIGHT / 2 + 100, r = 350;
+      this._arena = { cx, cy, r, angle: 0, gap: 0.8 };
+      this._ball = { x: cx, y: cy, vx: 6, vy: -4, r: 20, color: '#4ADE80', particles: [] };
+      this._hearts = 10;
+      this._maxHearts = 10;
+      this._state = 'playing'; // 'playing' | 'won' | 'died'
+    },
+    draw: function (c) {
+      c.fillStyle = '#000';
+      c.fillRect(0, 0, WIDTH, HEIGHT);
+
+      c.fillStyle = '#fff'; c.textAlign = 'center';
+      c.font = 'bold 70px Inter, sans-serif';
+      c.fillText('Escape Before', WIDTH / 2, 200);
+      c.fillText('You Die!', WIDTH / 2, 280);
+
+      // Hearts
+      const hS = 40;
+      for (let i = 0; i < this._maxHearts; i++) {
+        const hx = WIDTH / 2 - (this._maxHearts * hS) / 2 + i * hS + 20;
+        c.font = '30px serif';
+        c.fillText(i < this._hearts ? '\u2764\ufe0f' : '\ud83d\udda4', hx, 350);
+      }
+
+      const { cx, cy, r, angle, gap } = this._arena;
+      c.save();
+      c.translate(cx, cy);
+      c.rotate(angle);
+
+      // Draw Spiked Ring
+      c.strokeStyle = '#4B5563'; c.lineWidth = 10;
+      c.beginPath();
+      c.arc(0, 0, r, gap/2, Math.PI * 2 - gap/2);
+      c.stroke();
+
+      // Spikes
+      c.fillStyle = '#1F2937';
+      const numSpikes = 24;
+      for (let i = 0; i < numSpikes; i++) {
+        const a = gap/2 + (i / (numSpikes-1)) * (Math.PI * 2 - gap);
+        const sx = Math.cos(a) * r;
+        const sy = Math.sin(a) * r;
+        c.save();
+        c.translate(sx, sy);
+        c.rotate(a + Math.PI/2);
+        c.beginPath(); c.moveTo(-20, 0); c.lineTo(0, -40); c.lineTo(20, 0); c.fill();
+        c.restore();
+      }
+      c.restore();
+
+      // Ball Particles
+      this._ball.particles.forEach(p => {
+        c.fillStyle = p.color; c.globalAlpha = p.life;
+        c.beginPath(); c.arc(p.x, p.y, 4, 0, Math.PI * 2); c.fill();
+      });
+      c.globalAlpha = 1.0;
+
+      // Ball
+      if (this._state === 'playing' || this._state === 'won') {
+        const b = this._ball;
+        c.fillStyle = b.color;
+        c.shadowBlur = 20; c.shadowColor = b.color;
+        c.beginPath(); c.arc(b.x, b.y, b.r, 0, Math.PI * 2); c.fill();
+        c.shadowBlur = 0;
+      }
+
+      if (this._state === 'died') {
+        c.fillStyle = 'rgba(0,0,0,0.8)'; c.fillRect(0, 0, WIDTH, HEIGHT);
+        c.fillStyle = '#EF4444'; c.font = 'bold 120px serif';
+        c.fillText('YOU DIED', WIDTH / 2, HEIGHT / 2);
+      }
+      if (this._state === 'won') {
+        c.fillStyle = 'rgba(0,0,0,0.8)'; c.fillRect(0, 0, WIDTH, HEIGHT);
+        c.fillStyle = '#F59E0B'; c.font = 'bold 120px Inter, sans-serif';
+        c.fillText('VICTORY', WIDTH / 2, HEIGHT / 2);
+      }
+    },
+    run: async function (runId) {
+      this.init(); initAudio();
+      const { cx, cy, r } = this._arena;
+      const gravity = 0.2;
+      
+      while (activeRunId === runId && this._state === 'playing') {
+        const b = this._ball;
+        b.vy += gravity; b.x += b.vx; b.y += b.vy;
+        
+        // Particles
+        b.particles.push({ x: b.x, y: b.y, life: 1.0, color: b.color });
+        if (b.particles.length > 20) b.particles.shift();
+        b.particles.forEach(p => p.life -= 0.05);
+
+        const dx = b.x - cx, dy = b.y - cy, dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist + b.r > r) {
+          const worldAngle = Math.atan2(dy, dx);
+          const localAngle = (worldAngle - this._arena.angle + Math.PI * 4) % (Math.PI * 2);
+          
+          if (localAngle < this._arena.gap / 2 || localAngle > Math.PI * 2 - this._arena.gap / 2) {
+            // Out of the gap!
+            if (dist > r + 50) { this._state = 'won'; playNote(15, 'triangle', 0.5, 0.2); }
+          } else {
+            // Hit spikes
+            this._hearts--;
+            playNoise(0.5, 0.1);
+            if (this._hearts <= 0) { this._state = 'died'; break; }
+            
+            // Bounce
+            const nx = dx / dist, ny = dy / dist;
+            const dot = b.vx * nx + b.vy * ny;
+            b.vx -= 2 * dot * nx; b.vy -= 2 * dot * ny;
+            b.x = cx + nx * (r - b.r - 1); b.y = cy + ny * (r - b.r - 1);
+          }
+        }
+
+        this._arena.angle += 0.02;
+        await sleep(16);
+      }
+      await sleep(3000);
+    }
+  },
+
+  physicscrash: {
+    type: 'simulation',
+    title: 'Free For All',
+    badge: 'Battle',
+    desc: '4 balls battle in a grid arena. Last one standing wins!',
+    tiktokDesc: 'Combat épique entre 4 algorithmes ! Qui sera le dernier survivant ? #battle #physics #simulation',
+    tiktokTags: '#satisfying #battle #viral #physics #simulation #oddlysatisfying #game',
+    init: function () {
+      const ox = 100, oy = 400, ow = WIDTH - 200, oh = 1000;
+      this._arena = { ox, oy, ow, oh };
+      this._balls = [
+        { id: 0, x: ox + 100, y: oy + 100, vx: 8, vy: 6, r: 40, color: '#EF4444', hearts: 10, face: '\u003e_\u003c' },
+        { id: 1, x: ox + ow - 100, y: oy + 100, vx: -8, vy: 6, r: 40, color: '#3B82F6', hearts: 10, face: '\u0027-\u0027' },
+        { id: 2, x: ox + 100, y: oy + oh - 100, vx: 8, vy: -6, r: 40, color: '#10B981', hearts: 10, face: '\u00f2_\u00f3' },
+        { id: 3, x: ox + ow - 100, y: oy + oh - 100, vx: -8, vy: -6, r: 40, color: '#F59E0B', hearts: 10, face: '\u003e:\u0028' },
+      ];
+      this._particles = [];
+      this._winner = null;
+    },
+    draw: function (c) {
+      c.fillStyle = '#0F172A';
+      c.fillRect(0, 0, WIDTH, HEIGHT);
+
+      // Grid background
+      const { ox, oy, ow, oh } = this._arena;
+      c.strokeStyle = 'rgba(255,255,255,0.1)';
+      c.lineWidth = 1;
+      for(let x = ox; x <= ox + ow; x += 50) { c.beginPath(); c.moveTo(x, oy); c.lineTo(x, oy+oh); c.stroke(); }
+      for(let y = oy; y <= oy + oh; y += 50) { c.beginPath(); c.moveTo(ox, y); c.lineTo(ox+ow, y); c.stroke(); }
+
+      // Arena Border
+      c.strokeStyle = '#fff'; c.lineWidth = 8;
+      c.strokeRect(ox, oy, ow, oh);
+
+      // Hearts UI
+      this._balls.forEach((b, i) => {
+        const hx = 100 + (i % 2) * (WIDTH/2);
+        const hy = 100 + Math.floor(i / 2) * 100;
+        c.fillStyle = b.color; c.beginPath(); c.arc(hx, hy, 20, 0, Math.PI * 2); c.fill();
+        for(let j=0; j<10; j++) {
+          c.font = '24px serif';
+          c.fillText(j < b.hearts ? '\u2764\ufe0f' : '\ud83d\udda4', hx + 40 + j * 30, hy + 8);
+        }
+      });
+
+      c.fillStyle = '#fff'; c.font = 'bold 50px Inter, sans-serif'; c.textAlign = 'center';
+      c.fillText('Free For All', WIDTH/2, 350);
+
+      // Particles
+      this._particles.forEach(p => {
+        c.fillStyle = p.color; c.globalAlpha = p.life;
+        c.beginPath(); c.arc(p.x, p.y, p.size, 0, Math.PI * 2); c.fill();
+      });
+      c.globalAlpha = 1.0;
+
+      // Balls
+      this._balls.forEach(b => {
+        if (b.hearts <= 0) return;
+        c.save(); c.translate(b.x, b.y);
+        c.fillStyle = b.color;
+        c.shadowBlur = 15; c.shadowColor = b.color;
+        c.beginPath(); c.arc(0, 0, b.r, 0, Math.PI * 2); c.fill();
+        c.shadowBlur = 0;
+        c.fillStyle = '#fff'; c.font = 'bold 30px Inter, sans-serif';
+        c.fillText(b.face, 0, 10);
+        c.restore();
+      });
+
+      if (this._winner !== null) {
+        c.fillStyle = 'rgba(0,0,0,0.7)'; c.fillRect(0, HEIGHT/2 - 100, WIDTH, 200);
+        c.fillStyle = this._balls[this._winner].color;
+        c.font = 'bold 80px Inter, sans-serif';
+        c.fillText(`${this._balls[this._winner].color} WINS!`, WIDTH/2, HEIGHT/2 + 30);
+      }
+    },
+    run: async function (runId) {
+      this.init(); initAudio();
+      const { ox, oy, ow, oh } = this._arena;
+      
+      while (activeRunId === runId) {
+        const alive = this._balls.filter(b => b.hearts > 0);
+        if (alive.length <= 1) {
+          if (alive.length === 1) this._winner = alive[0].id;
+          break;
+        }
+
+        this._balls.forEach(b => {
+          if (b.hearts <= 0) return;
+          b.x += b.vx; b.y += b.vy;
+          // Wall bounce
+          if (b.x - b.r < ox || b.x + b.r > ox + ow) { b.vx *= -1; b.x = Math.max(ox+b.r, Math.min(ox+ow-b.r, b.x)); }
+          if (b.y - b.r < oy || b.y + b.r > oy + oh) { b.vy *= -1; b.y = Math.max(oy+b.r, Math.min(oy+oh-b.r, b.y)); }
+        });
+
+        // Ball collisions
+        for(let i=0; i<this._balls.length; i++) {
+          for(let j=i+1; j<this._balls.length; j++) {
+            const b1 = this._balls[i], b2 = this._balls[j];
+            if (b1.hearts <= 0 || b2.hearts <= 0) continue;
+            const dx = b2.x - b1.x, dy = b2.y - b1.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist < b1.r + b2.r) {
+              // Collision!
+              b1.hearts--; b2.hearts--;
+              playNote(Math.floor(Math.random()*5)+1, 'square', 0.1, 0.05);
+              // Physics
+              const nx = dx/dist, ny = dy/dist;
+              const p = b1.vx*nx + b1.vy*ny - (b2.vx*nx + b2.vy*ny);
+              b1.vx -= p*nx; b1.vy -= p*ny; b2.vx += p*nx; b2.vy += p*ny;
+              // Particles
+              for(let k=0; k<15; k++) {
+                this._particles.push({
+                  x: (b1.x+b2.x)/2, y: (b1.y+b2.y)/2,
+                  vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
+                  size: Math.random()*10+5, color: Math.random()>0.5 ? b1.color : b2.color, life: 1.0
+                });
+              }
+            }
+          }
+        }
+
+        this._particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.life -= 0.02; });
+        this._particles = this._particles.filter(p => p.life > 0);
+        await sleep(16);
+      }
+      await sleep(3000);
+    }
   },
 };
 

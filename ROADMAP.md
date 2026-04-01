@@ -355,3 +355,181 @@
 2. 10K followers → Creator Fund
 3. 50K → Brand deals
 4. 100K → Lancer son propre outil (SaaS)
+
+---
+
+## Analyse des videos d'inspiration (dossier /inspiration)
+
+### 1. Arena War — Territory War circulaire (swapjs)
+**Source** : `Capture d'écran 2026-04-01 151842.png` + `mimic_analysis.png`
+
+**Description** : 4 IA s'affrontent sur une grille CIRCULAIRE (pas carree). Chaque IA a un nom, une couleur, une strategie, et un pourcentage en temps reel.
+
+**Layout pixel-perfect (9:16, 1080x1920)** :
+- **Fond** : blanc/creme clair `#F5F0EB`
+- **Titre** : "Arena War" en noir, police serif bold ~60px, centre, y=120
+- **Sous-titre** : "4 algorithms fight for space" en gris clair, ~28px, y=160
+- **Grille circulaire** : centre x=540 y=700, rayon ~350px
+  - Forme : cercle rempli de cellules carrees (~8x8px)
+  - Seules les cellules DANS le cercle sont actives (les coins sont vides)
+  - Cellules vides : gris tres clair `#E8E4E0`
+  - Cellules occupees : couleur de l'IA
+- **IAs et couleurs** :
+  - Greedy : orange/saumon `#E8985A` — "Nearest empty cell"
+  - Spiral : noir `#3D3D3D` — "Clockwise wall-hugger"
+  - Hunter : bleu/mauve `#9B8EC8` — "Chase nearest enemy"
+  - Random : rose/mauve clair `#C4A0C4` — "Random walk"
+  - (Variante Mimic : une 5eme IA cyan `#7BC8C8` — "Copies enemy moves")
+- **Tete de creature** : carre colore ~12x12px avec 2 yeux blancs (2x2px) et 2 pupilles noires (1x1px)
+- **Scoreboard en bas** : 4 cartes empilees
+  - Chaque carte : fond blanc, bords arrondis 12px, hauteur ~65px
+  - A gauche : icone carre ~36x36 de la couleur avec yeux
+  - Centre-gauche : nom en bold 26px + description en gris 18px
+  - Droite : pourcentage en bold 30px
+  - Les cartes sont triees par score descendant
+
+**Ce qu'il faut implementer** :
+- Grille circulaire (masque les cellules hors du cercle)
+- Tetes avec yeux qui regardent dans la direction du mouvement
+- Style "pixel art retro propre" — pas de glow, pas d'ombres lourdes
+- 5eme IA optionnelle "Mimic" qui copie les mouvements du leader
+
+---
+
+### 2. Football Pong — Bosnie vs Italie
+**Source** : `frame_analysis.png` + `frame_analysis_mid.png` + `frame_analysis_end.png`
+
+**Description** : Deux balles-drapeaux rebondissent dans une arene circulaire. Quand une balle touche le mur, l'autre equipe marque. Style Pong mais avec physique 2D.
+
+**Layout pixel-perfect** :
+- **Fond** : vert football fonce `#2D5A27`
+- **Arene** : cercle blanc/gris clair, centre ecran, rayon ~350px
+  - Contour blanc epais ~6px
+  - Interieur vert fonce (meme que le fond ou legerement different)
+- **Scoreboard en haut** :
+  - Barre horizontale centree, fond semi-transparent
+  - Gauche : drapeau pays 1 (image ~40x28) + score en blanc bold 36px
+  - Centre : timer "23:04" en petit fond jaune/vert arrondi
+  - Droite : score en blanc bold 36px + drapeau pays 2
+- **Balles** :
+  - Chaque balle = cercle ~30px avec le drapeau du pays dessine dessus
+  - OU emoji drapeau simplifie (couleurs du drapeau en bandes)
+  - Les balles rebondissent avec physique realiste (vitesse, angle de reflexion)
+  - Quand une balle touche le bord du cercle = point pour l'adversaire
+- **Footer** :
+  - En bas : logo tournoi + "qualifiers" + noms des deux pays
+  - Fond semi-transparent
+
+**Ce qu'il faut implementer** :
+- Arene circulaire sur fond vert
+- Balles avec couleurs de drapeaux (pas besoin d'images, juste des bandes de couleurs)
+- Collision avec le cercle = point pour l'adversaire
+- Scoreboard anime en haut
+- Match en temps reel, le score evolue
+- Parametrable : n'importe quels pays/equipes
+
+---
+
+### 3. Escape Before You Die — Ball + Spikes + Hearts
+**Source** : `escape_analysis.png`
+
+**Description** : Une balle verte rebondit dans un cercle rempli de piques. Elle doit trouver la sortie avant de perdre toutes ses vies. Particules vertes trainent derriere elle.
+
+**Layout pixel-perfect** :
+- **Fond** : noir pur `#000000`
+- **Titre** : "Escape Before You Die!" en blanc bold ~52px, centre, y=120
+  - Avec emoji 💀 possible
+- **Vies** : rangee de coeurs en haut
+  - Coeurs rouges `#FF0000` = vies restantes
+  - Coeurs gris `#555555` = vies perdues
+  - ~10 coeurs total, taille ~28px chacun, espaces de 4px
+- **Arene** : cercle, centre x=540 y=800, rayon ~320px
+  - Contour : vert fonce `#1A3A1A` avec piques triangulaires
+  - Piques : triangles pointant vers l'interieur, ~20px de long, espaces regulierement sur tout le contour (~40 piques)
+  - Couleur piques : gris/vert sombre
+  - Un GAP dans les piques = la sortie (visible, ~40px de large)
+- **Balle** : cercle vert vif `#7FFF00`, rayon ~12px
+  - Trainee de particules vertes derriere (petits cercles qui fade)
+  - ~20-30 particules vertes semi-transparentes dispersees dans l'arene
+- **Balle grise** : une 2eme balle grise (obstacle? ou balle morte?)
+- **Footer** : texte petit en bas, username
+
+**Ce qu'il faut implementer** :
+- Cercle avec piques sur tout le contour (triangles)
+- Un gap = sortie qui peut tourner lentement
+- Balle avec trainee de particules
+- Systeme de vies (coeurs)
+- Toucher une pique = perdre une vie
+- Sortir par le gap = victoire
+- Particules ambiantes dans l'arene
+
+---
+
+### 4. Ball Multiply — Every bounce = new ball
+**Source** : `multiply_analysis.png`
+
+**Description** : Des balles rebondissent dans un cercle. A chaque rebond contre le mur, une nouvelle balle apparait. De 2 balles a 2500 en quelques secondes. Chaos exponentiel.
+
+**Layout pixel-perfect** :
+- **Fond** : noir pur `#000000`
+- **Titre** : "Every bounce = new ball 🤯" en blanc bold ~44px, centre, y=180
+- **Arene** : cercle, centre ecran, rayon ~350px
+  - Contour : bleu/violet fin `#5555CC`, epaisseur ~2px
+  - Interieur : noir
+- **Balles** : petits cercles colores, rayon ~5-6px
+  - Couleurs aleatoires vives : rouge `#FF0000`, bleu `#0066FF`, magenta `#FF00FF`, vert, jaune...
+  - Initialement 2-3 balles
+  - A chaque collision avec le mur du cercle → spawn une nouvelle balle a la position du rebond
+  - Direction de la nouvelle balle = aleatoire
+- **Croissance exponentielle** : le nombre de balles double rapidement
+  - Afficher un compteur en overlay : "Balls: 2" → "Balls: 47" → "Balls: 2,500"
+- **Le chaos final** : l'arene est completement remplie de balles qui rebondissent partout
+
+**Ce qu'il faut implementer** :
+- Cercle sur fond noir
+- Physique de rebond sur cercle
+- Spawn de nouvelle balle a chaque collision avec le mur
+- Couleur aleatoire pour chaque nouvelle balle
+- Compteur de balles en temps reel
+- Performance : limiter a ~2000-3000 balles max, reduire le rayon des balles quand il y en a trop
+- Son : petit "pop" a chaque spawn
+
+---
+
+### 5. Free For All — Emoji Battle Royale
+**Source** : `crash_analysis.png`
+
+**Description** : Des grosses balles emoji (avec visages) se battent dans une arene grille. Systeme de vies en haut (rangees de coeurs colores). Quand deux balles se touchent, une perd une vie.
+
+**Layout pixel-perfect** :
+- **Fond** : noir/bleu tres fonce `#0A0A1A`
+- **Vies en haut** : 4 rangees de coeurs (une par joueur)
+  - Rangee 1 : coeurs rouges (10 coeurs)
+  - Rangee 2 : coeurs bleu-vert (10 coeurs)
+  - Rangee 3 : coeurs verts (10 coeurs)
+  - Rangee 4 : coeurs jaunes (10 coeurs)
+  - Taille coeur ~20px, fond sombre derriere chaque rangee
+- **Titre** : "Free For All" en blanc bold centre, entre les vies et l'arene
+- **Arene** :
+  - Grille de lignes fines bleu fonce `#1A1A3A` sur fond noir
+  - Pas de bordure visible — les balles rebondissent sur les bords de l'ecran
+- **Balles/Creatures** :
+  - 4 grosses balles (~60-80px de diametre)
+  - Chaque balle a un VISAGE (emoji-style) : yeux, bouche
+  - Rouge : visage en colere 😡
+  - Bleu/vert : visage cool 😎
+  - Jaune : visage qui pleure 😢
+  - Vert : visage degel 🤢
+  - Les balles bougent avec physique, rebondissent sur les murs et entre elles
+  - Quand deux balles se touchent = la plus petite perd une vie
+- **Particules** : petites particules ambiantes (etoiles, debris) flottent dans l'arene
+- **Watermark** : @username en bas
+
+**Ce qu'il faut implementer** :
+- 4 grosses balles avec visages dessines (yeux + bouche, pas d'images)
+- Systeme de vies par couleur (rangees de coeurs en haut)
+- Collision = une balle perd un coeur
+- 0 coeurs = elimination (balle disparait avec explosion de particules)
+- Grille en arriere-plan
+- Particules ambiantes
+- Dernier debout gagne

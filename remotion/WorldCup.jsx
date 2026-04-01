@@ -2,73 +2,62 @@ import { useCurrentFrame, useVideoConfig, Sequence, Audio } from 'remotion';
 import { useEffect, useRef, useMemo } from 'react';
 import { TEAMS as ALL_TEAMS } from './teams';
 
-// --- CONSTANTS ---
-const W = 1080, H = 1920;
-const SCALE = 2;
+const W = 1080, H = 1920, SCALE = 2;
 
-function getTeamPair(homeCode, awayCode) {
-  const h = ALL_TEAMS[homeCode] || { name: homeCode, shortName: homeCode, color: '#333', altColor: '#999', flag: [] };
-  const a = ALL_TEAMS[awayCode] || { name: awayCode, shortName: awayCode, color: '#666', altColor: '#ccc', flag: [] };
-  return [
-    { ...h, score: 0, fouls: 0 },
-    { ...a, score: 0, fouls: 0 },
-  ];
+function getTeamPair(h, a) {
+  const ht = ALL_TEAMS[h] || { name: h, shortName: h, color: '#333', altColor: '#999', flag: [] };
+  const at = ALL_TEAMS[a] || { name: a, shortName: a, color: '#666', altColor: '#ccc', flag: [] };
+  return [{ ...ht, score: 0, fouls: 0 }, { ...at, score: 0, fouls: 0 }];
 }
 
-// --- SIMULATION STATE (deterministic, seeded) ---
 function seededRandom(seed) {
   let s = seed;
-  return () => {
-    s = (s * 16807 + 0) % 2147483647;
-    return (s - 1) / 2147483646;
-  };
+  return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
 }
 
+// ============== SIMULATION ==============
 function createState(seed, homeCode, awayCode, matchInfo) {
   const rand = seededRandom(seed);
-  const px = 60, py = 320, pw = W - 120, ph = 650;
+  // Rectangular pitch
+  const px = 70, py = 380, pw = W - 140, ph = 600;
   const midX = px + pw / 2, midY = py + ph / 2;
-  const goalW = 55, goalH = 280;
+  const goalW = 50, goalH = 240;
   const gTop = midY - goalH / 2, gBot = midY + goalH / 2;
-  const PR = 22;
+  const PR = 20;
 
   const teams = getTeamPair(homeCode, awayCode);
   const players = [
-    { x: px + 35, y: midY, vx: 0, vy: 0, r: PR, team: 0, role: 'gk' },
-    { x: midX - 130, y: midY - 90, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
-    { x: midX - 130, y: midY + 90, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
-    { x: px + pw - 35, y: midY, vx: 0, vy: 0, r: PR, team: 1, role: 'gk' },
-    { x: midX + 130, y: midY - 90, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
-    { x: midX + 130, y: midY + 90, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
+    // Team 0: GK + 2 field
+    { x: px + 30, y: midY, vx: 0, vy: 0, r: PR, team: 0, role: 'gk' },
+    { x: midX - 120, y: midY - 80, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
+    { x: midX - 120, y: midY + 80, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
+    // Team 1: GK + 2 field
+    { x: px + pw - 30, y: midY, vx: 0, vy: 0, r: PR, team: 1, role: 'gk' },
+    { x: midX + 120, y: midY - 80, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
+    { x: midX + 120, y: midY + 80, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
   ];
-  const referee = { x: midX, y: midY + 50, vx: 0, vy: 0, r: 16 };
-  const ball = { x: midX, y: midY, vx: 0, vy: 0, r: 12 };
-  const goalLog = [];
-  let stuckTimer = 0;
-  let lastBallX = midX, lastBallY = midY;
-  let foulFlash = 0;
-  let goalFlash = 0;
-  let kickoff = true;
-  let kickoffTimer = 30; // frames
+  const referee = { x: midX, y: midY + 40, vx: 0, vy: 0, r: 14 };
+  const ball = { x: midX, y: midY, vx: 0, vy: 0, r: 10 };
 
   return {
     rand, px, py, pw, ph, midX, midY, goalW, goalH, gTop, gBot,
-    teams, players, referee, ball, goalLog,
-    stuckTimer, lastBallX, lastBallY, foulFlash, goalFlash,
-    kickoff, kickoffTimer, timerFrames: 0, totalFrames: 30 * 65, matchInfo: matchInfo || '',
+    teams, players, referee, ball,
+    goalLog: [], stuckTimer: 0, lastBallX: midX, lastBallY: midY,
+    foulFlash: 0, goalFlash: 0, kickoff: true, kickoffTimer: 30,
+    timerFrames: 0, totalFrames: 30 * 65, matchInfo: matchInfo || '',
   };
 }
 
 function collide(a, b) {
-  const dx = b.x - a.x, dy = b.y - a.y, dist = Math.sqrt(dx * dx + dy * dy);
-  if (dist < a.r + b.r && dist > 0) {
-    const nx = dx / dist, ny = dy / dist;
-    const relV = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
-    if (relV > 0) {
+  const dx = b.x - a.x, dy = b.y - a.y, d = Math.sqrt(dx * dx + dy * dy);
+  if (d < a.r + b.r && d > 0) {
+    const nx = dx / d, ny = dy / d;
+    const rv = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
+    if (rv > 0) {
       const mA = a.r * a.r, mB = b.r * b.r, tot = mA + mB;
-      a.vx -= relV * nx * (2 * mB / tot); a.vy -= relV * ny * (2 * mB / tot);
-      b.vx += relV * nx * (2 * mA / tot); b.vy += relV * ny * (2 * mA / tot);
-      const ov = (a.r + b.r - dist) / 2;
+      a.vx -= rv * nx * (2 * mB / tot); a.vy -= rv * ny * (2 * mB / tot);
+      b.vx += rv * nx * (2 * mA / tot); b.vy += rv * ny * (2 * mA / tot);
+      const ov = (a.r + b.r - d) / 2;
       a.x -= nx * ov; a.y -= ny * ov; b.x += nx * ov; b.y += ny * ov;
       return true;
     }
@@ -76,449 +65,353 @@ function collide(a, b) {
   return false;
 }
 
-function bounceRect(b, state) {
-  const { px, py, pw, ph, gTop, gBot } = state;
+function bounceRect(b, s) {
+  const { px, py, pw, ph, gTop, gBot } = s;
   if (b.y - b.r < py) { b.y = py + b.r; b.vy = Math.abs(b.vy); }
   if (b.y + b.r > py + ph) { b.y = py + ph - b.r; b.vy = -Math.abs(b.vy); }
-  if (b.x - b.r < px) {
-    if (!(b.y > gTop && b.y < gBot)) { b.x = px + b.r; b.vx = Math.abs(b.vx); }
-  }
-  if (b.x + b.r > px + pw) {
-    if (!(b.y > gTop && b.y < gBot)) { b.x = px + pw - b.r; b.vx = -Math.abs(b.vx); }
-  }
+  if (b.x - b.r < px && !(b.y > gTop && b.y < gBot)) { b.x = px + b.r; b.vx = Math.abs(b.vx); }
+  if (b.x + b.r > px + pw && !(b.y > gTop && b.y < gBot)) { b.x = px + pw - b.r; b.vx = -Math.abs(b.vx); }
 }
 
-function resetPositions(state) {
-  const { px, pw, midX, midY, players, ball, referee } = state;
+function resetPos(s) {
+  const { px, pw, midX, midY, players, ball, referee } = s;
   ball.x = midX; ball.y = midY; ball.vx = 0; ball.vy = 0;
-  players[0].x = px + 35; players[0].y = midY;
-  players[1].x = midX - 130; players[1].y = midY - 90;
-  players[2].x = midX - 130; players[2].y = midY + 90;
-  players[3].x = px + pw - 35; players[3].y = midY;
-  players[4].x = midX + 130; players[4].y = midY - 90;
-  players[5].x = midX + 130; players[5].y = midY + 90;
+  players[0].x = px + 30; players[0].y = midY;
+  players[1].x = midX - 120; players[1].y = midY - 80;
+  players[2].x = midX - 120; players[2].y = midY + 80;
+  players[3].x = px + pw - 30; players[3].y = midY;
+  players[4].x = midX + 120; players[4].y = midY - 80;
+  players[5].x = midX + 120; players[5].y = midY + 80;
   players.forEach(p => { p.vx = 0; p.vy = 0; });
-  referee.x = midX; referee.y = midY + 50; referee.vx = 0; referee.vy = 0;
+  referee.x = midX; referee.y = midY + 40; referee.vx = 0; referee.vy = 0;
 }
 
-function stepSimulation(state) {
-  const { rand, px, pw, midX, midY, gTop, gBot, players, ball, referee, teams, goalLog } = state;
+function stepSim(s) {
+  const { rand, px, pw, midX, midY, gTop, gBot, players, ball, referee, teams, goalLog } = s;
 
-  if (state.kickoff) {
-    state.kickoffTimer--;
-    if (state.kickoffTimer <= 0) {
-      state.kickoff = false;
-      ball.vx = (rand() - 0.5) * 3;
-      ball.vy = (rand() - 0.5) * 3;
-    }
-    state.timerFrames++;
-    return;
-  }
+  if (s.kickoff) { s.kickoffTimer--; if (s.kickoffTimer <= 0) { s.kickoff = false; ball.vx = (rand() - 0.5) * 3; ball.vy = (rand() - 0.5) * 3; } s.timerFrames++; return; }
+  s.timerFrames++;
 
-  state.timerFrames++;
-  const timerSecs = 90 * (1 - state.timerFrames / state.totalFrames);
-
-  // AI
+  // AI — ULTRA AGGRESSIVE
   players.forEach(pl => {
     const oppGoalX = pl.team === 0 ? px + pw : px;
     const ownGoalX = pl.team === 0 ? px : px + pw;
     let tx, ty;
-
     if (pl.role === 'gk') {
-      tx = ownGoalX + (pl.team === 0 ? 35 : -35);
-      ty = midY + (ball.y - midY) * 0.7;
-      ty = Math.max(gTop + 20, Math.min(gBot - 20, ty));
-      if (Math.abs(ball.x - ownGoalX) < 150) { tx = ball.x; ty = ball.y; }
+      tx = ownGoalX + (pl.team === 0 ? 30 : -30);
+      ty = midY + (ball.y - midY) * 0.75;
+      ty = Math.max(gTop + 15, Math.min(gBot - 15, ty));
+      if (Math.abs(ball.x - ownGoalX) < 130) { tx = ball.x; ty = ball.y; }
     } else {
-      const gdx = oppGoalX - ball.x, gdy = midY - ball.y;
-      const gd = Math.sqrt(gdx * gdx + gdy * gdy) || 1;
-      tx = ball.x - (gdx / gd) * (ball.r + pl.r + 8);
-      ty = ball.y - (gdy / gd) * (ball.r + pl.r + 8);
+      const gdx = oppGoalX - ball.x, gdy = midY - ball.y, gd = Math.sqrt(gdx * gdx + gdy * gdy) || 1;
+      tx = ball.x - (gdx / gd) * (ball.r + pl.r + 6);
+      ty = ball.y - (gdy / gd) * (ball.r + pl.r + 6);
       const dist = Math.sqrt((pl.x - ball.x) ** 2 + (pl.y - ball.y) ** 2);
-      if (dist < 60) { tx = ball.x + (gdx / gd) * 10; ty = ball.y + (gdy / gd) * 10; }
-      const nearCorner = (pl.x < px + 40 || pl.x > px + pw - 40) && (pl.y < gTop - 40 || pl.y > gBot + 40);
-      if (nearCorner) { tx = midX + (rand() - 0.5) * 100; ty = midY + (rand() - 0.5) * 100; }
+      if (dist < 50) { tx = ball.x + (gdx / gd) * 8; ty = ball.y + (gdy / gd) * 8; }
+      if ((pl.x < px + 35 || pl.x > px + pw - 35) && (pl.y < gTop - 30 || pl.y > gBot + 30)) {
+        tx = midX + (rand() - 0.5) * 80; ty = midY + (rand() - 0.5) * 80;
+      }
     }
-
     const dx = tx - pl.x, dy = ty - pl.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
-    pl.vx += (dx / d) * 0.6; pl.vy += (dy / d) * 0.6;
-    pl.vx += (rand() - 0.5) * 0.2; pl.vy += (rand() - 0.5) * 0.2;
-    pl.vx *= 0.93; pl.vy *= 0.93;
-    const ms = pl.role === 'gk' ? 6 : 8;
+    pl.vx += (dx / d) * 0.7; pl.vy += (dy / d) * 0.7;
+    pl.vx += (rand() - 0.5) * 0.25; pl.vy += (rand() - 0.5) * 0.25;
+    pl.vx *= 0.92; pl.vy *= 0.92;
+    const ms = pl.role === 'gk' ? 6.5 : 9;
     const sp = Math.sqrt(pl.vx * pl.vx + pl.vy * pl.vy);
     if (sp > ms) { pl.vx = (pl.vx / sp) * ms; pl.vy = (pl.vy / sp) * ms; }
     pl.x += pl.vx; pl.y += pl.vy;
   });
 
   // Referee
-  const rtx = ball.x + (ball.x > midX ? -50 : 50);
-  const rty = ball.y + 35;
+  const rtx = ball.x + (ball.x > midX ? -45 : 45), rty = ball.y + 30;
   const rdx = rtx - referee.x, rdy = rty - referee.y, rd = Math.sqrt(rdx * rdx + rdy * rdy) || 1;
   referee.vx += (rdx / rd) * 0.2; referee.vy += (rdy / rd) * 0.2;
-  referee.vx *= 0.94; referee.vy *= 0.94;
+  referee.vx *= 0.93; referee.vy *= 0.93;
   referee.x += referee.vx; referee.y += referee.vy;
-  bounceRect(referee, state);
+  bounceRect(referee, s);
 
-  // Stuck detection
-  const bmd = Math.sqrt((ball.x - state.lastBallX) ** 2 + (ball.y - state.lastBallY) ** 2);
-  if (bmd < ball.r) { state.stuckTimer++; } else { state.stuckTimer = 0; state.lastBallX = ball.x; state.lastBallY = ball.y; }
-  if (state.stuckTimer >= 60) { // 2 seconds at 30fps
-    state.foulFlash = 45;
-    const attackTeam = ball.x < midX ? 0 : 1;
-    teams[attackTeam === 0 ? 1 : 0].fouls++;
-    ball.vx = (midX - ball.x) * 0.05 + (rand() - 0.5) * 6;
-    ball.vy = (midY - ball.y) * 0.05 + (rand() - 0.5) * 6;
-    players.forEach(pl => {
-      if (pl.team !== attackTeam) {
-        pl.x = pl.team === 0 ? px + pw / 4 : px + pw * 3 / 4;
-        pl.y = midY + (rand() - 0.5) * 200;
-        pl.vx = 0; pl.vy = 0;
-      }
-    });
-    state.stuckTimer = 0;
-    state.lastBallX = ball.x; state.lastBallY = ball.y;
+  // Stuck
+  const bmd = Math.sqrt((ball.x - s.lastBallX) ** 2 + (ball.y - s.lastBallY) ** 2);
+  if (bmd < ball.r) s.stuckTimer++; else { s.stuckTimer = 0; s.lastBallX = ball.x; s.lastBallY = ball.y; }
+  if (s.stuckTimer >= 60) {
+    s.foulFlash = 40;
+    const atk = ball.x < midX ? 0 : 1;
+    teams[atk === 0 ? 1 : 0].fouls++;
+    ball.vx = (midX - ball.x) * 0.06 + (rand() - 0.5) * 7;
+    ball.vy = (midY - ball.y) * 0.06 + (rand() - 0.5) * 7;
+    players.forEach(pl => { if (pl.team !== atk) { pl.x = pl.team === 0 ? px + pw / 4 : px + pw * 3 / 4; pl.y = midY + (rand() - 0.5) * 200; pl.vx = 0; pl.vy = 0; } });
+    s.stuckTimer = 0; s.lastBallX = ball.x; s.lastBallY = ball.y;
   }
 
-  // Ball physics
-  ball.vx *= 0.997; ball.vy *= 0.997;
-  ball.x += ball.vx; ball.y += ball.vy;
-  bounceRect(ball, state);
-  players.forEach(pl => { bounceRect(pl, state); collide(pl, ball); });
+  ball.vx *= 0.997; ball.vy *= 0.997; ball.x += ball.vx; ball.y += ball.vy;
+  bounceRect(ball, s);
+  players.forEach(pl => { bounceRect(pl, s); collide(pl, ball); });
   for (let i = 0; i < players.length; i++) for (let j = i + 1; j < players.length; j++) collide(players[i], players[j]);
   collide(referee, ball);
   players.forEach(pl => collide(referee, pl));
 
-  // Goal detection
+  // Goals
   let scored = -1;
   if (ball.x < px && ball.y > gTop && ball.y < gBot) scored = 1;
   if (ball.x > px + pw && ball.y > gTop && ball.y < gBot) scored = 0;
   if (scored >= 0) {
     teams[scored].score++;
-    const elapsed = timerSecs;
-    const m = Math.floor((90 - elapsed) / 60);
-    const s = Math.floor((90 - elapsed) % 60).toString().padStart(2, '0');
-    goalLog.push({ team: scored, timeStr: `${m}'${s}` });
-    state.goalFlash = 30;
-    resetPositions(state);
-    state.kickoff = true;
-    state.kickoffTimer = 30;
+    const elapsed = 90 * (s.timerFrames / s.totalFrames);
+    const m = Math.floor(elapsed / 60), sec = Math.floor(elapsed % 60).toString().padStart(2, '0');
+    goalLog.push({ team: scored, timeStr: `${m}'${sec}` });
+    s.goalFlash = 30;
+    resetPos(s);
+    s.kickoff = true; s.kickoffTimer = 30; s.stuckTimer = 0;
   }
-
-  if (state.foulFlash > 0) state.foulFlash--;
-  if (state.goalFlash > 0) state.goalFlash--;
+  if (s.foulFlash > 0) s.foulFlash--;
+  if (s.goalFlash > 0) s.goalFlash--;
 }
 
-// --- DRAW FUNCTION ---
-function drawFrame(ctx, state, frameNum) {
-  const { px, py, pw, ph, midX, midY, goalW, goalH, gTop, gBot, teams, players, referee, ball, goalLog } = state;
+// ============== DRAW ==============
+function drawFrame(ctx, s) {
+  const { px, py, pw, ph, midX, midY, goalW, goalH, gTop, gBot, teams, players, referee, ball, goalLog } = s;
   const c = ctx;
+  c.save(); c.scale(SCALE, SCALE);
 
-  c.save();
-  c.scale(SCALE, SCALE);
+  // BG
+  c.fillStyle = '#1B7339'; c.fillRect(0, 0, W, H);
 
-  // Background
-  c.fillStyle = '#1B7339';
-  c.fillRect(0, 0, W, H);
-
-  // --- SCOREBOARD ---
-  const sbY = 180, sbW = 920, sbH = 100;
+  // === SCOREBOARD (reference style with flag bars) ===
+  const sbY = 180, sbW = 750, sbH = 75;
   const sx = W / 2 - sbW / 2;
-  c.fillStyle = 'rgba(0,0,0,0.9)';
-  if (c.roundRect) { c.beginPath(); c.roundRect(sx, sbY, sbW, sbH, 18); c.fill(); }
-  c.fillStyle = teams[0].color;
-  if (c.roundRect) { c.beginPath(); c.roundRect(sx, sbY, 12, sbH, [18, 0, 0, 18]); c.fill(); }
-  c.fillStyle = teams[1].color;
-  if (c.roundRect) { c.beginPath(); c.roundRect(sx + sbW - 12, sbY, 12, sbH, [0, 18, 18, 0]); c.fill(); }
-
-  c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = 'bold 36px Inter, sans-serif';
-  c.fillText(teams[0].shortName, sx + 30, sbY + 62);
-  c.textAlign = 'right';
-  c.fillText(teams[1].shortName, sx + sbW - 30, sbY + 62);
-
-  c.textAlign = 'center'; c.font = 'bold 64px Inter, sans-serif';
-  c.fillText(teams[0].score, sx + sbW / 2 - 80, sbY + 68);
-  c.fillStyle = '#555'; c.font = 'bold 40px Inter, sans-serif';
-  c.fillText('-', sx + sbW / 2, sbY + 64);
-  c.fillStyle = '#fff'; c.font = 'bold 64px Inter, sans-serif';
-  c.fillText(teams[1].score, sx + sbW / 2 + 80, sbY + 68);
-
-  // Timer — maps frame to 90:00 countdown
-  const timerSecs = Math.max(0, 90 * (1 - state.timerFrames / state.totalFrames));
-  const mins = Math.floor(timerSecs / 60).toString().padStart(2, '0');
-  const secs = Math.floor(timerSecs % 60).toString().padStart(2, '0');
-  c.fillStyle = '#111';
-  if (c.roundRect) { c.beginPath(); c.roundRect(sx + sbW / 2 - 55, sbY - 14, 110, 34, 12); c.fill(); }
-  c.fillStyle = '#4ADE80'; c.font = 'bold 24px Fira Code, monospace';
-  c.fillText(`${mins}:${secs}`, sx + sbW / 2, sbY + 14);
-
-  // Fouls (yellow cards)
-  c.font = 'bold 22px Inter, sans-serif';
-  c.fillStyle = '#FFD700';
-  c.textAlign = 'left';
-  if (teams[0].fouls > 0) c.fillText(`\uD83D\uDFE8 ${teams[0].fouls}`, sx + 30, sbY + 90);
-  c.textAlign = 'right';
-  if (teams[1].fouls > 0) c.fillText(`\uD83D\uDFE8 ${teams[1].fouls}`, sx + sbW - 30, sbY + 90);
-
-  // --- PITCH (neon glow) ---
-  c.fillStyle = '#22883F';
-  c.fillRect(px, py, pw, ph);
+  // Left flag bg
   c.save();
-  c.shadowColor = 'rgba(255,255,255,0.6)'; c.shadowBlur = 15;
-  c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = 4;
+  if (c.roundRect) { c.beginPath(); c.roundRect(sx, sbY, sbW * 0.32, sbH, [14, 0, 0, 14]); c.clip(); }
+  const lf = teams[0].flag || [];
+  const ld = sbW * 0.32;
+  lf.forEach(f => { c.fillStyle = f[0]; c.fillRect(sx + f[1] * ld, sbY + f[2] * sbH, f[3] * ld, f[4] * sbH); });
+  c.restore();
+  // Score left
+  c.fillStyle = teams[0].color; c.fillRect(sx + sbW * 0.32, sbY, sbW * 0.1, sbH);
+  c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = 'bold 48px Inter, sans-serif';
+  c.fillText(teams[0].score, sx + sbW * 0.37, sbY + 54);
+  // Timer center
+  c.fillStyle = '#B8860B'; c.fillRect(sx + sbW * 0.42, sbY, sbW * 0.16, sbH);
+  const tSecs = Math.max(0, 90 * (1 - s.timerFrames / s.totalFrames));
+  const mins = Math.floor(tSecs / 60).toString().padStart(2, '0');
+  const secs = Math.floor(tSecs % 60).toString().padStart(2, '0');
+  c.fillStyle = '#fff'; c.font = 'bold 30px Fira Code, monospace';
+  c.fillText(`${mins}:${secs}`, sx + sbW * 0.5, sbY + 50);
+  // Score right
+  c.fillStyle = teams[1].color; c.fillRect(sx + sbW * 0.58, sbY, sbW * 0.1, sbH);
+  c.fillStyle = '#fff'; c.font = 'bold 48px Inter, sans-serif';
+  c.fillText(teams[1].score, sx + sbW * 0.63, sbY + 54);
+  // Right flag bg
+  c.save();
+  if (c.roundRect) { c.beginPath(); c.roundRect(sx + sbW * 0.68, sbY, sbW * 0.32, sbH, [0, 14, 14, 0]); c.clip(); }
+  const rf = teams[1].flag || [];
+  const rd2 = sbW * 0.32;
+  rf.forEach(f => { c.fillStyle = f[0]; c.fillRect(sx + sbW * 0.68 + f[1] * rd2, sbY + f[2] * sbH, f[3] * rd2, f[4] * sbH); });
+  c.restore();
+
+  // === PITCH with neon glow ===
+  c.fillStyle = '#22883F'; c.fillRect(px, py, pw, ph);
+  c.save(); c.shadowColor = 'rgba(255,255,255,0.7)'; c.shadowBlur = 18;
+  c.strokeStyle = '#fff'; c.lineWidth = 5;
   c.strokeRect(px, py, pw, ph);
   c.beginPath(); c.moveTo(midX, py); c.lineTo(midX, py + ph); c.stroke();
-  c.beginPath(); c.arc(midX, midY, 60, 0, Math.PI * 2); c.stroke();
-  c.fillStyle = '#fff'; c.beginPath(); c.arc(midX, midY, 5, 0, Math.PI * 2); c.fill();
-  const penW = 90, penH = 280;
+  c.beginPath(); c.arc(midX, midY, 55, 0, Math.PI * 2); c.stroke();
+  c.fillStyle = '#fff'; c.beginPath(); c.arc(midX, midY, 4, 0, Math.PI * 2); c.fill();
+  const penW = 80, penH = 250;
   c.strokeRect(px, midY - penH / 2, penW, penH);
   c.strokeRect(px + pw - penW, midY - penH / 2, penW, penH);
   c.restore();
 
-  // --- GOALS (neon glow + net) ---
+  // === GOALS (white neon cages + net) ===
   for (let side = 0; side < 2; side++) {
     const gx = side === 0 ? px - goalW : px + pw;
-    c.fillStyle = 'rgba(255,255,255,0.06)';
-    c.fillRect(gx, gTop, goalW, goalH);
-    c.save(); c.shadowColor = 'rgba(255,255,255,0.5)'; c.shadowBlur = 12;
-    c.strokeStyle = '#fff'; c.lineWidth = 4;
-    if (side === 0) {
-      c.beginPath(); c.moveTo(px, gTop); c.lineTo(gx, gTop); c.lineTo(gx, gBot); c.lineTo(px, gBot); c.stroke();
-    } else {
-      c.beginPath(); c.moveTo(px + pw, gTop); c.lineTo(gx + goalW, gTop); c.lineTo(gx + goalW, gBot); c.lineTo(px + pw, gBot); c.stroke();
-    }
+    c.fillStyle = 'rgba(255,255,255,0.05)'; c.fillRect(gx, gTop, goalW, goalH);
+    c.save(); c.shadowColor = 'rgba(255,255,255,0.5)'; c.shadowBlur = 14;
+    c.strokeStyle = '#fff'; c.lineWidth = 5;
+    if (side === 0) { c.beginPath(); c.moveTo(px, gTop); c.lineTo(gx, gTop); c.lineTo(gx, gBot); c.lineTo(px, gBot); c.stroke(); }
+    else { c.beginPath(); c.moveTo(px + pw, gTop); c.lineTo(gx + goalW, gTop); c.lineTo(gx + goalW, gBot); c.lineTo(px + pw, gBot); c.stroke(); }
     c.restore();
     c.strokeStyle = 'rgba(255,255,255,0.2)'; c.lineWidth = 1;
-    for (let ny = gTop + 12; ny < gBot; ny += 12) { c.beginPath(); c.moveTo(gx, ny); c.lineTo(gx + goalW, ny); c.stroke(); }
-    for (let nx = 0; nx < goalW; nx += 8) { c.beginPath(); c.moveTo(gx + nx, gTop); c.lineTo(gx + nx, gBot); c.stroke(); }
+    for (let ny = gTop + 10; ny < gBot; ny += 10) { c.beginPath(); c.moveTo(gx, ny); c.lineTo(gx + goalW, ny); c.stroke(); }
+    for (let nx = 0; nx < goalW; nx += 7) { c.beginPath(); c.moveTo(gx + nx, gTop); c.lineTo(gx + nx, gBot); c.stroke(); }
   }
 
-  // --- FOOTBALL ---
-  c.fillStyle = '#fff';
-  c.beginPath(); c.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2); c.fill();
-  c.strokeStyle = '#555'; c.lineWidth = 1;
-  c.beginPath(); c.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2); c.stroke();
+  // === FOOTBALL ===
+  c.fillStyle = '#fff'; c.beginPath(); c.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2); c.fill();
+  c.strokeStyle = '#555'; c.lineWidth = 1; c.beginPath(); c.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2); c.stroke();
 
-  // --- PLAYERS ---
-  players.forEach(pl => {
+  // === PLAYERS (countryballs with flag + eyes) ===
+  const drawPlayer = (pl) => {
     const tm = teams[pl.team];
     c.save(); c.translate(pl.x, pl.y);
-    c.fillStyle = tm.color;
-    c.beginPath(); c.arc(0, 0, pl.r, 0, Math.PI * 2); c.fill();
-    // Draw flag pattern from team data
+    // Body
+    c.fillStyle = tm.color; c.beginPath(); c.arc(0, 0, pl.r, 0, Math.PI * 2); c.fill();
+    // Flag clipped
     c.save(); c.beginPath(); c.arc(0, 0, pl.r, 0, Math.PI * 2); c.clip();
-    const flagData = tm.flag || [];
-    const d = pl.r * 2;
-    flagData.forEach(f => {
-      c.fillStyle = f[0];
-      c.fillRect(-pl.r + f[1] * d, -pl.r + f[2] * d, f[3] * d, f[4] * d);
-    });
+    const fl = tm.flag || [], d = pl.r * 2;
+    fl.forEach(f => { c.fillStyle = f[0]; c.fillRect(-pl.r + f[1] * d, -pl.r + f[2] * d, f[3] * d, f[4] * d); });
     c.restore();
-    if (pl.role === 'gk') { c.strokeStyle = '#FFD700'; c.lineWidth = 3; c.beginPath(); c.arc(0, 0, pl.r + 2, 0, Math.PI * 2); c.stroke(); }
+    // GK ring
+    if (pl.role === 'gk') { c.strokeStyle = '#FFD700'; c.lineWidth = 2.5; c.beginPath(); c.arc(0, 0, pl.r + 2, 0, Math.PI * 2); c.stroke(); }
+    // Eyes follow ball
     const ea = Math.atan2(ball.y - pl.y, ball.x - pl.x);
     c.fillStyle = '#fff';
-    c.beginPath(); c.ellipse(-7, -4, 9, 12, 0, 0, Math.PI * 2); c.fill();
-    c.beginPath(); c.ellipse(7, -4, 9, 12, 0, 0, Math.PI * 2); c.fill();
-    c.strokeStyle = '#000'; c.lineWidth = 1.5;
-    c.beginPath(); c.ellipse(-7, -4, 9, 12, 0, 0, Math.PI * 2); c.stroke();
-    c.beginPath(); c.ellipse(7, -4, 9, 12, 0, 0, Math.PI * 2); c.stroke();
+    c.beginPath(); c.ellipse(-5, -3, 7, 9, 0, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.ellipse(5, -3, 7, 9, 0, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = '#000'; c.lineWidth = 1;
+    c.beginPath(); c.ellipse(-5, -3, 7, 9, 0, 0, Math.PI * 2); c.stroke();
+    c.beginPath(); c.ellipse(5, -3, 7, 9, 0, 0, Math.PI * 2); c.stroke();
     c.fillStyle = '#000';
-    c.beginPath(); c.arc(-7 + Math.cos(ea) * 3.5, -4 + Math.sin(ea) * 3.5, 4, 0, Math.PI * 2); c.fill();
-    c.beginPath(); c.arc(7 + Math.cos(ea) * 3.5, -4 + Math.sin(ea) * 3.5, 4, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.arc(-5 + Math.cos(ea) * 3, -3 + Math.sin(ea) * 3, 3.5, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.arc(5 + Math.cos(ea) * 3, -3 + Math.sin(ea) * 3, 3.5, 0, Math.PI * 2); c.fill();
     c.restore();
-  });
+  };
+  players.forEach(drawPlayer);
 
-  // --- REFEREE ---
+  // === REFEREE ===
   c.save(); c.translate(referee.x, referee.y);
-  c.fillStyle = '#111';
-  c.beginPath(); c.arc(0, 0, referee.r, 0, Math.PI * 2); c.fill();
+  c.fillStyle = '#111'; c.beginPath(); c.arc(0, 0, referee.r, 0, Math.PI * 2); c.fill();
   c.fillStyle = '#FFD700'; c.fillRect(-referee.r, -3, referee.r * 2, 6);
   const rea = Math.atan2(ball.y - referee.y, ball.x - referee.x);
   c.fillStyle = '#fff';
-  c.beginPath(); c.ellipse(-4, -3, 5, 7, 0, 0, Math.PI * 2); c.fill();
-  c.beginPath(); c.ellipse(4, -3, 5, 7, 0, 0, Math.PI * 2); c.fill();
+  c.beginPath(); c.ellipse(-4, -3, 5, 6, 0, 0, Math.PI * 2); c.fill();
+  c.beginPath(); c.ellipse(4, -3, 5, 6, 0, 0, Math.PI * 2); c.fill();
   c.fillStyle = '#000';
   c.beginPath(); c.arc(-4 + Math.cos(rea) * 2, -3 + Math.sin(rea) * 2, 2.5, 0, Math.PI * 2); c.fill();
   c.beginPath(); c.arc(4 + Math.cos(rea) * 2, -3 + Math.sin(rea) * 2, 2.5, 0, Math.PI * 2); c.fill();
   c.restore();
 
-  // --- FOUL FLASH ---
-  if (state.foulFlash > 0) {
-    c.fillStyle = `rgba(255,255,0,${(state.foulFlash / 45) * 0.15})`;
-    c.fillRect(0, 0, W, H);
-    c.fillStyle = '#FFD700'; c.textAlign = 'center'; c.font = 'bold 50px Inter, sans-serif';
-    c.fillText('FOUL!', W / 2, midY);
-  }
-
-  // --- GOAL LOG ---
+  // === GOAL LOG (large cards with timer) ===
   if (goalLog.length > 0) {
-    const logY = py + ph + 20;
+    const logY = py + ph + 15;
     goalLog.forEach((g, i) => {
-      const cardY = logY + i * 58;
+      const cy2 = logY + i * 52;
       c.fillStyle = 'rgba(0,0,0,0.8)';
-      if (c.roundRect) { c.beginPath(); c.roundRect(60, cardY, W - 120, 50, 12); c.fill(); }
+      if (c.roundRect) { c.beginPath(); c.roundRect(60, cy2, W - 120, 45, 10); c.fill(); }
       c.fillStyle = teams[g.team].color;
-      if (c.roundRect) { c.beginPath(); c.roundRect(60, cardY, 8, 50, [12, 0, 0, 12]); c.fill(); }
+      if (c.roundRect) { c.beginPath(); c.roundRect(60, cy2, 7, 45, [10, 0, 0, 10]); c.fill(); }
       c.fillStyle = 'rgba(255,255,255,0.12)';
-      if (c.roundRect) { c.beginPath(); c.roundRect(85, cardY + 10, 70, 30, 8); c.fill(); }
-      c.fillStyle = '#4ADE80'; c.font = 'bold 22px Fira Code, monospace'; c.textAlign = 'center';
-      c.fillText(g.timeStr, 120, cardY + 32);
-      c.fillStyle = '#fff'; c.font = 'bold 28px Inter, sans-serif'; c.textAlign = 'left';
-      c.fillText(`\u26BD  ${teams[g.team].shortName} GOAL!`, 170, cardY + 35);
+      if (c.roundRect) { c.beginPath(); c.roundRect(82, cy2 + 8, 65, 28, 7); c.fill(); }
+      c.fillStyle = '#4ADE80'; c.font = 'bold 20px Fira Code, monospace'; c.textAlign = 'center';
+      c.fillText(g.timeStr, 114, cy2 + 29);
+      c.fillStyle = '#fff'; c.font = 'bold 26px Inter, sans-serif'; c.textAlign = 'left';
+      c.fillText(`\u26BD  ${teams[g.team].shortName} GOAL!`, 160, cy2 + 32);
     });
   }
 
-  // --- KICKOFF ---
-  if (state.kickoff && state.kickoffTimer > 0) {
-    c.fillStyle = 'rgba(0,0,0,0.5)'; c.fillRect(px, midY - 40, pw, 80);
-    c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = 'bold 50px Inter, sans-serif';
-    c.fillText(state.kickoffTimer > 20 ? 'KICK OFF!' : state.kickoffTimer > 10 ? '2' : '1', W / 2, midY + 16);
-  }
+  // === BOTTOM INFO CARD (reference style) ===
+  const ibY = H - 200, ibW = 580, ibH = 120;
+  const ibx = W / 2 - ibW / 2;
+  c.fillStyle = '#fff';
+  if (c.roundRect) { c.beginPath(); c.roundRect(ibx, ibY, ibW, ibH, 18); c.fill(); }
+  // Left flag mini
+  c.save();
+  if (c.roundRect) { c.beginPath(); c.roundRect(ibx + 20, ibY + 20, 55, 35, 4); c.clip(); }
+  const lf2 = teams[0].flag || [];
+  lf2.forEach(f => { c.fillStyle = f[0]; c.fillRect(ibx + 20 + f[1] * 55, ibY + 20 + f[2] * 35, f[3] * 55, f[4] * 35); });
+  c.restore();
+  c.strokeStyle = '#ddd'; c.lineWidth = 1;
+  if (c.roundRect) { c.beginPath(); c.roundRect(ibx + 20, ibY + 20, 55, 35, 4); c.stroke(); }
+  // Right flag mini
+  c.save();
+  if (c.roundRect) { c.beginPath(); c.roundRect(ibx + ibW - 75, ibY + 20, 55, 35, 4); c.clip(); }
+  const rf2 = teams[1].flag || [];
+  rf2.forEach(f => { c.fillStyle = f[0]; c.fillRect(ibx + ibW - 75 + f[1] * 55, ibY + 20 + f[2] * 35, f[3] * 55, f[4] * 35); });
+  c.restore();
+  c.strokeStyle = '#ddd'; c.lineWidth = 1;
+  if (c.roundRect) { c.beginPath(); c.roundRect(ibx + ibW - 75, ibY + 20, 55, 35, 4); c.stroke(); }
+  // Text
+  c.fillStyle = '#111'; c.textAlign = 'center'; c.font = 'bold 18px Inter, sans-serif';
+  c.fillText('FIFA WORLD CUP 2026', ibx + ibW / 2, ibY + 38);
+  c.font = 'bold 38px serif'; c.fillText('qualifiers', ibx + ibW / 2, ibY + 80);
+  c.font = 'bold 13px Inter, sans-serif'; c.fillStyle = '#666';
+  c.textAlign = 'left'; c.fillText(teams[0].shortName, ibx + 20, ibY + 75);
+  c.textAlign = 'right'; c.fillText(teams[1].shortName, ibx + ibW - 20, ibY + 75);
 
-  // --- GOAL FLASH ---
-  if (state.goalFlash > 0) {
-    c.fillStyle = `rgba(255,255,255,${(state.goalFlash / 30) * 0.3})`;
-    c.fillRect(0, 0, W, H);
+  // === FOUL ===
+  if (s.foulFlash > 0) {
+    c.fillStyle = `rgba(255,255,0,${(s.foulFlash / 40) * 0.15})`; c.fillRect(0, 0, W, H);
+    c.fillStyle = '#FFD700'; c.textAlign = 'center'; c.font = 'bold 46px Inter, sans-serif';
+    c.fillText('FOUL!', W / 2, midY);
   }
-
-  // --- MATCH INFO (bottom) ---
-  if (state.matchInfo) {
-    c.fillStyle = 'rgba(0,0,0,0.6)';
-    if (c.roundRect) { c.beginPath(); c.roundRect(100, H - 130, W - 200, 50, 12); c.fill(); }
-    c.fillStyle = '#ccc'; c.textAlign = 'center'; c.font = '22px Inter, sans-serif';
-    c.fillText(state.matchInfo, W / 2, H - 98);
+  // === GOAL FLASH ===
+  if (s.goalFlash > 0) { c.fillStyle = `rgba(255,255,255,${(s.goalFlash / 30) * 0.3})`; c.fillRect(0, 0, W, H); }
+  // === KICKOFF ===
+  if (s.kickoff && s.kickoffTimer > 0) {
+    c.fillStyle = 'rgba(0,0,0,0.5)'; c.fillRect(px, midY - 35, pw, 70);
+    c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = 'bold 44px Inter, sans-serif';
+    c.fillText(s.kickoffTimer > 20 ? 'KICK OFF!' : s.kickoffTimer > 10 ? '2' : '1', W / 2, midY + 14);
   }
-
-  // --- FULL TIME ---
-  if (state.timerFrames >= state.totalFrames - 90) {
-    c.fillStyle = 'rgba(0,0,0,0.75)'; c.fillRect(0, H / 2 - 100, W, 200);
-    c.textAlign = 'center'; c.font = 'bold 30px Inter, sans-serif'; c.fillStyle = '#aaa';
-    c.fillText('FULL TIME', W / 2, H / 2 - 55);
-    c.font = 'bold 70px Inter, sans-serif'; c.fillStyle = '#fff';
+  // === FULL TIME ===
+  if (s.timerFrames >= s.totalFrames - 90) {
+    c.fillStyle = 'rgba(0,0,0,0.75)'; c.fillRect(0, H / 2 - 90, W, 180);
+    c.textAlign = 'center'; c.font = 'bold 28px Inter, sans-serif'; c.fillStyle = '#aaa';
+    c.fillText('FULL TIME', W / 2, H / 2 - 50);
+    c.font = 'bold 64px Inter, sans-serif'; c.fillStyle = '#fff';
     c.fillText(`${teams[0].score} - ${teams[1].score}`, W / 2, H / 2 + 10);
-    c.font = 'bold 36px Inter, sans-serif'; c.fillStyle = '#FFD700';
+    c.font = 'bold 32px Inter, sans-serif'; c.fillStyle = '#FFD700';
     const w = teams[0].score > teams[1].score ? teams[0].name : teams[1].score > teams[0].score ? teams[1].name : 'DRAW';
-    c.fillText(w === 'DRAW' ? 'DRAW!' : `${w} WINS!`, W / 2, H / 2 + 60);
+    c.fillText(w === 'DRAW' ? 'DRAW!' : `${w} WINS!`, W / 2, H / 2 + 55);
   }
-
+  // === MATCH INFO ===
+  if (s.matchInfo) {
+    c.fillStyle = '#fff'; c.globalAlpha = 0.4; c.textAlign = 'center'; c.font = '16px Inter, sans-serif';
+    c.fillText(s.matchInfo, W / 2, H - 60); c.globalAlpha = 1;
+  }
   c.restore();
 }
 
-// --- PRE-COMPUTE EVENTS FOR AUDIO ---
-function precomputeEvents(seed, homeTeam, awayTeam, matchInfo, totalFrames) {
-  const state = createState(seed, homeTeam, awayTeam, matchInfo);
-  const events = [];
-  let lastGoalCount = 0;
-  let lastFoulFlash = 0;
-
+// ============== PRE-COMPUTE EVENTS ==============
+function precomputeEvents(seed, home, away, info, totalFrames) {
+  const s = createState(seed, home, away, info);
+  const events = [{ type: 'whistle', frame: 25 }];
+  let lastGoals = 0, lastFoul = 0;
   for (let f = 0; f < totalFrames; f++) {
-    const prevBallX = state.ball.x;
-    const prevBallY = state.ball.y;
-    stepSimulation(state);
-
-    // Detect goal (score changed)
-    const totalGoals = state.teams[0].score + state.teams[1].score;
-    if (totalGoals > lastGoalCount) {
-      events.push({ type: 'goal', frame: f });
-      lastGoalCount = totalGoals;
-    }
-
-    // Detect foul (foulFlash went from 0 to >0)
-    if (state.foulFlash > 0 && lastFoulFlash === 0) {
-      events.push({ type: 'whistle', frame: f });
-    }
-    lastFoulFlash = state.foulFlash;
-
-    // Detect ball-wall bounce (ball position snapped)
-    const ballMoved = Math.abs(state.ball.x - prevBallX) + Math.abs(state.ball.y - prevBallY);
-    if (ballMoved > 10 && f % 3 === 0) {
-      // Sample some kicks/bounces (not every frame to avoid overload)
-      events.push({ type: 'kick', frame: f });
-    }
+    stepSim(s);
+    const goals = s.teams[0].score + s.teams[1].score;
+    if (goals > lastGoals) { events.push({ type: 'goal', frame: f }); lastGoals = goals; }
+    if (s.foulFlash > 0 && lastFoul === 0) events.push({ type: 'whistle', frame: f });
+    lastFoul = s.foulFlash;
+    if (f % 5 === 0 && Math.sqrt(s.ball.vx ** 2 + s.ball.vy ** 2) > 4) events.push({ type: 'kick', frame: f });
   }
-
-  // Kickoff whistle at start
-  events.unshift({ type: 'whistle', frame: 25 });
-
   return events;
 }
 
-// --- REACT COMPONENT ---
+// ============== COMPONENT ==============
 export const WorldCup = ({ homeTeam = 'FRA', awayTeam = 'SEN', seed = 42, matchInfo = '' }) => {
   const frame = useCurrentFrame();
   const { width, height, durationInFrames } = useVideoConfig();
   const canvasRef = useRef(null);
 
-  // Pre-compute all audio events ONCE
-  const audioEvents = useMemo(() => {
-    return precomputeEvents(seed, homeTeam, awayTeam, matchInfo, durationInFrames);
-  }, [seed, homeTeam, awayTeam, matchInfo, durationInFrames]);
+  const audioEvents = useMemo(() => precomputeEvents(seed, homeTeam, awayTeam, matchInfo, durationInFrames), [seed, homeTeam, awayTeam, matchInfo, durationInFrames]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-
-    // Simulate deterministically up to current frame
     const state = createState(seed, homeTeam, awayTeam, matchInfo);
-    for (let f = 0; f < frame; f++) {
-      stepSimulation(state);
-    }
-
-    // Draw
+    for (let f = 0; f < frame; f++) stepSim(state);
     ctx.clearRect(0, 0, width, height);
-    drawFrame(ctx, state, frame);
+    drawFrame(ctx, state);
   }, [frame, width, height, seed, homeTeam, awayTeam, matchInfo]);
 
-  // Audio file paths (staticFile resolves from public/)
   const bgmSrc = new URL('./audio/bgm.wav', import.meta.url).href;
   const crowdSrc = new URL('./audio/crowd.wav', import.meta.url).href;
   const goalSrc = new URL('./audio/goal.wav', import.meta.url).href;
   const whistleSrc = new URL('./audio/whistle.wav', import.meta.url).href;
   const kickSrc = new URL('./audio/kick.wav', import.meta.url).href;
-  const bounceSrc = new URL('./audio/bounce.wav', import.meta.url).href;
 
   return (
     <>
-      <canvas
-        ref={canvasRef}
-        width={width}
-        height={height}
-        style={{ width: '100%', height: '100%' }}
-      />
-
-      {/* Background music — full duration */}
+      <canvas ref={canvasRef} width={width} height={height} style={{ width: '100%', height: '100%' }} />
       <Audio src={bgmSrc} volume={0.25} />
-
-      {/* Crowd ambiance — looped (10s file, repeated) */}
       {Array.from({ length: 7 }).map((_, i) => (
-        <Sequence key={`crowd-${i}`} from={i * 300} durationInFrames={300}>
-          <Audio src={crowdSrc} volume={0.15} />
-        </Sequence>
+        <Sequence key={`c${i}`} from={i * 300} durationInFrames={300}><Audio src={crowdSrc} volume={0.12} /></Sequence>
       ))}
-
-      {/* Dynamic events — goals, whistles, kicks */}
-      {audioEvents.map((evt, i) => {
-        if (evt.type === 'goal') {
-          return (
-            <Sequence key={`goal-${i}`} from={evt.frame} durationInFrames={75}>
-              <Audio src={goalSrc} volume={0.6} />
-            </Sequence>
-          );
-        }
-        if (evt.type === 'whistle') {
-          return (
-            <Sequence key={`whistle-${i}`} from={evt.frame} durationInFrames={25}>
-              <Audio src={whistleSrc} volume={0.5} />
-            </Sequence>
-          );
-        }
-        if (evt.type === 'kick') {
-          return (
-            <Sequence key={`kick-${i}`} from={evt.frame} durationInFrames={5}>
-              <Audio src={kickSrc} volume={0.3} />
-            </Sequence>
-          );
-        }
+      {audioEvents.map((e, i) => {
+        if (e.type === 'goal') return <Sequence key={`g${i}`} from={e.frame} durationInFrames={75}><Audio src={goalSrc} volume={0.6} /></Sequence>;
+        if (e.type === 'whistle') return <Sequence key={`w${i}`} from={e.frame} durationInFrames={25}><Audio src={whistleSrc} volume={0.5} /></Sequence>;
+        if (e.type === 'kick') return <Sequence key={`k${i}`} from={e.frame} durationInFrames={5}><Audio src={kickSrc} volume={0.25} /></Sequence>;
         return null;
       })}
     </>

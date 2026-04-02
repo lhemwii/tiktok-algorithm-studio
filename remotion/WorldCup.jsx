@@ -2,8 +2,10 @@ import { useCurrentFrame, useVideoConfig, Sequence, Audio } from 'remotion';
 import { useEffect, useRef, useMemo } from 'react';
 import { TEAMS as ALL_TEAMS } from './teams';
 
-// Logical resolution — Remotion --scale 2 handles the 4K upscale cleanly
+// Logical resolution for all drawing code
 const W = 1080, H = 1920;
+// Canvas pixel multiplier for 4K sharpness (canvas elements ignore --scale)
+const CANVAS_SCALE = 2;
 
 function getTeamPair(h, a) {
   const ht = ALL_TEAMS[h] || { name: h, shortName: h, color: '#333', altColor: '#999', flag: [] };
@@ -260,6 +262,7 @@ function drawFrame(ctx, snap) {
   c.imageSmoothingQuality = 'high';
   c.lineJoin = 'round';
   c.lineCap = 'round';
+  c.scale(CANVAS_SCALE, CANVAS_SCALE); // 2x for 4K sharpness on canvas elements
 
   const elapsed = 90 * (snap.timerFrames / snap.totalFrames);
   const pulse = 1 + Math.sin(elapsed * 0.5) * 0.03;

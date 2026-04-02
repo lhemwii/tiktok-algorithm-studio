@@ -10,8 +10,8 @@ export const RemotionRoot = () => {
         component={WorldCup}
         durationInFrames={30 * 65}
         fps={30}
-        width={1080}
-        height={1920}
+        width={2160}
+        height={3840}
         defaultProps={{
           homeTeam: 'FRA',
           awayTeam: 'SEN',

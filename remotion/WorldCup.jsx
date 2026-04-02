@@ -2,9 +2,8 @@ import { useCurrentFrame, useVideoConfig, Sequence, Audio } from 'remotion';
 import { useEffect, useRef, useMemo } from 'react';
 import { TEAMS as ALL_TEAMS } from './teams';
 
-// Render DIRECTLY at output resolution — no CSS scaling, no intermediate resize
-// The composition is 2160x3840, we draw at 2160x3840, 1:1 pixel mapping
-const W = 2160, H = 3840;
+// Logical resolution — Remotion --scale 2 handles the 4K upscale cleanly
+const W = 1080, H = 1920;
 
 function getTeamPair(h, a) {
   const ht = ALL_TEAMS[h] || { name: h, shortName: h, color: '#333', altColor: '#999', flag: [] };
@@ -20,22 +19,22 @@ function seededRandom(seed) {
 // ============== SIMULATION ==============
 function initState(seed, homeCode, awayCode, matchInfo) {
   const rand = seededRandom(seed);
-  const px = 140, py = 800, pw = W - 280, ph = 1160;
+  const px = 70, py = 400, pw = W - 140, ph = 580;
   const midX = px + pw / 2, midY = py + ph / 2;
-  const goalW = 100, goalH = 460;
+  const goalW = 50, goalH = 230;
   const gTop = midY - goalH / 2, gBot = midY + goalH / 2;
-  const PR = 50;
+  const PR = 25;
   const teams = getTeamPair(homeCode, awayCode);
   const players = [
-    { x: px + 72, y: midY, vx: 0, vy: 0, r: PR, team: 0, role: 'gk' },
-    { x: midX - 244, y: midY - 164, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
-    { x: midX - 244, y: midY + 164, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
-    { x: px + pw - 72, y: midY, vx: 0, vy: 0, r: PR, team: 1, role: 'gk' },
-    { x: midX + 244, y: midY - 164, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
-    { x: midX + 244, y: midY + 164, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
+    { x: px + 36, y: midY, vx: 0, vy: 0, r: PR, team: 0, role: 'gk' },
+    { x: midX - 122, y: midY - 82, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
+    { x: midX - 122, y: midY + 82, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
+    { x: px + pw - 36, y: midY, vx: 0, vy: 0, r: PR, team: 1, role: 'gk' },
+    { x: midX + 122, y: midY - 82, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
+    { x: midX + 122, y: midY + 82, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
   ];
-  const referee = { x: midX, y: midY + 70, vx: 0, vy: 0, r: 28 };
-  const ball = { x: midX, y: midY, vx: 0, vy: 0, r: 20 };
+  const referee = { x: midX, y: midY + 35, vx: 0, vy: 0, r: 14 };
+  const ball = { x: midX, y: midY, vx: 0, vy: 0, r: 10 };
   return {
     rand, px, py, pw, ph, midX, midY, goalW, goalH, gTop, gBot, teams, players, referee, ball,
     goalLog: [], foulLog: [], stuckTimer: 0, lastBallX: midX, lastBallY: midY,
@@ -74,14 +73,14 @@ function bounceRect(b, s) {
 function resetPos(s) {
   const { px, pw, midX, midY, players, ball, referee } = s;
   ball.x = midX; ball.y = midY; ball.vx = 0; ball.vy = 0;
-  players[0].x = px + 72; players[0].y = midY;
-  players[1].x = midX - 244; players[1].y = midY - 164;
-  players[2].x = midX - 244; players[2].y = midY + 164;
-  players[3].x = px + pw - 72; players[3].y = midY;
-  players[4].x = midX + 244; players[4].y = midY - 164;
-  players[5].x = midX + 244; players[5].y = midY + 164;
+  players[0].x = px + 36; players[0].y = midY;
+  players[1].x = midX - 122; players[1].y = midY - 82;
+  players[2].x = midX - 122; players[2].y = midY + 82;
+  players[3].x = px + pw - 36; players[3].y = midY;
+  players[4].x = midX + 122; players[4].y = midY - 82;
+  players[5].x = midX + 122; players[5].y = midY + 82;
   players.forEach(p => { p.vx = 0; p.vy = 0; });
-  referee.x = midX; referee.y = midY + 70; referee.vx = 0; referee.vy = 0;
+  referee.x = midX; referee.y = midY + 35; referee.vx = 0; referee.vy = 0;
 }
 
 function stepSim(s) {
@@ -92,7 +91,7 @@ function stepSim(s) {
     s.kickoffTimer--;
     if (s.kickoffTimer <= 0) {
       s.kickoff = false;
-      ball.vx = (rand() - 0.5) * 6; ball.vy = (rand() - 0.5) * 6;
+      ball.vx = (rand() - 0.5) * 3; ball.vy = (rand() - 0.5) * 3;
       s.events.push('whistle');
     }
     s.timerFrames++; return;
@@ -105,34 +104,34 @@ function stepSim(s) {
     const ownGoalX = pl.team === 0 ? px : px + pw;
     let tx, ty;
     if (pl.role === 'gk') {
-      tx = ownGoalX + (pl.team === 0 ? 56 : -56);
+      tx = ownGoalX + (pl.team === 0 ? 28 : -28);
       ty = midY + (ball.y - midY) * 0.8;
       ty = Math.max(gTop + 12, Math.min(gBot - 12, ty));
-      if (Math.abs(ball.x - ownGoalX) < 240) { tx = ball.x; ty = ball.y; }
+      if (Math.abs(ball.x - ownGoalX) < 120) { tx = ball.x; ty = ball.y; }
     } else {
       const gdx = oppGoalX - ball.x, gdy = midY - ball.y, gd = Math.sqrt(gdx * gdx + gdy * gdy) || 1;
-      tx = ball.x - (gdx / gd) * (ball.r + pl.r + 10);
-      ty = ball.y - (gdy / gd) * (ball.r + pl.r + 10);
+      tx = ball.x - (gdx / gd) * (ball.r + pl.r + 5);
+      ty = ball.y - (gdy / gd) * (ball.r + pl.r + 5);
       const dist = Math.sqrt((pl.x - ball.x) ** 2 + (pl.y - ball.y) ** 2);
-      if (dist < 90) { tx = ball.x + (gdx / gd) * 16; ty = ball.y + (gdy / gd) * 16; }
-      if ((pl.x < px + 60 || pl.x > px + pw - 60) && (pl.y < gTop - 50 || pl.y > gBot + 50)) {
-        tx = midX + (rand() - 0.5) * 160; ty = midY + (rand() - 0.5) * 160;
+      if (dist < 45) { tx = ball.x + (gdx / gd) * 8; ty = ball.y + (gdy / gd) * 8; }
+      if ((pl.x < px + 30 || pl.x > px + pw - 30) && (pl.y < gTop - 25 || pl.y > gBot + 25)) {
+        tx = midX + (rand() - 0.5) * 80; ty = midY + (rand() - 0.5) * 80;
       }
     }
     const dx = tx - pl.x, dy = ty - pl.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
-    pl.vx += (dx / d) * 1.5; pl.vy += (dy / d) * 1.5;
-    pl.vx += (rand() - 0.5) * 0.6; pl.vy += (rand() - 0.5) * 0.6;
+    pl.vx += (dx / d) * 0.75; pl.vy += (dy / d) * 0.75;
+    pl.vx += (rand() - 0.5) * 0.3; pl.vy += (rand() - 0.5) * 0.3;
     pl.vx *= 0.92; pl.vy *= 0.92;
-    const ms = pl.role === 'gk' ? 14 : 19;
+    const ms = pl.role === 'gk' ? 7 : 9.5;
     const sp = Math.sqrt(pl.vx * pl.vx + pl.vy * pl.vy);
     if (sp > ms) { pl.vx = (pl.vx / sp) * ms; pl.vy = (pl.vy / sp) * ms; }
     pl.x += pl.vx; pl.y += pl.vy;
   });
 
   // Referee
-  const rtx = ball.x + (ball.x > midX ? -80 : 80), rty = ball.y + 50;
+  const rtx = ball.x + (ball.x > midX ? -40 : 40), rty = ball.y + 25;
   const rdx = rtx - referee.x, rdy = rty - referee.y, rd = Math.sqrt(rdx * rdx + rdy * rdy) || 1;
-  referee.vx += (rdx / rd) * 0.4; referee.vy += (rdy / rd) * 0.4;
+  referee.vx += (rdx / rd) * 0.2; referee.vy += (rdy / rd) * 0.2;
   referee.vx *= 0.93; referee.vy *= 0.93;
   referee.x += referee.vx; referee.y += referee.vy;
   bounceRect(referee, s);
@@ -147,9 +146,9 @@ function stepSim(s) {
     const foulTeam = atk === 0 ? 1 : 0;
     const elapsed = 90 * (s.timerFrames / s.totalFrames);
     foulLog.push({ team: foulTeam, timeStr: `${Math.floor(elapsed / 60)}'${Math.floor(elapsed % 60).toString().padStart(2, '0')}` });
-    ball.vx = (midX - ball.x) * 0.06 + (rand() - 0.5) * 14;
-    ball.vy = (midY - ball.y) * 0.06 + (rand() - 0.5) * 14;
-    players.forEach(pl => { if (pl.team !== atk) { pl.x = pl.team === 0 ? px + pw / 4 : px + pw * 3 / 4; pl.y = midY + (rand() - 0.5) * 360; pl.vx = 0; pl.vy = 0; } });
+    ball.vx = (midX - ball.x) * 0.06 + (rand() - 0.5) * 7;
+    ball.vy = (midY - ball.y) * 0.06 + (rand() - 0.5) * 7;
+    players.forEach(pl => { if (pl.team !== atk) { pl.x = pl.team === 0 ? px + pw / 4 : px + pw * 3 / 4; pl.y = midY + (rand() - 0.5) * 180; pl.vx = 0; pl.vy = 0; } });
     s.stuckTimer = 0; s.lastBallX = ball.x; s.lastBallY = ball.y;
     s.events.push('whistle');
   }
@@ -257,10 +256,10 @@ function drawFrame(ctx, snap) {
   const { px, py, pw, ph, midX, midY, goalW, goalH, gTop, teams, players, referee, ball, goalLog, foulLog } = snap;
   const c = ctx;
   c.save();
-  c.imageSmoothingEnabled = false; // pixel-perfect, no blur
+  c.imageSmoothingEnabled = true;
+  c.imageSmoothingQuality = 'high';
   c.lineJoin = 'round';
   c.lineCap = 'round';
-  // No scale — drawing directly at 2160x3840 native resolution
 
   const elapsed = 90 * (snap.timerFrames / snap.totalFrames);
   const pulse = 1 + Math.sin(elapsed * 0.5) * 0.03;

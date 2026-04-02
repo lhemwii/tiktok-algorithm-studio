@@ -4,8 +4,9 @@ import { TEAMS as ALL_TEAMS } from './teams';
 
 // Logical resolution for all drawing code
 const W = 1080, H = 1920;
-// Canvas pixel multiplier for 4K sharpness (canvas elements ignore --scale)
-const CANVAS_SCALE = 2;
+// Canvas renders at 4x internally (8K), CSS downscales to composition size (4K)
+// This gives super-sampled anti-aliasing for maximum sharpness
+const CANVAS_SCALE = 4;
 
 function getTeamPair(h, a) {
   const ht = ALL_TEAMS[h] || { name: h, shortName: h, color: '#333', altColor: '#999', flag: [] };

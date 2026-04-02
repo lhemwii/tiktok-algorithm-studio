@@ -24,7 +24,10 @@ body.dark-mode {
 
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: var(--bg-color);
+  background:
+    radial-gradient(circle at top left, rgba(255,255,255,0.6), transparent 25%),
+    radial-gradient(circle at bottom right, rgba(124, 58, 237, 0.08), transparent 22%),
+    var(--bg-color);
   color: var(--text-main);
   transition: background-color 0.3s ease, color 0.3s ease;
   min-height: 100vh;
@@ -104,9 +107,8 @@ ul.nav-category button.active {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   padding: 2rem;
-  gap: 2rem;
+  gap: 1.25rem;
   position: relative;
 }
 
@@ -118,10 +120,236 @@ ul.nav-category button.active {
   align-items: center;
 }
 
+.eyebrow {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-secondary);
+  margin-bottom: 0.35rem;
+}
+
 .studio-header h1 {
-  font-size: 1.5rem;
+  font-size: 2rem;
   font-weight: 800;
   letter-spacing: -0.03em;
+}
+
+.hero-panel,
+.preset-panel,
+.render-panel,
+#tiktok-meta {
+  width: 100%;
+  max-width: 600px;
+  border-radius: 24px;
+  border: 1px solid rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.58);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+}
+
+body.dark-mode .hero-panel,
+body.dark-mode .preset-panel,
+body.dark-mode .render-panel,
+body.dark-mode #tiktok-meta {
+  background: rgba(15, 23, 42, 0.68);
+  border-color: rgba(255,255,255,0.08);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+}
+
+.hero-panel {
+  padding: 1.35rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.hero-kicker,
+.section-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-secondary);
+}
+
+.hero-panel h2 {
+  font-size: 1.5rem;
+  line-height: 1.15;
+  margin-top: 0.35rem;
+}
+
+.hero-copy,
+.panel-copy {
+  color: var(--text-secondary);
+  margin-top: 0.55rem;
+  line-height: 1.5;
+}
+
+.hero-tips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.hero-tips span,
+.render-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  background: rgba(28, 28, 30, 0.08);
+  color: var(--text-main);
+}
+
+body.dark-mode .hero-tips span,
+body.dark-mode .render-badge {
+  background: rgba(255,255,255,0.08);
+}
+
+.preset-panel,
+.render-panel {
+  padding: 1.25rem;
+}
+
+.live-editor {
+  display: grid;
+  gap: 1rem;
+}
+
+.editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.editor-field {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.85rem;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.72);
+  border: 1px solid rgba(28, 28, 30, 0.08);
+}
+
+body.dark-mode .editor-field {
+  background: rgba(15, 23, 42, 0.72);
+  border-color: rgba(255,255,255,0.08);
+}
+
+.editor-field span {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.editor-field strong {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.editor-field input[type="range"] {
+  width: 100%;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.section-heading h3 {
+  font-size: 1.2rem;
+  margin-top: 0.2rem;
+}
+
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.preset-card {
+  border: 1px solid rgba(28, 28, 30, 0.08);
+  border-radius: 18px;
+  padding: 1rem;
+  background: rgba(255,255,255,0.8);
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.preset-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(124, 58, 237, 0.35);
+  box-shadow: 0 10px 24px rgba(124, 58, 237, 0.12);
+}
+
+.preset-card.active {
+  border-color: #7C3AED;
+  box-shadow: 0 12px 30px rgba(124, 58, 237, 0.18);
+}
+
+body.dark-mode .preset-card {
+  background: rgba(15, 23, 42, 0.7);
+  border-color: rgba(255,255,255,0.08);
+}
+
+.preset-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.45rem;
+}
+
+.preset-card h4 {
+  font-size: 1rem;
+}
+
+.preset-chip {
+  border-radius: 999px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  background: rgba(124, 58, 237, 0.12);
+  color: #7C3AED;
+}
+
+.preset-card p {
+  color: var(--text-secondary);
+  line-height: 1.4;
+  font-size: 0.92rem;
+}
+
+.preset-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.8rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.ghost-btn,
+.primary-accent-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 0.75rem 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ghost-btn {
+  background: rgba(28, 28, 30, 0.08);
+  color: var(--text-main);
+}
+
+.primary-accent-btn {
+  background: linear-gradient(135deg, #7C3AED, #2563EB);
+  color: #fff;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.18);
 }
 
 /* Rec Button */
@@ -228,16 +456,78 @@ ul.nav-category button.active {
   color: var(--text-main);
 }
 
-/* TikTok Meta Box */
-#tiktok-meta {
-  margin-top: 1rem;
-  padding: 1rem;
-  background: rgba(0,0,0,0.1);
+/* Render Panel */
+.render-config {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.8rem 0;
+}
+
+.render-input {
+  padding: 0.65rem 0.8rem;
   border-radius: 12px;
-  max-width: 600px;
-  width: 100%;
+  border: 1px solid rgba(28, 28, 30, 0.12);
+  font-size: 0.95rem;
+  background: rgba(255,255,255,0.85);
+  color: var(--text-main);
+}
+
+.render-seed {
+  width: 90px;
+}
+
+body.dark-mode .render-input {
+  background: rgba(15, 23, 42, 0.9);
+  border-color: rgba(255,255,255,0.08);
+}
+
+.render-versus {
+  align-self: center;
+  font-weight: 800;
+}
+
+.render-status {
+  margin-top: 0.8rem;
   display: none;
 }
+
+.progress-shell {
+  background: rgba(0,0,0,0.1);
+  border-radius: 8px;
+  height: 24px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  background: linear-gradient(90deg, #7C3AED, #2563EB);
+  height: 100%;
+  width: 0%;
+  transition: width 0.3s;
+  border-radius: 8px;
+}
+
+.status-text {
+  font-size: 0.85rem;
+  margin-top: 0.4rem;
+  opacity: 0.8;
+}
+
+.download-link {
+  display: none;
+  margin-top: 0.7rem;
+  color: #7C3AED;
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-decoration: none;
+}
+
+/* TikTok Meta Box */
+#tiktok-meta {
+  padding: 1rem;
+  display: none;
+}
+
 #tiktok-meta h3 {
   margin-bottom: 0.5rem;
 }
@@ -275,4 +565,10 @@ body.dark-mode .theme-btn { border: 1px solid rgba(255,255,255,0.1); }
     max-height: 200px;
   }
   #studio-wrapper { height: 60vh; }
+  .preset-grid { grid-template-columns: 1fr; }
+  .editor-grid { grid-template-columns: 1fr; }
+  .section-heading { align-items: flex-start; flex-direction: column; }
+  .content { padding: 1rem; }
+  .studio-header h1 { font-size: 1.6rem; }
+  .hero-panel h2 { font-size: 1.25rem; }
 }

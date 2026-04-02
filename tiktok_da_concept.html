@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TikTok DA Concept - World Cup Simulation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Inter:wght@700;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-green: #116c2d; /* Solid flat emerald green flat background */
+      --white-glow: rgba(255, 255, 255, 0.6);
+      
+      --ui-text: #000000;
+      --bosnia-blue: #001489;
+      --bosnia-yellow: #FFCE00;
+      --italy-green: #008C45;
+      --italy-red: #CE2B37;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-green);
+      font-family: 'Fredoka', 'Inter', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* TIKTOK MOBILE CONTAINER */
+    .mobile-frame {
+      width: 450px;
+      height: 800px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* PITCH (Horizontal Rectangle as requested) */
+    .pitch {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 400px; /* spanning horizontally */
+      height: 250px; /* keeping it horizontal */
+      border: 8px solid #ffffff;
+      box-shadow: 0 0 25px var(--white-glow), inset 0 0 25px var(--white-glow);
+      border-radius: 20px;
+    }
+
+    /* GOALS (Cutouts / Appendages) */
+    .goal {
+      position: absolute;
+      width: 40px;
+      height: 80px;
+      border: 6px solid #ffffff;
+      box-shadow: 0 0 15px var(--white-glow), inset 0 0 15px var(--white-glow);
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .goal.left {
+      left: -40px;
+      border-right: none;
+      border-top-left-radius: 8px;
+      border-bottom-left-radius: 8px;
+    }
+
+    .goal.right {
+      right: -40px;
+      border-left: none;
+      border-top-right-radius: 8px;
+      border-bottom-right-radius: 8px;
+    }
+
+    /* MIDLINE */
+    .pitch-midline {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      width: 6px;
+      background: #ffffff;
+      transform: translateX(-50%);
+      box-shadow: 0 0 15px var(--white-glow);
+    }
+
+    .pitch-midcircle {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 80px;
+      height: 80px;
+      border: 6px solid #ffffff;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 15px var(--white-glow), inset 0 0 15px var(--white-glow);
+    }
+
+    /* COUNTRYBALLS MOCKS */
+    .ball {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 2px solid rgba(0,0,0,0.5);
+      box-shadow: -4px -4px 8px rgba(0,0,0,0.3) inset, 4px 4px 10px rgba(255,255,255,0.4) inset, 0 8px 10px rgba(0,0,0,0.3);
+      z-index: 5;
+    }
+    
+    .eyes {
+      position: absolute;
+      display: flex;
+      gap: 6px;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    .eye {
+      width: 10px;
+      height: 12px;
+      background: #fff;
+      border-radius: 50%;
+      border: 1px solid #111;
+    }
+
+    .ball.bosnia {
+      top: 40%;
+      left: 30%;
+      background: var(--bosnia-blue);
+      overflow: hidden;
+    }
+    .bosnia-yellow-tri {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--bosnia-yellow);
+      clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    }
+    
+    .ball.italy {
+      top: 60%;
+      left: 60%;
+      background: linear-gradient(90deg, var(--italy-green) 33.3%, #fff 33.3%, #fff 66.6%, var(--italy-red) 66.6%);
+    }
+
+    /* TOP SCOREBOARD (EXACT DA REF) */
+    .scoreboard {
+      position: absolute;
+      top: 100px;
+      gap: 0;
+      display: flex;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      border: 2px solid rgba(255,255,255,0.2);
+    }
+
+    .sb-flag {
+      width: 80px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .sb-flag.bosnia {
+      background: var(--bosnia-blue);
+      position: relative;
+    }
+    .sb-flag.bosnia::after {
+      content: '★ ★ ★ ★ ★';
+      color: #fff;
+      font-size: 8px;
+      position: absolute;
+      transform: rotate(45deg);
+      right: 15px;
+      top: 15px;
+    }
+    .sb-flag.bosnia::before {
+      content: '';
+      position: absolute;
+      background: var(--bosnia-yellow);
+      width: 40px;
+      height: 40px;
+      right: 0;
+      clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    }
+
+    .sb-flag.italy {
+      background: linear-gradient(90deg, var(--italy-green) 33.3%, #fff 33.3%, #fff 66.6%, var(--italy-red) 66.6%);
+    }
+
+    .sb-score-group {
+      display: flex;
+    }
+
+    .sb-score {
+      padding: 0 12px;
+      font-size: 26px;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .sb-score.orange {
+      background: #ffffff;
+      color: #FF8A00;
+    }
+    .sb-score.blue {
+      background: #001A8E;
+      color: #ffffff;
+    }
+    
+    .sb-timer-block {
+      display: flex;
+    }
+    .sb-timer-half {
+      width: 45px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .sb-timer-half.yellow {
+      background: #FFCE00;
+      color: #fff;
+    }
+    .sb-timer-half.darkblue {
+      background: #4C659B;
+      color: #fff;
+    }
+
+    /* BOTTOM PANEL (EXACT DA REF) */
+    .bottom-panel {
+      position: absolute;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #ffffff;
+      border-radius: 12px;
+      width: 380px;
+      height: 90px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 15px;
+      box-shadow: 0 6px 30px rgba(0,0,0,0.3);
+    }
+
+    .panel-side {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      width: 25%;
+    }
+
+    .panel-flag-box {
+      width: 45px;
+      height: 35px;
+      border-radius: 4px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .panel-flag-box.bosnia {
+      background: var(--bosnia-blue);
+      position: relative;
+      overflow: hidden;
+    }
+    .panel-flag-box.bosnia::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--bosnia-yellow);
+      clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    }
+
+    .panel-flag-box.italy {
+      background: linear-gradient(90deg, var(--italy-green) 33.3%, #fff 33.3%, #fff 66.6%, var(--italy-red) 66.6%);
+    }
+
+    .panel-team-name {
+      font-size: 11px;
+      font-weight: 900;
+      color: var(--ui-text);
+      text-transform: uppercase;
+      text-align: center;
+    }
+
+    .panel-center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 50%;
+    }
+
+    .p-title {
+      font-size: 13px;
+      font-weight: 900;
+      color: var(--ui-text);
+      letter-spacing: 0.5px;
+    }
+    .p-date {
+      font-size: 10px;
+      font-weight: 700;
+      color: #666;
+      margin: 2px 0 4px;
+    }
+    .p-status {
+      font-size: 16px;
+      font-weight: 900;
+      color: var(--ui-text);
+      text-transform: lowercase;
+    }
+
+  </style>
+</head>
+<body>
+
+  <div class="mobile-frame">
+    <!-- TOP SCOREBOARD -->
+    <div class="scoreboard">
+      <div class="sb-flag bosnia"></div>
+      <div class="sb-score orange">2</div>
+      
+      <div class="sb-timer-block">
+        <div class="sb-timer-half yellow">81:</div>
+        <div class="sb-timer-half darkblue">32</div>
+      </div>
+      
+      <div class="sb-score blue">3</div>
+      <div class="sb-flag italy"></div>
+    </div>
+
+    <!-- PITCH -->
+    <div class="pitch">
+      <div class="pitch-midline"></div>
+      <div class="pitch-midcircle"></div>
+      
+      <div class="goal left"></div>
+      <div class="goal right"></div>
+      
+      <!-- COUNTRY BALLS -->
+      <div class="ball bosnia">
+        <div class="bosnia-yellow-tri"></div>
+        <div class="eyes"><div class="eye"></div><div class="eye"></div></div>
+      </div>
+      
+      <div class="ball italy">
+        <div class="eyes"><div class="eye"></div><div class="eye"></div></div>
+      </div>
+    </div>
+
+    <!-- BOTTOM PANEL -->
+    <div class="bottom-panel">
+      
+      <div class="panel-side">
+        <div class="panel-flag-box bosnia"></div>
+        <div class="panel-team-name">BOSNIA & HER...</div>
+      </div>
+
+      <div class="panel-center">
+        <div class="p-title">MILLI TAKIMLAR</div>
+        <div class="p-date">31/03 TUE</div>
+        <div class="p-status">qualifiers</div>
+      </div>
+
+      <div class="panel-side">
+        <div class="panel-flag-box italy"></div>
+        <div class="panel-team-name">ITALY</div>
+      </div>
+
+    </div>
+  </div>
+
+</body>
+</html>

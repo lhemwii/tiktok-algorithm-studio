@@ -1,4 +1,5 @@
 import './style.css';
+import { TEAMS as TEAM_DATA } from '../remotion/teams.js';
 
 // --- DOM ---
 const canvas = document.getElementById('studio-canvas');
@@ -13,6 +14,19 @@ const themeToggle = document.getElementById('themeToggle');
 const metaBox = document.getElementById('tiktok-meta');
 const metaDesc = document.getElementById('meta-desc');
 const metaTags = document.getElementById('meta-tags');
+const presetGrid = document.getElementById('preset-grid');
+const playSelectedBtn = document.getElementById('playSelectedBtn');
+const liveEditor = document.getElementById('live-editor');
+const liveHomeTeam = document.getElementById('liveHomeTeam');
+const liveAwayTeam = document.getElementById('liveAwayTeam');
+const livePlayerSize = document.getElementById('livePlayerSize');
+const livePlayerSizeValue = document.getElementById('livePlayerSizeValue');
+const liveLineWidth = document.getElementById('liveLineWidth');
+const liveLineWidthValue = document.getElementById('liveLineWidthValue');
+const liveGlow = document.getElementById('liveGlow');
+const liveGlowValue = document.getElementById('liveGlowValue');
+const liveScoreboardY = document.getElementById('liveScoreboardY');
+const liveScoreboardYValue = document.getElementById('liveScoreboardYValue');
 
 // --- CANVAS METRICS (4K display, 1080p recording) ---
 const WIDTH = 1080;   // logical size used by all draw code
@@ -35,6 +49,10 @@ let mediaRecorder = null;
 let recordedChunks = [];
 let isRecording = false;
 let startTime = 0;
+let audioBuffers = {};
+let audioBuffersPromise = null;
+let ambienceSource = null;
+let ambienceGain = null;
 
 let arr = [];
 let numBars = 15;
@@ -55,6 +73,15 @@ let twParticles = [];   // Particles for eliminated bots
 let twRanks = [0, 1, 2, 3]; // Current ranks for leaderboard sliding
 let twRankY = [0, 1, 2, 3]; // Animated Y positions for leaderboard
 
+const worldcupLiveConfig = {
+  homeTeam: 'FRA',
+  awayTeam: 'SEN',
+  playerSize: 22,
+  lineWidth: 8,
+  glow: 24,
+  scoreboardY: 72,
+};
+
 const sleep = ms => new Promise(res => setTimeout(res, ms));
 
 const Theme = {
@@ -71,6 +98,49 @@ const Theme = {
   codeTextMuted: '#94A3B8',
 };
 
+const VIRAL_PRESETS = [
+  {
+    id: 'worldcup',
+    label: 'Countryball Match',
+    family: 'Sport',
+    desc: 'Simulation football ronde avec score, chrono et chaos dans une arene.',
+    pace: '90 sec',
+    hook: 'Bosnia vs Italy',
+  },
+  {
+    id: 'mimicwar',
+    label: 'Arena War',
+    family: 'Strategy',
+    desc: 'Des algorithmes se battent pour conquerir l espace case par case.',
+    pace: 'Loopable',
+    hook: 'Mimic chases leader',
+  },
+  {
+    id: 'multiplyballs',
+    label: 'Ball Multiplier',
+    family: 'Physics',
+    desc: 'Chaque rebond cree une nouvelle balle jusqu au chaos complet.',
+    pace: 'Fast ramp',
+    hook: 'Every bounce = new ball',
+  },
+  {
+    id: 'escapeordie',
+    label: 'Escape Before You Die',
+    family: 'Hardcore',
+    desc: 'Une balle doit survivre aux pics et trouver la sortie avant le game over.',
+    pace: 'Tension',
+    hook: 'You Died screen',
+  },
+  {
+    id: 'physicscrash',
+    label: 'Free For All',
+    family: 'Battle',
+    desc: 'Quatre balles emoji s affrontent dans une cage jusqu au dernier survivant.',
+    pace: 'Impact',
+    hook: 'Heart damage',
+  },
+];
+
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -82,14 +152,35 @@ function downloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function getLiveTeam(code) {
+  return TEAM_DATA[code] || {
+    name: code,
+    shortName: code,
+    color: '#334155',
+    altColor: '#94A3B8',
+    flag: [['#334155', 0, 0, 1, 1]],
+  };
+}
+
+function drawFlagFromData(c, flag, x, y, w, h) {
+  (flag || []).forEach((segment) => {
+    c.fillStyle = segment[0];
+    c.fillRect(x + segment[1] * w, y + segment[2] * h, segment[3] * w, segment[4] * h);
+  });
+}
+
 // --- AUDIO ENGINE ---
 function initAudio() {
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.9;
     masterGain.connect(audioCtx.destination);
   }
   if (audioCtx.state === 'suspended') audioCtx.resume();
+  if (!audioBuffersPromise) {
+    audioBuffersPromise = loadAudioBuffers();
+  }
 }
 
 function playNote(val, type = 'sine', duration = 0.1, vol = 0.1) {
@@ -148,6 +239,83 @@ function playConquer(regionIdx) {
   } catch (e) { /* silent */ }
 }
 
+const SOUND_FILES = {
+  whistleShort: new URL('../remotion/audio/whistle-short.mp3', import.meta.url).href,
+  whistleLong: new URL('../remotion/audio/whistle-long.mp3', import.meta.url).href,
+  kick: new URL('../remotion/audio/realistic-kick.mp3', import.meta.url).href,
+  bounce: new URL('../remotion/audio/bounce.wav', import.meta.url).href,
+  goal: new URL('../remotion/audio/goal-cheer.mp3', import.meta.url).href,
+  goalNet: new URL('../remotion/audio/goal-net-impact.mp3', import.meta.url).href,
+  crowd: new URL('../remotion/audio/clean-stadium-loop.mp3', import.meta.url).href,
+};
+
+async function loadAudioBuffers() {
+  if (!audioCtx) return;
+  const entries = await Promise.all(Object.entries(SOUND_FILES).map(async ([name, url]) => {
+    try {
+      const response = await fetch(url);
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = await audioCtx.decodeAudioData(arrayBuffer);
+      return [name, buffer];
+    } catch (error) {
+      console.warn(`Failed to load sound: ${name}`, error);
+      return [name, null];
+    }
+  }));
+  audioBuffers = Object.fromEntries(entries);
+}
+
+function playSample(name, { volume = 0.3, rate = 1, when = 0, offset = 0, duration, loop = false, destination = masterGain } = {}) {
+  if (!audioCtx || !audioBuffers[name] || !destination) return null;
+  try {
+    const source = audioCtx.createBufferSource();
+    const gainNode = audioCtx.createGain();
+    source.buffer = audioBuffers[name];
+    source.playbackRate.value = rate;
+    source.loop = loop;
+    gainNode.gain.value = volume;
+    source.connect(gainNode);
+    gainNode.connect(destination);
+    if (typeof duration === 'number') {
+      source.start(audioCtx.currentTime + when, offset, duration);
+    } else {
+      source.start(audioCtx.currentTime + when, offset);
+    }
+    return source;
+  } catch (error) {
+    console.warn(`Failed to play sound: ${name}`, error);
+    return null;
+  }
+}
+
+function playCrowdReaction(volume = 0.2, rate = 1) {
+  return playSample('goal', { volume, rate });
+}
+
+function stopAmbience() {
+  if (ambienceSource) {
+    try { ambienceSource.stop(); } catch {}
+    ambienceSource = null;
+  }
+  if (ambienceGain) {
+    try { ambienceGain.disconnect(); } catch {}
+    ambienceGain = null;
+  }
+}
+
+function startCrowdAmbience() {
+  if (!audioCtx || !audioBuffers.crowd || ambienceSource) return;
+  ambienceSource = audioCtx.createBufferSource();
+  ambienceGain = audioCtx.createGain();
+  ambienceSource.buffer = audioBuffers.crowd;
+  ambienceSource.loop = true;
+  ambienceSource.playbackRate.value = 0.98;
+  ambienceGain.gain.value = 0.14;
+  ambienceSource.connect(ambienceGain);
+  ambienceGain.connect(masterGain);
+  ambienceSource.start(0, 0.3);
+}
+
 // --- RECORDING ENGINE ---
 recBtn.addEventListener('click', () => {
   if (!isRecording) startRecording();
@@ -163,6 +331,7 @@ function formatTime(ms) {
 
 async function startRecording() {
   initAudio();
+  await audioBuffersPromise;
 
   // Reset simulation state
   const algo = ALGORITHMS[currentAlgoId];
@@ -230,6 +399,7 @@ async function startRecording() {
 async function stopRecording() {
   if (!mediaRecorder || !isRecording) return;
   isRecording = false;
+  stopAmbience();
 
   recBtn.textContent = 'Encoding...';
   recBtn.classList.remove('recording');
@@ -2868,6 +3038,7 @@ const ALGORITHMS = {
     tiktokDesc: 'Bosnie vs Italie ! Qui pousse le ballon dans le but ? 90 secondes de chaos #worldcup #football #countryball',
     tiktokTags: '#worldcup #football #countryball #bosnia #italy #satisfying #simulation #physics',
     init: function () {
+      const cfg = worldcupLiveConfig;
       // Rectangular pitch
       const px = 80, py = 240, pw = WIDTH - 160, ph = 700;
       const goalW = 60, goalH = 300; // large goals
@@ -2875,23 +3046,19 @@ const ALGORITHMS = {
       this._goalH = goalH;
       this._goalW = goalW;
       this._teams = [
-        { name: 'BOSNIA', shortName: 'BOS', color: '#002395', altColor: '#FFC107', score: 0 },
-        { name: 'ITALY', shortName: 'ITA', color: '#008C45', altColor: '#fff', score: 0 },
+        { ...getLiveTeam(cfg.homeTeam), score: 0, yellowCards: 0, touches: 0 },
+        { ...getLiveTeam(cfg.awayTeam), score: 0, yellowCards: 0, touches: 0 },
       ];
       const midX = px + pw / 2, midY = py + ph / 2;
-      const goalMidY = midY;
-      const PR = 22; // all players same size
+      const PR = cfg.playerSize;
       this._players = [
-        // Bosnia: GK + 2 field
         { x: px + 40, y: midY, vx: 0, vy: 0, r: PR, team: 0, role: 'gk' },
         { x: midX - 140, y: midY - 100, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
         { x: midX - 140, y: midY + 100, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
-        // Italy: GK + 2 field
         { x: px + pw - 40, y: midY, vx: 0, vy: 0, r: PR, team: 1, role: 'gk' },
         { x: midX + 140, y: midY - 100, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
         { x: midX + 140, y: midY + 100, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
       ];
-      // Referee — follows the action, can bounce the ball
       this._referee = { x: midX, y: midY + 50, vx: 0, vy: 0, r: 18 };
       this._ball = { x: midX, y: midY, vx: 0, vy: 0, r: 12 };
       this._particles = [];
@@ -2901,225 +3068,414 @@ const ALGORITHMS = {
       this._kickoff = true;
       this._kickoffTimer = 0;
       this._goalLog = [];
+      this._cardsLog = [];
       this._stuckTimer = 0;
       this._lastBallPos = { x: 0, y: 0 };
       this._foulFlash = 0;
+      this._audio = { wallCooldown: 0, kickCooldown: 0, crowdPulseCooldown: 0 };
     },
     draw: function (c) {
+      const cfg = worldcupLiveConfig;
       const p = this._pitch;
       const t = this._teams;
       const fb = this._ball;
-      const midX = p.x + p.w / 2, midY = p.y + p.h / 2;
+      const midX = p.x + p.w / 2;
+      const midY = p.y + p.h / 2;
+      const gH = this._goalH;
+      const gW = this._goalW;
+      const gTop = midY - gH / 2;
+      const elapsed = 90 - this._timerSecs;
+      const pulse = 1 + Math.sin(elapsed * 0.9) * 0.03;
+      const glassFill = 'rgba(8, 16, 24, 0.42)';
+      const panelStroke = 'rgba(255,255,255,0.18)';
 
-      // Green background
-      c.fillStyle = '#1B7339';
+      const roundRect = (x, y, w, h, r = 18) => {
+        if (c.roundRect) {
+          c.beginPath();
+          c.roundRect(x, y, w, h, r);
+          return;
+        }
+        c.beginPath();
+        c.moveTo(x + r, y);
+        c.lineTo(x + w - r, y);
+        c.quadraticCurveTo(x + w, y, x + w, y + r);
+        c.lineTo(x + w, y + h - r);
+        c.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        c.lineTo(x + r, y + h);
+        c.quadraticCurveTo(x, y + h, x, y + h - r);
+        c.lineTo(x, y + r);
+        c.quadraticCurveTo(x, y, x + r, y);
+      };
+
+      const drawGlassPanel = (x, y, w, h, r = 18) => {
+        c.save();
+        c.shadowColor = 'rgba(0,0,0,0.22)';
+        c.shadowBlur = 26;
+        c.fillStyle = glassFill;
+        roundRect(x, y, w, h, r);
+        c.fill();
+        c.strokeStyle = panelStroke;
+        c.lineWidth = 2;
+        roundRect(x, y, w, h, r);
+        c.stroke();
+        c.restore();
+      };
+
+      const drawTeamFlag = (teamIdx, x, y, size = 56) => {
+        const team = t[teamIdx];
+        c.save();
+        c.shadowColor = 'rgba(0,0,0,0.18)';
+        c.shadowBlur = 14;
+        c.fillStyle = 'rgba(255,255,255,0.1)';
+        roundRect(x, y, size, size, 16);
+        c.fill();
+        c.strokeStyle = 'rgba(255,255,255,0.24)';
+        c.lineWidth = 2;
+        roundRect(x, y, size, size, 16);
+        c.stroke();
+        roundRect(x + 3, y + 3, size - 6, size - 6, 14);
+        c.clip();
+        drawFlagFromData(c, team.flag, x + 3, y + 3, size - 6, size - 6);
+        c.restore();
+      };
+
+      const drawCountryball = (pl) => {
+        const team = t[pl.team];
+        c.save();
+        c.translate(pl.x, pl.y);
+        c.shadowColor = 'rgba(0,0,0,0.2)';
+        c.shadowBlur = 18;
+        c.shadowOffsetY = 10;
+        c.beginPath();
+        c.arc(0, 0, pl.r, 0, Math.PI * 2);
+        c.clip();
+        drawFlagFromData(c, team.flag, -pl.r, -pl.r, pl.r * 2, pl.r * 2);
+        c.restore();
+        c.save();
+        c.translate(pl.x, pl.y);
+        c.strokeStyle = 'rgba(255,255,255,0.4)';
+        c.lineWidth = 1.5;
+        c.beginPath();
+        c.arc(0, 0, pl.r, 0, Math.PI * 2);
+        c.stroke();
+        if (pl.role === 'gk') {
+          c.strokeStyle = '#ffd54a';
+          c.lineWidth = 3;
+          c.beginPath();
+          c.arc(0, 0, pl.r + 4, 0, Math.PI * 2);
+          c.stroke();
+        }
+        const eyeAngle = Math.atan2(fb.y - pl.y, fb.x - pl.x);
+        c.fillStyle = '#fff';
+        c.beginPath(); c.ellipse(-7, -4, 8, 10, 0, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.ellipse(7, -4, 8, 10, 0, 0, Math.PI * 2); c.fill();
+        c.fillStyle = '#111';
+        c.beginPath(); c.arc(-7 + Math.cos(eyeAngle) * 2.6, -4 + Math.sin(eyeAngle) * 2.6, 3.4, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.arc(7 + Math.cos(eyeAngle) * 2.6, -4 + Math.sin(eyeAngle) * 2.6, 3.4, 0, Math.PI * 2); c.fill();
+        c.restore();
+      };
+
+      c.fillStyle = '#156f34';
+      c.fillRect(0, 0, WIDTH, HEIGHT);
+      const bgGrad = c.createRadialGradient(WIDTH / 2, HEIGHT * 0.22, 120, WIDTH / 2, HEIGHT * 0.24, HEIGHT);
+      bgGrad.addColorStop(0, 'rgba(255,255,255,0.1)');
+      bgGrad.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = bgGrad;
       c.fillRect(0, 0, WIDTH, HEIGHT);
 
-      // --- SCOREBOARD (large, prominent) ---
-      const sbY = 140, sbW = 920, sbH = 100;
-      const sx = WIDTH / 2 - sbW / 2;
-      c.fillStyle = 'rgba(0,0,0,0.9)';
-      if (c.roundRect) { c.beginPath(); c.roundRect(sx, sbY, sbW, sbH, 18); c.fill(); }
-      // Team color accent bars (thicker)
-      c.fillStyle = t[0].color;
-      if (c.roundRect) { c.beginPath(); c.roundRect(sx, sbY, 12, sbH, [18, 0, 0, 18]); c.fill(); }
-      c.fillStyle = t[1].color;
-      if (c.roundRect) { c.beginPath(); c.roundRect(sx + sbW - 12, sbY, 12, sbH, [0, 18, 18, 0]); c.fill(); }
-      // Team names (large)
-      c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = 'bold 36px Inter, sans-serif';
-      c.fillText(t[0].shortName, sx + 30, sbY + 62);
+      const sbX = 92;
+      const sbY = cfg.scoreboardY;
+      const sbW = WIDTH - 184;
+      const sbH = 126;
+      drawGlassPanel(sbX, sbY, sbW, sbH, 28);
+      c.save();
+      c.fillStyle = 'rgba(255,255,255,0.12)';
+      roundRect(sbX, sbY, sbW, 8, 28);
+      c.fill();
+      c.restore();
+      drawTeamFlag(0, sbX + 16, sbY + 20, 64);
+      drawTeamFlag(1, sbX + sbW - 80, sbY + 20, 64);
+
+      c.textAlign = 'left';
+      c.fillStyle = '#f8fbff';
+      c.font = 'bold 16px Inter, sans-serif';
+      c.fillText(t[0].name, sbX + 94, sbY + 50);
+      c.font = '12px Inter, sans-serif';
+      c.fillStyle = 'rgba(255,255,255,0.78)';
+      c.fillText(`${this._players.filter(pl => pl.team === 0 && pl.role === 'field').length} field + gk`, sbX + 94, sbY + 72);
+
       c.textAlign = 'right';
-      c.fillText(t[1].shortName, sx + sbW - 30, sbY + 62);
-      // Scores (very large)
-      c.textAlign = 'center'; c.font = 'bold 64px Inter, sans-serif';
-      c.fillText(t[0].score, sx + sbW / 2 - 80, sbY + 68);
-      c.fillStyle = '#555'; c.font = 'bold 40px Inter, sans-serif';
-      c.fillText('-', sx + sbW / 2, sbY + 64);
-      c.fillStyle = '#fff'; c.font = 'bold 64px Inter, sans-serif';
-      c.fillText(t[1].score, sx + sbW / 2 + 80, sbY + 68);
-      // Timer (top center pill, larger)
+      c.fillStyle = '#f8fbff';
+      c.font = 'bold 16px Inter, sans-serif';
+      c.fillText(t[1].name, sbX + sbW - 94, sbY + 50);
+      c.font = '12px Inter, sans-serif';
+      c.fillStyle = 'rgba(255,255,255,0.78)';
+      c.fillText(`${this._players.filter(pl => pl.team === 1 && pl.role === 'field').length} field + gk`, sbX + sbW - 94, sbY + 72);
+
+      c.textAlign = 'center';
+      c.fillStyle = '#fff';
+      c.font = '900 66px Inter, sans-serif';
+      c.fillText(String(t[0].score), sbX + sbW / 2 - 112, sbY + 78);
+      c.fillText(String(t[1].score), sbX + sbW / 2 + 112, sbY + 78);
+      c.fillStyle = 'rgba(255,255,255,0.35)';
+      c.font = '700 26px Inter, sans-serif';
+      c.fillText('VS', sbX + sbW / 2, sbY + 78);
+
       const mins = Math.floor(Math.max(0, this._timerSecs) / 60).toString().padStart(2, '0');
       const secs = Math.floor(Math.max(0, this._timerSecs) % 60).toString().padStart(2, '0');
-      c.fillStyle = '#111';
-      if (c.roundRect) { c.beginPath(); c.roundRect(sx + sbW / 2 - 55, sbY - 14, 110, 34, 12); c.fill(); }
-      c.fillStyle = '#4ADE80'; c.font = 'bold 24px Fira Code, monospace';
-      c.fillText(`${mins}:${secs}`, sx + sbW / 2, sbY + 14);
-
-      // --- PITCH ---
-      c.fillStyle = '#22883F';
-      c.fillRect(p.x, p.y, p.w, p.h);
-      // Neon glow pitch lines
       c.save();
-      c.shadowColor = 'rgba(255,255,255,0.6)';
-      c.shadowBlur = 12;
-      c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = 3;
+      c.translate(sbX + sbW / 2, sbY - 6);
+      c.scale(pulse, pulse);
+      c.fillStyle = '#f4c845';
+      roundRect(-64, 0, 128, 42, 18);
+      c.fill();
+      c.strokeStyle = 'rgba(255,255,255,0.28)';
+      c.lineWidth = 1;
+      roundRect(-64, 0, 128, 42, 18);
+      c.stroke();
+      c.fillStyle = '#1d2631';
+      c.font = '900 24px Fira Code, monospace';
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.fillText(`${mins}:${secs}`, 0, 21);
+      c.restore();
+      c.textBaseline = 'alphabetic';
+
+      const pitchGrad = c.createLinearGradient(p.x, p.y, p.x, p.y + p.h);
+      pitchGrad.addColorStop(0, '#238743');
+      pitchGrad.addColorStop(1, '#176f36');
+      c.fillStyle = pitchGrad;
+      c.fillRect(p.x, p.y, p.w, p.h);
+      c.save();
+      c.shadowColor = 'rgba(255,255,255,0.22)';
+      c.shadowBlur = cfg.glow;
+      c.strokeStyle = 'rgba(255,255,255,0.98)';
+      c.lineWidth = cfg.lineWidth;
       c.strokeRect(p.x, p.y, p.w, p.h);
-      // Center line
       c.beginPath(); c.moveTo(midX, p.y); c.lineTo(midX, p.y + p.h); c.stroke();
-      // Center circle
-      c.beginPath(); c.arc(midX, midY, 60, 0, Math.PI * 2); c.stroke();
-      // Center dot
+      c.beginPath(); c.arc(midX, midY, 86, 0, Math.PI * 2); c.stroke();
       c.fillStyle = '#fff';
-      c.beginPath(); c.arc(midX, midY, 5, 0, Math.PI * 2); c.fill();
-      // Penalty areas
-      const penW = 100, penH = 300;
+      c.beginPath(); c.arc(midX, midY, 7, 0, Math.PI * 2); c.fill();
+      const penW = 138;
+      const penH = 360;
       c.strokeRect(p.x, midY - penH / 2, penW, penH);
       c.strokeRect(p.x + p.w - penW, midY - penH / 2, penW, penH);
-      c.restore(); // reset shadow
-
-      // --- GOALS (white cages with neon glow + net) ---
-      const gH = this._goalH, gW = this._goalW;
-      const gTop = midY - gH / 2;
-      // Left goal
-      c.fillStyle = 'rgba(255,255,255,0.06)';
-      c.fillRect(p.x - gW, gTop, gW, gH);
-      c.save();
-      c.shadowColor = 'rgba(255,255,255,0.5)'; c.shadowBlur = 10;
-      c.strokeStyle = '#fff'; c.lineWidth = 4;
-      c.beginPath(); c.moveTo(p.x, gTop); c.lineTo(p.x - gW, gTop); c.lineTo(p.x - gW, gTop + gH); c.lineTo(p.x, gTop + gH); c.stroke();
       c.restore();
-      // Net pattern
-      c.strokeStyle = 'rgba(255,255,255,0.25)'; c.lineWidth = 1;
-      for (let ny = gTop + 12; ny < gTop + gH; ny += 12) { c.beginPath(); c.moveTo(p.x - gW, ny); c.lineTo(p.x, ny); c.stroke(); }
-      for (let nx = p.x - gW + 8; nx < p.x; nx += 8) { c.beginPath(); c.moveTo(nx, gTop); c.lineTo(nx, gTop + gH); c.stroke(); }
-      // Right goal
-      c.fillStyle = 'rgba(255,255,255,0.06)';
-      c.fillRect(p.x + p.w, gTop, gW, gH);
-      c.save();
-      c.shadowColor = 'rgba(255,255,255,0.5)'; c.shadowBlur = 10;
-      c.strokeStyle = '#fff'; c.lineWidth = 4;
-      c.beginPath(); c.moveTo(p.x + p.w, gTop); c.lineTo(p.x + p.w + gW, gTop); c.lineTo(p.x + p.w + gW, gTop + gH); c.lineTo(p.x + p.w, gTop + gH); c.stroke();
-      c.restore();
-      c.strokeStyle = 'rgba(255,255,255,0.25)'; c.lineWidth = 1;
-      for (let ny = gTop + 12; ny < gTop + gH; ny += 12) { c.beginPath(); c.moveTo(p.x + p.w, ny); c.lineTo(p.x + p.w + gW, ny); c.stroke(); }
-      for (let nx = p.x + p.w + 8; nx < p.x + p.w + gW; nx += 8) { c.beginPath(); c.moveTo(nx, gTop); c.lineTo(nx, gTop + gH); c.stroke(); }
 
-      // --- PARTICLES ---
-      this._particles.forEach(pt => {
-        c.globalAlpha = pt.life; c.fillStyle = pt.color;
-        c.beginPath(); c.arc(pt.x, pt.y, pt.size, 0, Math.PI * 2); c.fill();
-      });
-      c.globalAlpha = 1;
-
-      // --- FOOTBALL ---
-      c.fillStyle = '#fff';
-      c.beginPath(); c.arc(fb.x, fb.y, fb.r, 0, Math.PI * 2); c.fill();
-      c.strokeStyle = '#333'; c.lineWidth = 1.5;
-      c.beginPath(); c.arc(fb.x, fb.y, fb.r, 0, Math.PI * 2); c.stroke();
-      c.fillStyle = '#333';
-      for (let i = 0; i < 5; i++) {
-        const a = i * Math.PI * 2 / 5 - Math.PI / 2;
-        c.beginPath(); c.arc(fb.x + Math.cos(a) * fb.r * 0.5, fb.y + Math.sin(a) * fb.r * 0.5, 2, 0, Math.PI * 2); c.fill();
-      }
-
-      // --- PLAYERS ---
-      this._players.forEach(pl => {
-        const tm = t[pl.team];
-        c.save(); c.translate(pl.x, pl.y);
-        c.fillStyle = tm.color;
-        c.beginPath(); c.arc(0, 0, pl.r, 0, Math.PI * 2); c.fill();
-        c.save(); c.beginPath(); c.arc(0, 0, pl.r, 0, Math.PI * 2); c.clip();
-        if (pl.team === 0) {
-          c.fillStyle = '#FFC107';
-          c.beginPath(); c.moveTo(-pl.r, -pl.r); c.lineTo(pl.r, pl.r); c.lineTo(-pl.r, pl.r); c.fill();
+      const drawGoal = (isLeft) => {
+        const gx = isLeft ? p.x - gW : p.x + p.w;
+        c.save();
+        c.shadowColor = 'rgba(255,255,255,0.28)';
+        c.shadowBlur = 20;
+        c.strokeStyle = 'rgba(255,255,255,0.96)';
+        c.lineWidth = 7;
+        c.beginPath();
+        if (isLeft) {
+          c.moveTo(p.x, gTop);
+          c.lineTo(gx, gTop);
+          c.lineTo(gx, gTop + gH);
+          c.lineTo(p.x, gTop + gH);
         } else {
-          c.fillStyle = '#008C45'; c.fillRect(-pl.r, -pl.r, pl.r * 2 / 3, pl.r * 2);
-          c.fillStyle = '#fff'; c.fillRect(-pl.r + pl.r * 2 / 3, -pl.r, pl.r * 2 / 3, pl.r * 2);
-          c.fillStyle = '#CE2B37'; c.fillRect(-pl.r + pl.r * 4 / 3, -pl.r, pl.r * 2 / 3, pl.r * 2);
+          c.moveTo(p.x + p.w, gTop);
+          c.lineTo(gx + gW, gTop);
+          c.lineTo(gx + gW, gTop + gH);
+          c.lineTo(p.x + p.w, gTop + gH);
+        }
+        c.stroke();
+        c.shadowBlur = 0;
+        c.strokeStyle = 'rgba(255,255,255,0.2)';
+        c.lineWidth = 1;
+        for (let ny = gTop + 14; ny < gTop + gH; ny += 14) {
+          c.beginPath();
+          c.moveTo(isLeft ? gx : p.x + p.w, ny);
+          c.lineTo(isLeft ? p.x : gx + gW, ny);
+          c.stroke();
+        }
+        for (let nx = 0; nx <= gW; nx += 10) {
+          c.beginPath();
+          c.moveTo((isLeft ? gx : p.x + p.w) + nx, gTop);
+          c.lineTo((isLeft ? gx : p.x + p.w) + nx, gTop + gH);
+          c.stroke();
         }
         c.restore();
-        if (pl.role === 'gk') { c.strokeStyle = '#FFD700'; c.lineWidth = 3; c.beginPath(); c.arc(0, 0, pl.r + 2, 0, Math.PI * 2); c.stroke(); }
-        // Eyes
-        const ea = Math.atan2(fb.y - pl.y, fb.x - pl.x);
-        c.fillStyle = '#fff';
-        c.beginPath(); c.ellipse(-6, -3, 8, 10, 0, 0, Math.PI * 2); c.fill();
-        c.beginPath(); c.ellipse(6, -3, 8, 10, 0, 0, Math.PI * 2); c.fill();
-        c.strokeStyle = '#000'; c.lineWidth = 1;
-        c.beginPath(); c.ellipse(-6, -3, 8, 10, 0, 0, Math.PI * 2); c.stroke();
-        c.beginPath(); c.ellipse(6, -3, 8, 10, 0, 0, Math.PI * 2); c.stroke();
-        c.fillStyle = '#000';
-        c.beginPath(); c.arc(-6 + Math.cos(ea) * 3, -3 + Math.sin(ea) * 3, 3.5, 0, Math.PI * 2); c.fill();
-        c.beginPath(); c.arc(6 + Math.cos(ea) * 3, -3 + Math.sin(ea) * 3, 3.5, 0, Math.PI * 2); c.fill();
+      };
+      drawGoal(true);
+      drawGoal(false);
+
+      this._particles.forEach((pt) => {
+        c.save();
+        c.globalAlpha = pt.life;
+        c.fillStyle = pt.color;
+        c.shadowBlur = 16;
+        c.shadowColor = pt.color;
+        c.beginPath();
+        c.arc(pt.x, pt.y, pt.size, 0, Math.PI * 2);
+        c.fill();
         c.restore();
       });
 
-      // --- REFEREE ---
+      const speed = Math.sqrt(fb.vx * fb.vx + fb.vy * fb.vy);
+      if (speed > 3.5) {
+        const tailAngle = Math.atan2(fb.vy, fb.vx);
+        c.save();
+        c.translate(fb.x, fb.y);
+        c.rotate(tailAngle + Math.PI);
+        const trailGrad = c.createLinearGradient(0, 0, 46, 0);
+        trailGrad.addColorStop(0, 'rgba(255,255,255,0.36)');
+        trailGrad.addColorStop(1, 'rgba(255,255,255,0)');
+        c.fillStyle = trailGrad;
+        roundRect(0, -8, 46, 16, 10);
+        c.fill();
+        c.restore();
+      }
+
+      c.save();
+      c.shadowColor = 'rgba(255,255,255,0.45)';
+      c.shadowBlur = 22;
+      c.fillStyle = '#fff';
+      c.beginPath(); c.arc(fb.x, fb.y, fb.r, 0, Math.PI * 2); c.fill();
+      c.restore();
+      c.strokeStyle = 'rgba(24,24,24,0.24)';
+      c.lineWidth = 2;
+      c.beginPath(); c.arc(fb.x, fb.y, fb.r, 0, Math.PI * 2); c.stroke();
+
+      this._players.forEach((pl) => drawCountryball(pl));
+
       if (this._referee) {
         const ref = this._referee;
-        c.save(); c.translate(ref.x, ref.y);
-        c.fillStyle = '#111';
-        c.beginPath(); c.arc(0, 0, ref.r, 0, Math.PI * 2); c.fill();
-        // Yellow stripe (referee shirt)
-        c.fillStyle = '#FFD700';
+        c.save();
+        c.translate(ref.x, ref.y);
+        c.shadowColor = 'rgba(0,0,0,0.18)';
+        c.shadowBlur = 14;
+        c.shadowOffsetY = 8;
+        c.fillStyle = '#131313';
+        c.beginPath();
+        c.arc(0, 0, ref.r, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = '#ffd54a';
         c.fillRect(-ref.r, -4, ref.r * 2, 8);
-        // Eyes follow ball
         const rea = Math.atan2(fb.y - ref.y, fb.x - ref.x);
         c.fillStyle = '#fff';
         c.beginPath(); c.ellipse(-5, -4, 6, 8, 0, 0, Math.PI * 2); c.fill();
         c.beginPath(); c.ellipse(5, -4, 6, 8, 0, 0, Math.PI * 2); c.fill();
-        c.fillStyle = '#000';
-        c.beginPath(); c.arc(-5 + Math.cos(rea) * 2.5, -4 + Math.sin(rea) * 2.5, 3, 0, Math.PI * 2); c.fill();
-        c.beginPath(); c.arc(5 + Math.cos(rea) * 2.5, -4 + Math.sin(rea) * 2.5, 3, 0, Math.PI * 2); c.fill();
+        c.fillStyle = '#111';
+        c.beginPath(); c.arc(-5 + Math.cos(rea) * 2, -4 + Math.sin(rea) * 2, 2.7, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.arc(5 + Math.cos(rea) * 2, -4 + Math.sin(rea) * 2, 2.7, 0, Math.PI * 2); c.fill();
         c.restore();
       }
 
-      // --- FOUL FLASH ---
+      const eventRows = [
+        ...this._goalLog.map((g) => ({ team: g.team, timeStr: g.timeStr, label: 'Goal scored', accent: '#4ade80', kind: 'GOAL' })),
+        ...this._cardsLog.map((card) => ({ team: card.team, timeStr: card.timeStr, label: 'Yellow card', accent: '#f4c845', kind: 'YC' })),
+      ].slice(-4).reverse();
+
+      const panelX = 74;
+      const panelY = HEIGHT - 318;
+      const panelW = WIDTH - 148;
+      const panelH = 244;
+      drawGlassPanel(panelX, panelY, panelW, panelH, 24);
+      c.fillStyle = 'rgba(255,255,255,0.06)';
+      c.fillRect(panelX + panelW / 2 - 1, panelY + 62, 2, panelH - 82);
+
+      c.fillStyle = 'rgba(255,255,255,0.74)';
+      c.font = '700 12px Inter, sans-serif';
+      c.textAlign = 'left';
+      c.fillText('MATCH CENTER', panelX + 22, panelY + 26);
+      c.fillStyle = '#fff';
+      c.font = '900 28px Inter, sans-serif';
+      c.fillText('Goals, Cards, Momentum', panelX + 22, panelY + 54);
+
+      const drawCounterChip = (x, y, label, value, color) => {
+        c.fillStyle = 'rgba(255,255,255,0.08)';
+        roundRect(x, y, 126, 34, 16);
+        c.fill();
+        c.fillStyle = color;
+        c.font = '800 12px Inter, sans-serif';
+        c.fillText(label, x + 12, y + 22);
+        c.textAlign = 'right';
+        c.fillStyle = '#fff';
+        c.font = '900 14px Inter, sans-serif';
+        c.fillText(String(value), x + 114, y + 22);
+        c.textAlign = 'left';
+      };
+      drawCounterChip(panelX + 22, panelY + 72, 'BOS YC', t[0].yellowCards, '#f4c845');
+      drawCounterChip(panelX + 156, panelY + 72, 'ITA YC', t[1].yellowCards, '#f4c845');
+
+      c.fillStyle = '#fff';
+      c.font = '800 16px Inter, sans-serif';
+      c.fillText('Recent actions', panelX + panelW / 2 + 20, panelY + 88);
+      eventRows.forEach((event, idx) => {
+        const rowY = panelY + 104 + idx * 30;
+        c.fillStyle = 'rgba(255,255,255,0.06)';
+        roundRect(panelX + panelW / 2 + 18, rowY - 18, panelW / 2 - 40, 24, 12);
+        c.fill();
+        c.fillStyle = event.accent;
+        c.font = '900 12px Fira Code, monospace';
+        c.fillText(event.timeStr, panelX + panelW / 2 + 32, rowY - 1);
+        c.fillStyle = '#fff';
+        c.font = '600 13px Inter, sans-serif';
+        c.fillText(`${t[event.team].shortName} ${event.label}`, panelX + panelW / 2 + 92, rowY - 1);
+        c.textAlign = 'right';
+        c.fillStyle = 'rgba(255,255,255,0.76)';
+        c.font = '800 11px Inter, sans-serif';
+        c.fillText(event.kind, panelX + panelW - 24, rowY - 1);
+        c.textAlign = 'left';
+      });
+
       if (this._foulFlash > 0) {
-        c.fillStyle = `rgba(255,255,0,${this._foulFlash * 0.2})`;
+        c.fillStyle = `rgba(244, 200, 69, ${this._foulFlash * 0.24})`;
         c.fillRect(0, 0, WIDTH, HEIGHT);
-        c.fillStyle = '#FFD700'; c.textAlign = 'center';
-        c.font = 'bold 50px Inter, sans-serif';
-        c.fillText('FOUL!', WIDTH / 2, midY - 30);
-        this._foulFlash -= 0.02;
+        c.fillStyle = '#f4c845';
+        c.textAlign = 'center';
+        c.font = '900 86px Inter, sans-serif';
+        c.fillText('YELLOW CARD', WIDTH / 2, midY - 16);
+        this._foulFlash -= 0.015;
       }
 
-      // --- GOAL LOG (large cards) ---
-      if (this._goalLog.length > 0) {
-        const logY = p.y + p.h + 20;
-        this._goalLog.forEach((g, i) => {
-          const cardY = logY + i * 60;
-          c.fillStyle = 'rgba(0,0,0,0.8)';
-          if (c.roundRect) { c.beginPath(); c.roundRect(70, cardY, WIDTH - 140, 52, 12); c.fill(); }
-          // Color accent
-          c.fillStyle = t[g.team].color;
-          if (c.roundRect) { c.beginPath(); c.roundRect(70, cardY, 8, 52, [12, 0, 0, 12]); c.fill(); }
-          // Time badge
-          c.fillStyle = 'rgba(255,255,255,0.12)';
-          if (c.roundRect) { c.beginPath(); c.roundRect(95, cardY + 10, 72, 32, 8); c.fill(); }
-          c.fillStyle = '#4ADE80'; c.font = 'bold 22px Fira Code, monospace'; c.textAlign = 'center';
-          c.fillText(g.timeStr, 131, cardY + 33);
-          // Team + GOAL
-          c.fillStyle = '#fff'; c.font = 'bold 30px Inter, sans-serif'; c.textAlign = 'left';
-          c.fillText(`\u26BD  ${t[g.team].shortName} GOAL!`, 185, cardY + 36);
-        });
-      }
-
-      // Kickoff
       if (this._kickoff && this._kickoffTimer > 0) {
-        c.fillStyle = 'rgba(0,0,0,0.5)'; c.fillRect(p.x, midY - 40, p.w, 80);
-        c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = 'bold 50px Inter, sans-serif';
-        c.fillText(this._kickoffTimer > 45 ? 'KICK OFF!' : this._kickoffTimer > 15 ? '3' : this._kickoffTimer > 10 ? '2' : '1', midX, midY + 16);
+        c.fillStyle = 'rgba(8,16,24,0.52)';
+        roundRect(midX - 170, midY - 44, 340, 88, 20);
+        c.fill();
+        c.fillStyle = '#fff';
+        c.textAlign = 'center';
+        c.font = '900 48px Inter, sans-serif';
+        c.fillText(this._kickoffTimer > 45 ? 'KICK OFF' : Math.ceil(this._kickoffTimer / 15), midX, midY + 16);
       }
 
-      if (this._goalFlash > 0) { c.fillStyle = `rgba(255,255,255,${this._goalFlash * 0.3})`; c.fillRect(0, 0, WIDTH, HEIGHT); this._goalFlash -= 0.03; }
+      if (this._goalFlash > 0) {
+        c.fillStyle = `rgba(255,255,255,${this._goalFlash * 0.26})`;
+        c.fillRect(0, 0, WIDTH, HEIGHT);
+        this._goalFlash -= 0.03;
+      }
 
       if (this._ended) {
-        c.fillStyle = 'rgba(0,0,0,0.75)'; c.fillRect(0, HEIGHT / 2 - 100, WIDTH, 200);
-        c.textAlign = 'center'; c.font = 'bold 32px Inter, sans-serif'; c.fillStyle = '#aaa'; c.fillText('FULL TIME', WIDTH / 2, HEIGHT / 2 - 55);
-        c.font = 'bold 70px Inter, sans-serif'; c.fillStyle = '#fff'; c.fillText(`${t[0].score} - ${t[1].score}`, WIDTH / 2, HEIGHT / 2 + 10);
-        c.font = 'bold 36px Inter, sans-serif'; c.fillStyle = '#FFD700';
-        const w = t[0].score > t[1].score ? t[0].name : t[1].score > t[0].score ? t[1].name : 'DRAW';
-        c.fillText(w === 'DRAW' ? 'DRAW!' : `${w} WINS!`, WIDTH / 2, HEIGHT / 2 + 60);
+        c.fillStyle = 'rgba(6,10,16,0.82)';
+        c.fillRect(0, HEIGHT / 2 - 130, WIDTH, 260);
+        c.textAlign = 'center';
+        c.fillStyle = 'rgba(255,255,255,0.72)';
+        c.font = '700 28px Inter, sans-serif';
+        c.fillText('FULL TIME', WIDTH / 2, HEIGHT / 2 - 52);
+        c.fillStyle = '#fff';
+        c.font = '900 96px Inter, sans-serif';
+        c.fillText(`${t[0].score} - ${t[1].score}`, WIDTH / 2, HEIGHT / 2 + 24);
+        c.fillStyle = '#f4c845';
+        c.font = '800 34px Inter, sans-serif';
+        const winner = t[0].score > t[1].score ? t[0].name : t[1].score > t[0].score ? t[1].name : 'DRAW';
+        c.fillText(winner === 'DRAW' ? 'DRAW' : `${winner} WINS`, WIDTH / 2, HEIGHT / 2 + 78);
       }
+      c.textAlign = 'left';
+      c.textBaseline = 'alphabetic';
     },
     run: async function (runId) {
       this.init(); initAudio();
+      await audioBuffersPromise;
       const pi = this._pitch;
       const players = this._players;
       const fb = this._ball;
       const teams = this._teams;
       const midX = pi.x + pi.w / 2, midY = pi.y + pi.h / 2;
       const gH = this._goalH, gTop = midY - gH / 2, gBot = midY + gH / 2;
+      const audioState = this._audio;
 
       const collide = (a, b) => {
         const dx = b.x - a.x, dy = b.y - a.y, dist = Math.sqrt(dx * dx + dy * dy);
@@ -3170,15 +3526,23 @@ const ALGORITHMS = {
       resetPositions();
       this._kickoff = true;
       this._kickoffTimer = 60;
+      startCrowdAmbience();
+      playSample('whistleLong', { volume: 0.14, rate: 1.02, duration: 2 });
+      playCrowdReaction(0.08, 0.96);
 
       while (activeRunId === runId && !this._ended) {
+        audioState.wallCooldown = Math.max(0, audioState.wallCooldown - 1);
+        audioState.kickCooldown = Math.max(0, audioState.kickCooldown - 1);
+        audioState.crowdPulseCooldown = Math.max(0, audioState.crowdPulseCooldown - 1);
+
         if (this._kickoff) {
           this._kickoffTimer--;
           if (this._kickoffTimer <= 0) {
             this._kickoff = false;
             fb.vx = (Math.random() - 0.5) * 2;
             fb.vy = (Math.random() - 0.5) * 2;
-            playNote(12, 'triangle', 0.15, 0.1);
+            playSample('whistleLong', { volume: 0.13, rate: 1.08, duration: 2 });
+            playCrowdReaction(0.1, 1.02);
           }
           await sleep(16);
           continue;
@@ -3269,12 +3633,22 @@ const ALGORITHMS = {
 
         if (this._stuckTimer >= 2) {
           this._foulFlash = 1.5;
-          playNoise(0.15, 0.15);
-          playNote(15, 'square', 0.2, 0.1);
+          const ballInLeftHalf = fb.x < midX;
+          const attackingTeam = ballInLeftHalf ? 0 : 1; 
+          const defendingTeam = attackingTeam === 0 ? 1 : 0;
+          
+          // Small penalty: attacking team (defending that half) gets the ball, 
+          // others get a yellow card for "stalling"
+          teams[defendingTeam].yellowCards++;
+          const el = 90 - this._timerSecs;
+          this._cardsLog.push({ team: defendingTeam, timeStr: `${Math.floor(el / 60)}'${Math.floor(el % 60).toString().padStart(2, '0')}` });
+
+          playSample('whistleShort', { volume: 0.14, rate: 0.97, duration: 2 });
+          playNoise(0.08, 0.04);
+          playCrowdReaction(0.08, 0.94);
 
           // Ball goes to team in the camp where the ball is
-          const ballInLeftHalf = fb.x < midX;
-          const attackingTeam = ballInLeftHalf ? 0 : 1; // team defending that half gets the ball
+          // attackingTeam and defendingTeam already computed above
 
           // Place ball at foul spot, kick toward opponent goal
           const oppGoalX = attackingTeam === 0 ? pi.x + pi.w : pi.x;
@@ -3298,10 +3672,26 @@ const ALGORITHMS = {
         fb.vx *= 0.997; fb.vy *= 0.997;
         fb.x += fb.vx; fb.y += fb.vy;
 
+        // Particle trail
+        const speed = Math.sqrt(fb.vx*fb.vx + fb.vy*fb.vy);
+        if (speed > 2 && Math.random() > 0.4) {
+          this._particles.push({ 
+            x: fb.x, y: fb.y, 
+            vx: -fb.vx * 0.2 + (Math.random()-0.5)*1, 
+            vy: -fb.vy * 0.2 + (Math.random()-0.5)*1, 
+            size: 3 + Math.random()*2, 
+            color: 'rgba(74, 222, 128, 0.6)', 
+            life: 0.8 
+          });
+        }
+
         // Bounces
         if (bounceRect(fb)) {
           for (let i = 0; i < 4; i++) this._particles.push({ x: fb.x, y: fb.y, vx: (Math.random() - 0.5) * 4, vy: (Math.random() - 0.5) * 4, size: 2, color: '#fff', life: 0.7 });
-          playNote(6, 'sine', 0.03, 0.03);
+          if (audioState.wallCooldown === 0) {
+            playSample('bounce', { volume: 0.26, rate: 0.92 + Math.random() * 0.14 });
+            audioState.wallCooldown = 4;
+          }
         }
         players.forEach(pl => bounceRect(pl));
 
@@ -3309,7 +3699,14 @@ const ALGORITHMS = {
         players.forEach(pl => {
           if (collide(pl, fb)) {
             for (let i = 0; i < 5; i++) this._particles.push({ x: fb.x, y: fb.y, vx: (Math.random() - 0.5) * 5, vy: (Math.random() - 0.5) * 5, size: 3, color: teams[pl.team].color, life: 0.7 });
-            playNote(8, 'square', 0.04, 0.05);
+            if (audioState.kickCooldown === 0) {
+              playSample('kick', { volume: 0.24, rate: 0.96 + Math.random() * 0.12 });
+              audioState.kickCooldown = 2;
+            }
+            if (audioState.crowdPulseCooldown === 0) {
+              playCrowdReaction(0.06, 1);
+              audioState.crowdPulseCooldown = 18;
+            }
           }
         });
         for (let i = 0; i < players.length; i++) for (let j = i + 1; j < players.length; j++) collide(players[i], players[j]);
@@ -3317,7 +3714,7 @@ const ALGORITHMS = {
         // Referee-ball collision (ball bounces off referee — funny moments!)
         if (collide(ref, fb)) {
           for (let i = 0; i < 8; i++) this._particles.push({ x: fb.x, y: fb.y, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6, size: 2, color: '#FFD700', life: 0.8 });
-          playNote(3, 'square', 0.06, 0.08);
+          playSample('kick', { volume: 0.18, rate: 0.82 });
         }
         // Referee-player collisions
         players.forEach(pl => collide(ref, pl));
@@ -3333,12 +3730,15 @@ const ALGORITHMS = {
           this._goalLog.push({ team: scored, timeStr: `${Math.floor(el / 60)}'${Math.floor(el % 60).toString().padStart(2, '0')}` });
           this._goalFlash = 1.0;
           this._stuckTimer = 0; // reset foul timer
-          playNote(15, 'triangle', 0.5, 0.2);
+          playSample('goalNet', { volume: 0.34, rate: 1.02 });
+          playSample('goal', { volume: 0.48, when: 0.06 });
+          playSample('whistleShort', { volume: 0.11, rate: 1.15, when: 0.12, duration: 2 });
           await sleep(1500);
           resetPositions();
           // Reset referee to center too
           ref.x = midX; ref.y = midY + 50; ref.vx = 0; ref.vy = 0;
           this._kickoff = true; this._kickoffTimer = 60;
+          playSample('whistleLong', { volume: 0.12, rate: 1.05, duration: 2 });
           continue;
         }
 
@@ -3347,12 +3747,11 @@ const ALGORITHMS = {
         await sleep(16);
       }
 
-      playNote(8, 'triangle', 0.5, 0.15);
-      await sleep(300);
-      playNote(12, 'triangle', 0.5, 0.15);
-      await sleep(300);
-      playNote(15, 'triangle', 0.8, 0.15);
+      playSample('whistleLong', { volume: 0.11, rate: 0.92, duration: 2 });
+      await sleep(150);
+      playSample('whistleLong', { volume: 0.1, rate: 0.85, duration: 2 });
       await sleep(5000);
+      stopAmbience();
     }
   },
 
@@ -3455,7 +3854,7 @@ const ALGORITHMS = {
       for (let i = 0; i < this._maxHearts; i++) {
         const hx = WIDTH / 2 - (this._maxHearts * hS) / 2 + i * hS + 20;
         c.font = '30px serif';
-        c.fillText(i < this._hearts ? '\u2764\ufe0f' : '\ud83d\udda4', hx, 350);
+        c.fillText(i < this._hearts ? '❤️' : '🖤', hx, 350);
       }
 
       const { cx, cy, r, angle, gap } = this._arena;
@@ -3565,10 +3964,10 @@ const ALGORITHMS = {
       const ox = 100, oy = 400, ow = WIDTH - 200, oh = 1000;
       this._arena = { ox, oy, ow, oh };
       this._balls = [
-        { id: 0, x: ox + 100, y: oy + 100, vx: 8, vy: 6, r: 40, color: '#EF4444', hearts: 10, face: '\u003e_\u003c' },
-        { id: 1, x: ox + ow - 100, y: oy + 100, vx: -8, vy: 6, r: 40, color: '#3B82F6', hearts: 10, face: '\u0027-\u0027' },
-        { id: 2, x: ox + 100, y: oy + oh - 100, vx: 8, vy: -6, r: 40, color: '#10B981', hearts: 10, face: '\u00f2_\u00f3' },
-        { id: 3, x: ox + ow - 100, y: oy + oh - 100, vx: -8, vy: -6, r: 40, color: '#F59E0B', hearts: 10, face: '\u003e:\u0028' },
+        { id: 0, x: ox + 100, y: oy + 100, vx: 8, vy: 6, r: 40, color: '#EF4444', hearts: 10, face: '>_<' },
+        { id: 1, x: ox + ow - 100, y: oy + 100, vx: -8, vy: 6, r: 40, color: '#3B82F6', hearts: 10, face: "'-'" },
+        { id: 2, x: ox + 100, y: oy + oh - 100, vx: 8, vy: -6, r: 40, color: '#10B981', hearts: 10, face: 'ò_ó' },
+        { id: 3, x: ox + ow - 100, y: oy + oh - 100, vx: -8, vy: -6, r: 40, color: '#F59E0B', hearts: 10, face: '>:( ' },
       ];
       this._particles = [];
       this._winner = null;
@@ -3595,7 +3994,7 @@ const ALGORITHMS = {
         c.fillStyle = b.color; c.beginPath(); c.arc(hx, hy, 20, 0, Math.PI * 2); c.fill();
         for(let j=0; j<10; j++) {
           c.font = '24px serif';
-          c.fillText(j < b.hearts ? '\u2764\ufe0f' : '\ud83d\udda4', hx + 40 + j * 30, hy + 8);
+          c.fillText(j < b.hearts ? '❤️' : '🖤', hx + 40 + j * 30, hy + 8);
         }
       });
 
@@ -3684,6 +4083,63 @@ const ALGORITHMS = {
   },
 };
 
+function renderPresetCards() {
+  if (!presetGrid) return;
+  presetGrid.innerHTML = '';
+
+  VIRAL_PRESETS.forEach((preset) => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'preset-card';
+    card.dataset.algoId = preset.id;
+    card.innerHTML = `
+      <div class="preset-card-header">
+        <h4>${preset.label}</h4>
+        <span class="preset-chip">${preset.family}</span>
+      </div>
+      <p>${preset.desc}</p>
+      <div class="preset-footer">
+        <span>${preset.pace}</span>
+        <span>${preset.hook}</span>
+      </div>
+    `;
+    card.addEventListener('click', () => {
+      if (!isRecording) loadAlgorithm(preset.id);
+    });
+    presetGrid.appendChild(card);
+  });
+}
+
+function updatePresetSelection() {
+  if (!presetGrid) return;
+  presetGrid.querySelectorAll('.preset-card').forEach((card) => {
+    card.classList.toggle('active', card.dataset.algoId === currentAlgoId);
+  });
+}
+
+function syncWorldCupEditorUI() {
+  if (!liveHomeTeam) return;
+  liveHomeTeam.value = worldcupLiveConfig.homeTeam;
+  liveAwayTeam.value = worldcupLiveConfig.awayTeam;
+  livePlayerSize.value = String(worldcupLiveConfig.playerSize);
+  liveLineWidth.value = String(worldcupLiveConfig.lineWidth);
+  liveGlow.value = String(worldcupLiveConfig.glow);
+  liveScoreboardY.value = String(worldcupLiveConfig.scoreboardY);
+  livePlayerSizeValue.textContent = `${worldcupLiveConfig.playerSize}px`;
+  liveLineWidthValue.textContent = `${worldcupLiveConfig.lineWidth}px`;
+  liveGlowValue.textContent = `${worldcupLiveConfig.glow}px`;
+  liveScoreboardYValue.textContent = `${worldcupLiveConfig.scoreboardY}px`;
+}
+
+function refreshWorldCupPreview(reinit = false) {
+  if (currentAlgoId !== 'worldcup') return;
+  const algo = ALGORITHMS.worldcup;
+  if (!algo) return;
+  if (reinit && algo.init) {
+    algo.init();
+  }
+}
+
 // --- NAVIGATION ---
 function loadAlgorithm(id) {
   isAnimating = false;
@@ -3692,6 +4148,7 @@ function loadAlgorithm(id) {
   activeLine = null;
   twRunning = false;
   twWinner = null;
+  stopAmbience();
 
   const algo = ALGORITHMS[id];
   if (!algo) return;
@@ -3708,6 +4165,11 @@ function loadAlgorithm(id) {
   document.querySelectorAll('#nav-list button, .nav-category button').forEach(btn => btn.classList.remove('active'));
   const activeBtn = document.getElementById(`nav-btn-${id}`);
   if (activeBtn) activeBtn.classList.add('active');
+  updatePresetSelection();
+  if (liveEditor) {
+    liveEditor.classList.toggle('hidden', id !== 'worldcup');
+    if (id === 'worldcup') syncWorldCupEditorUI();
+  }
 
   window.location.hash = id;
 
@@ -3783,6 +4245,7 @@ async function startCurrentAlgo() {
   updateControlButtons('running');
 
   initAudio();
+  await audioBuffersPromise;
   activeRunId++;
   const runId = activeRunId;
 
@@ -3806,6 +4269,7 @@ function stopCurrentAlgo() {
   if (!isAnimating) return;
   activeRunId++; // invalide le runId en cours → l'algo s'arrete
   isAnimating = false;
+  stopAmbience();
   updateControlButtons('done');
 }
 
@@ -3813,6 +4277,7 @@ function restartCurrentAlgo() {
   // Reset state puis relance
   activeRunId++;
   isAnimating = false;
+  stopAmbience();
   const algo = ALGORITHMS[currentAlgoId];
   if (algo.type === 'sort') generateArray();
   else if (algo.init) algo.init();
@@ -3823,6 +4288,11 @@ function restartCurrentAlgo() {
 // --- EVENTS ---
 stopBtn.addEventListener('click', stopCurrentAlgo);
 restartBtn.addEventListener('click', restartCurrentAlgo);
+if (playSelectedBtn) {
+  playSelectedBtn.addEventListener('click', () => {
+    if (!isRecording) startCurrentAlgo();
+  });
+}
 themeToggle.addEventListener('click', () => {
   document.body.classList.toggle('dark-mode');
   themeToggle.textContent = document.body.classList.contains('dark-mode') ? '\u2600\uFE0F' : '\uD83C\uDF19';
@@ -3871,6 +4341,50 @@ if (renderHome && renderAway) {
   });
   renderHome.value = 'FRA';
   renderAway.value = 'SEN';
+}
+
+if (liveHomeTeam && liveAwayTeam) {
+  TEAM_LIST.forEach(code => {
+    liveHomeTeam.appendChild(new Option(code, code));
+    liveAwayTeam.appendChild(new Option(code, code));
+  });
+  syncWorldCupEditorUI();
+
+  const bindWorldCupEditor = (input, onChange) => {
+    input.addEventListener('input', onChange);
+    input.addEventListener('change', onChange);
+  };
+
+  bindWorldCupEditor(liveHomeTeam, () => {
+    worldcupLiveConfig.homeTeam = liveHomeTeam.value;
+    refreshWorldCupPreview(true);
+  });
+
+  bindWorldCupEditor(liveAwayTeam, () => {
+    worldcupLiveConfig.awayTeam = liveAwayTeam.value;
+    refreshWorldCupPreview(true);
+  });
+
+  bindWorldCupEditor(livePlayerSize, () => {
+    worldcupLiveConfig.playerSize = parseInt(livePlayerSize.value, 10);
+    syncWorldCupEditorUI();
+    refreshWorldCupPreview(true);
+  });
+
+  bindWorldCupEditor(liveLineWidth, () => {
+    worldcupLiveConfig.lineWidth = parseInt(liveLineWidth.value, 10);
+    syncWorldCupEditorUI();
+  });
+
+  bindWorldCupEditor(liveGlow, () => {
+    worldcupLiveConfig.glow = parseInt(liveGlow.value, 10);
+    syncWorldCupEditorUI();
+  });
+
+  bindWorldCupEditor(liveScoreboardY, () => {
+    worldcupLiveConfig.scoreboardY = parseInt(liveScoreboardY.value, 10);
+    syncWorldCupEditorUI();
+  });
 }
 
 if (renderBtn) {
@@ -3944,6 +4458,7 @@ if (renderBtn) {
 }
 
 // --- INIT ---
+renderPresetCards();
 renderNav();
 const initialAlgo = window.location.hash.slice(1);
-loadAlgorithm(ALGORITHMS[initialAlgo] ? initialAlgo : 'anxiety');
+loadAlgorithm(ALGORITHMS[initialAlgo] ? initialAlgo : 'worldcup');

@@ -31,9 +31,36 @@
     <!-- Main Studio Area -->
     <main class="content">
       <div class="studio-header">
-        <h1>Algorithm Studio</h1>
+        <div>
+          <p class="eyebrow">Video Builder 9:16</p>
+          <h1>Code Video Studio</h1>
+        </div>
         <button id="recBtn" class="rec-btn">&#9210; REC</button>
       </div>
+
+      <section class="hero-panel">
+        <div>
+          <p class="hero-kicker">Inspirations virales</p>
+          <h2>Cree des videos comme Arena War, Countryball ou Escape Before You Die.</h2>
+          <p class="hero-copy">Choisis un preset, lance la simulation, puis enregistre ou rends un MP4 vertical pret pour Shorts, TikTok et Reels.</p>
+        </div>
+        <div class="hero-tips">
+          <span>1080x1920</span>
+          <span>Canvas temps reel</span>
+          <span>Remotion MP4</span>
+        </div>
+      </section>
+
+      <section class="preset-panel">
+        <div class="section-heading">
+          <div>
+            <p class="section-label">Templates</p>
+            <h3>Presets viraux</h3>
+          </div>
+          <button id="playSelectedBtn" class="ghost-btn">Lancer le preset</button>
+        </div>
+        <div id="preset-grid" class="preset-grid"></div>
+      </section>
 
       <div id="studio-wrapper">
         <!-- Floating REC Indicator -->
@@ -50,23 +77,71 @@
         <button id="restartBtn" disabled>&#8635; Recommencer</button>
       </div>
 
-      <!-- Render Panel -->
-      <div id="render-panel" style="margin-top:1rem;padding:1.2rem;background:rgba(0,0,0,0.08);border-radius:16px;max-width:600px;width:100%;">
-        <h3 style="margin-bottom:0.8rem;font-size:1.1rem;">Render 4K MP4</h3>
-        <div id="render-config" style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.8rem;">
-          <select id="renderHome" style="padding:0.4rem;border-radius:8px;border:1px solid rgba(0,0,0,0.15);font-size:0.9rem;"></select>
-          <span style="align-self:center;font-weight:bold;">vs</span>
-          <select id="renderAway" style="padding:0.4rem;border-radius:8px;border:1px solid rgba(0,0,0,0.15);font-size:0.9rem;"></select>
-          <input id="renderSeed" type="number" value="42" placeholder="Seed" style="width:70px;padding:0.4rem;border-radius:8px;border:1px solid rgba(0,0,0,0.15);font-size:0.9rem;">
-        </div>
-        <button id="renderBtn" style="background:#7C3AED;color:#fff;border:none;padding:0.7rem 1.5rem;border-radius:50px;font-weight:bold;font-size:1rem;cursor:pointer;">Render 4K MP4</button>
-        <div id="render-status" style="margin-top:0.8rem;display:none;">
-          <div style="background:rgba(0,0,0,0.1);border-radius:8px;height:24px;overflow:hidden;">
-            <div id="render-progress-bar" style="background:#7C3AED;height:100%;width:0%;transition:width 0.3s;border-radius:8px;"></div>
+      <section id="live-editor" class="render-panel live-editor hidden">
+        <div class="section-heading">
+          <div>
+            <p class="section-label">Live Editor</p>
+            <h3>Football UI Controls</h3>
           </div>
-          <p id="render-status-text" style="font-size:0.85rem;margin-top:0.4rem;opacity:0.8;"></p>
+          <span class="render-badge">Preview instantane</span>
         </div>
-        <a id="render-download" href="#" download style="display:none;margin-top:0.5rem;color:#7C3AED;font-weight:bold;font-size:0.95rem;">Telecharger le MP4</a>
+        <p class="panel-copy">Ajuste le match directement dans le canvas avant de lancer un rendu MP4.</p>
+        <div class="editor-grid">
+          <label class="editor-field">
+            <span>Equipe gauche</span>
+            <select id="liveHomeTeam" class="render-input"></select>
+          </label>
+          <label class="editor-field">
+            <span>Equipe droite</span>
+            <select id="liveAwayTeam" class="render-input"></select>
+          </label>
+          <label class="editor-field">
+            <span>Taille joueurs</span>
+            <input id="livePlayerSize" type="range" min="18" max="34" step="1">
+            <strong id="livePlayerSizeValue">22</strong>
+          </label>
+          <label class="editor-field">
+            <span>Epaisseur lignes</span>
+            <input id="liveLineWidth" type="range" min="6" max="18" step="1">
+            <strong id="liveLineWidthValue">8</strong>
+          </label>
+          <label class="editor-field">
+            <span>Glow terrain</span>
+            <input id="liveGlow" type="range" min="8" max="36" step="1">
+            <strong id="liveGlowValue">24</strong>
+          </label>
+          <label class="editor-field">
+            <span>Position scoreboard</span>
+            <input id="liveScoreboardY" type="range" min="50" max="220" step="2">
+            <strong id="liveScoreboardYValue">72</strong>
+          </label>
+        </div>
+      </section>
+
+      <!-- Render Panel -->
+      <div id="render-panel" class="render-panel">
+        <div class="section-heading">
+          <div>
+            <p class="section-label">Export</p>
+            <h3>Render Countryball Match en MP4</h3>
+          </div>
+          <span class="render-badge">Serveur local</span>
+        </div>
+        <p class="panel-copy">Pour le template football, choisis les equipes puis rends une video HD directement depuis Remotion.</p>
+        <div id="render-config" class="render-config">
+          <select id="renderHome" class="render-input"></select>
+          <span class="render-versus">vs</span>
+          <select id="renderAway" class="render-input"></select>
+          <input id="renderSeed" class="render-input render-seed" type="number" value="42" placeholder="Seed">
+        </div>
+        <button id="renderBtn" class="primary-accent-btn">Render 4K MP4</button>
+        <div id="render-status" class="render-status">
+          <div class="progress-shell">
+            <div id="render-progress-bar" class="progress-bar"></div>
+          </div>
+          <p id="render-status-text" class="status-text"></p>
+        </div>
+        <a id="render-download" href="#" download class="download-link">Telecharger le MP4</a>
       </div>
 
       <!-- TikTok Meta Data -->

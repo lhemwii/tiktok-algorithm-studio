@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UI Glassmorphism Concept - World Cup Simulation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@500;700&family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --pitch-dark: #1e293b;
+      --neon-green: #4ADE80;
+      --neon-green-glow: rgba(74, 222, 128, 0.6);
+      
+      --glass-bg: rgba(255, 255, 255, 0.07);
+      --glass-border: rgba(255, 255, 255, 0.15);
+      --glass-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+      --glass-highlight: inset 0 1px 1px rgba(255, 255, 255, 0.15);
+      
+      --team1: #002395; /* BOSNIA */
+      --team1-text: #FFC107;
+      --team2: #008C45; /* ITALY */
+      --team2-text: #ffffff;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      font-family: 'Inter', sans-serif;
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Fake Canvas Pitch for Context */
+    .pitch-bg {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 450px;
+      height: 800px;
+      background: var(--pitch-dark);
+      border: 4px solid var(--neon-green);
+      box-shadow: 0 0 50px var(--neon-green-glow), inset 0 0 50px var(--neon-green-glow);
+      border-radius: 12px;
+      z-index: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .pitch-line-mid {
+      width: 100%;
+      height: 4px;
+      background: var(--neon-green);
+      box-shadow: 0 0 10px var(--neon-green-glow);
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+    .pitch-circle {
+      width: 120px;
+      height: 120px;
+      border: 4px solid var(--neon-green);
+      box-shadow: 0 0 10px var(--neon-green-glow), inset 0 0 10px var(--neon-green-glow);
+      border-radius: 50%;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    /* GLASSMORPHISM UTILITY */
+    .glass {
+      background: var(--glass-bg);
+      backdrop-filter: blur(24px) saturate(160%);
+      -webkit-backdrop-filter: blur(24px) saturate(160%);
+      border: 1px solid var(--glass-border);
+      box-shadow: var(--glass-shadow), var(--glass-highlight);
+      border-radius: 28px;
+    }
+
+    /* TOP SCOREBOARD */
+    .scoreboard {
+      position: absolute;
+      top: 40px;
+      width: 600px;
+      height: 120px;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      animation: slideDown 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes slideDown {
+      from { transform: translateY(-50px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .team-block {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      width: 40%;
+    }
+    .team-block.right {
+      flex-direction: row-reverse;
+    }
+
+    .team-color-bar {
+      width: 12px;
+      height: 70px;
+      border-radius: 8px;
+    }
+    .color-1 { background: var(--team1); box-shadow: 0 0 15px var(--team1); }
+    .color-2 { background: var(--team2); box-shadow: 0 0 15px var(--team2); }
+
+    .team-info {
+      display: flex;
+      flex-direction: column;
+    }
+    .team-block.right .team-info {
+      align-items: flex-end;
+    }
+
+    .team-abbr {
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      color: rgba(255, 255, 255, 0.9);
+      text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+
+    .score {
+      font-size: 64px;
+      font-weight: 900;
+      line-height: 1;
+      text-shadow: 0 4px 16px rgba(0,0,0,0.6);
+    }
+    
+    .center-info {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .timer-pill {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 8px 24px;
+      border-radius: 30px;
+      border: 1px solid rgba(255,255,255,0.1);
+      margin-top: -35px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+      margin-bottom: 12px;
+    }
+
+    .timer {
+      font-family: 'Fira Code', monospace;
+      font-weight: 700;
+      font-size: 26px;
+      color: var(--neon-green);
+      text-shadow: 0 0 12px var(--neon-green-glow);
+      animation: pulsePulse 2s infinite;
+    }
+
+    @keyframes pulsePulse {
+      0%, 100% { opacity: 1; text-shadow: 0 0 12px var(--neon-green-glow); }
+      50% { opacity: 0.7; text-shadow: 0 0 4px rgba(74, 222, 128, 0.3); }
+    }
+
+    .vs-text {
+      font-size: 20px;
+      font-weight: 800;
+      color: rgba(255, 255, 255, 0.3);
+    }
+
+    /* BOTTOM STATS PANEL */
+    .stats-panel {
+      position: absolute;
+      bottom: 40px;
+      width: 700px;
+      height: 200px;
+      z-index: 10;
+      display: flex;
+      animation: slideUp 0.8s 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+      overflow: hidden;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(50px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .stats-divider {
+      position: absolute;
+      left: 50%;
+      top: 20px;
+      bottom: 20px;
+      width: 1px;
+      background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.2), transparent);
+    }
+
+    .stats-col {
+      flex: 1;
+      padding: 24px 30px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stats-team-name {
+      font-size: 20px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 16px;
+    }
+    .stats-col:nth-child(1) .stats-team-name { color: var(--team1-text); }
+    .stats-col:nth-child(3) .stats-team-name { color: var(--team2-text); text-align: right; }
+
+    .events-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .stats-col:nth-child(3) .events-list {
+      align-items: flex-end;
+    }
+
+    .event-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: 'Fira Code', monospace;
+      font-size: 16px;
+      color: rgba(255,255,255,0.8);
+      background: rgba(0,0,0,0.2);
+      padding: 6px 14px;
+      border-radius: 8px;
+      width: fit-content;
+      border-left: 3px solid transparent;
+      transition: all 0.3s ease;
+    }
+    
+    .event-item:hover {
+      background: rgba(255,255,255,0.1);
+      transform: translateX(4px);
+    }
+    .stats-col:nth-child(3) .event-item:hover {
+      transform: translateX(-4px);
+    }
+
+    .event-item.goal {
+      border-color: #fff;
+    }
+    .event-item.card {
+      border-color: #FFD100;
+    }
+
+    .event-icon {
+      font-size: 18px;
+    }
+
+    /* Animated floating particles in background for premium feel */
+    .particle {
+      position: absolute;
+      border-radius: 50%;
+      background: var(--neon-green);
+      box-shadow: 0 0 10px var(--neon-green);
+      opacity: 0.6;
+      animation: float 4s ease-in-out infinite alternate;
+    }
+
+    @keyframes float {
+      from { transform: translateY(0) scale(1); opacity: 0.3; }
+      to { transform: translateY(-20px) scale(1.2); opacity: 0.8; }
+    }
+
+  </style>
+</head>
+<body>
+
+  <!-- Decorative particles -->
+  <div class="particle" style="width: 8px; height: 8px; top: 30%; left: 30%; animation-delay: 0s;"></div>
+  <div class="particle" style="width: 4px; height: 4px; top: 70%; left: 60%; animation-delay: 1s;"></div>
+  <div class="particle" style="width: 6px; height: 6px; top: 40%; left: 80%; animation-delay: 2s; background: #fff;"></div>
+
+  <!-- Background Pitch context -->
+  <div class="pitch-bg">
+    <div class="pitch-circle"></div>
+    <div class="pitch-line-mid"></div>
+  </div>
+
+  <!-- TOP SCOREBOARD GLASS PANEL -->
+  <div class="scoreboard glass">
+    
+    <!-- Team 1 -->
+    <div class="team-block">
+      <div class="team-color-bar color-1"></div>
+      <div class="team-info">
+        <span class="team-abbr">BOS</span>
+        <span class="score">2</span>
+      </div>
+    </div>
+
+    <!-- Center Info -->
+    <div class="center-info">
+      <div class="timer-pill">
+        <span class="timer">84:12</span>
+      </div>
+      <span class="vs-text">VS</span>
+    </div>
+
+    <!-- Team 2 -->
+    <div class="team-block right">
+      <div class="team-color-bar color-2"></div>
+      <div class="team-info">
+        <span class="team-abbr">ITA</span>
+        <span class="score">1</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- BOTTOM STATS GLASS PANEL -->
+  <div class="stats-panel glass">
+    
+    <!-- Team 1 Stats -->
+    <div class="stats-col">
+      <div class="stats-team-name">BOSNIA</div>
+      <div class="events-list">
+        <div class="event-item goal">
+          <span class="event-icon">⚽</span>
+          <span class="event-time">12'04</span>
+        </div>
+        <div class="event-item goal">
+          <span class="event-icon">⚽</span>
+          <span class="event-time">56'42</span>
+        </div>
+        <div class="event-item card">
+          <span class="event-icon">🟨</span>
+          <span class="event-time">82'10</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Divider -->
+    <div class="stats-divider"></div>
+
+    <!-- Team 2 Stats -->
+    <div class="stats-col">
+      <div class="stats-team-name">ITALY</div>
+      <div class="events-list">
+        <div class="event-item goal">
+          <span class="event-icon">⚽</span>
+          <span class="event-time">34'15</span>
+        </div>
+        <div class="event-item card">
+          <span class="event-icon">🟨</span>
+          <span class="event-time">45'00</span>
+        </div>
+        <div class="event-item card">
+          <span class="event-icon">🟨</span>
+          <span class="event-time">67'30</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Proposal 1 - Broadcast TV</title>
+  <style>
+    body{margin:0;font-family:Inter,Arial,sans-serif;background:#0d4e25;color:#fff}
+    .page{max-width:1200px;margin:0 auto;padding:28px}
+    .top{display:flex;justify-content:space-between;gap:24px;margin-bottom:24px}
+    .meta{max-width:720px}
+    .meta p{color:#d3e6d7;line-height:1.5}
+    .badge{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#c5dec8}
+    .shell{display:grid;grid-template-columns:420px 1fr;gap:28px}
+    .phone{width:420px;aspect-ratio:9/16;border-radius:38px;padding:18px;background:#0a1217;box-shadow:0 30px 60px rgba(0,0,0,.3)}
+    .screen{position:relative;height:100%;border-radius:28px;overflow:hidden;background:linear-gradient(180deg,#228740,#156b33)}
+    .topbar{position:absolute;left:18px;right:18px;top:18px;height:104px;border-radius:28px;background:linear-gradient(180deg,rgba(9,16,23,.68),rgba(9,16,23,.46));backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.16);box-shadow:0 18px 36px rgba(0,0,0,.22)}
+    .broadcast-line{position:absolute;left:0;right:0;top:0;height:7px;background:linear-gradient(90deg,#1944ad 0 45%,#d4d7dd 45% 55%,#009246 55% 100%)}
+    .row{display:grid;grid-template-columns:1fr 110px 1fr;gap:12px;align-items:center;padding:18px 16px 10px}
+    .team{display:grid;grid-template-columns:56px 1fr auto;gap:10px;align-items:center}
+    .team.away{grid-template-columns:auto 1fr 56px}
+    .flag{width:56px;height:56px;border-radius:14px;border:2px solid rgba(255,255,255,.22)}
+    .bos{background:linear-gradient(135deg,#1743ad 0 68%,#f4c53a 68% 100%)}
+    .ita{background:linear-gradient(90deg,#009246 0 33%,#f7f7f7 33% 66%,#ce2b37 66% 100%)}
+    .name strong{display:block;font-size:14px;text-transform:uppercase;letter-spacing:.08em}
+    .name span{display:block;font-size:12px;color:#c9d7de;margin-top:4px}
+    .score{font-size:46px;font-weight:900}
+    .timer{background:#f4c53a;color:#132130;border-radius:18px;text-align:center;padding:14px 8px;font-size:28px;font-weight:900;box-shadow:inset 0 1px 0 rgba(255,255,255,.5)}
+    .shots{display:grid;grid-template-columns:1fr 1fr;padding:0 18px 12px;color:#d9e4eb;font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+    .shots .r{text-align:right}
+    .pitch{position:absolute;left:42px;right:42px;top:152px;bottom:166px}
+    .ring{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 50% 50%,#2a9449,#1f7b3b 70%,#186633 100%)}
+    .outline{position:absolute;inset:0;border-radius:50%;border:12px solid #fff;box-shadow:0 0 20px rgba(255,255,255,.92),0 0 42px rgba(255,255,255,.4)}
+    .centerline{position:absolute;left:50%;top:10%;bottom:10%;width:6px;transform:translateX(-50%);background:rgba(255,255,255,.92);border-radius:999px}
+    .goal{position:absolute;left:-18px;top:50%;width:76px;height:126px;transform:translateY(-50%);border:8px solid rgba(255,255,255,.92);border-right:none;border-radius:16px 0 0 16px;background:repeating-linear-gradient(0deg,rgba(255,255,255,.22) 0 2px,transparent 2px 10px),repeating-linear-gradient(90deg,rgba(255,255,255,.22) 0 2px,transparent 2px 10px)}
+    .ball,.player{position:absolute;border-radius:50%;box-shadow:0 12px 20px rgba(0,0,0,.22)}
+    .ball{width:34px;height:34px;left:48%;top:46%;background:radial-gradient(circle at 30% 30%,#fff,#f1f1f1 65%,#d1d1d1);border:2px solid rgba(0,0,0,.2)}
+    .p1{width:52px;height:52px;left:58%;top:49%;background:linear-gradient(145deg,#1743ad 0 68%,#f4c53a 68% 100%)}
+    .p2{width:52px;height:52px;left:21%;top:22%;background:linear-gradient(90deg,#009246 0 33%,#f7f7f7 33% 66%,#ce2b37 66% 100%)}
+    .bottom{position:absolute;left:18px;right:18px;bottom:18px;border-radius:22px;background:rgba(7,12,18,.78);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.12);padding:14px}
+    .bottom .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+    .bottom .title{font-size:12px;text-transform:uppercase;letter-spacing:.16em;color:#adc2d0}
+    .chips{display:flex;gap:8px}
+    .chip{padding:8px 10px;border-radius:999px;background:rgba(255,255,255,.08);font-size:12px;font-weight:800}
+    .events{display:grid;gap:8px}
+    .event{display:grid;grid-template-columns:48px 1fr auto;gap:8px;align-items:center;background:rgba(255,255,255,.05);border-radius:14px;padding:8px 10px}
+    .event .t{font-weight:900;color:#ffd870}
+    .event .tag{font-size:11px;font-weight:900;text-transform:uppercase;padding:6px 8px;border-radius:999px;background:rgba(255,216,112,.18)}
+    .notes{display:grid;gap:16px}
+    .card{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:22px;padding:20px}
+    .card p,.card li{color:#d6e7d8;line-height:1.5}
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="top">
+      <div class="meta">
+        <div class="badge">Proposal 1</div>
+        <h1>Broadcast TV</h1>
+        <p>Heavy top scoreboard, center line inside the arena, stat chips, and a real event desk at the bottom. This version feels closer to sports television packaging than a mobile game overlay.</p>
+      </div>
+      <div class="card" style="min-width:280px">
+        <h3>Direction</h3>
+        <p>Best if you want the animation to feel like a real televised match recap with clean information hierarchy and strong readability.</p>
+      </div>
+    </div>
+    <div class="shell">
+      <div class="phone">
+        <div class="screen">
+          <div class="topbar">
+            <div class="broadcast-line"></div>
+            <div class="row">
+              <div class="team">
+                <div class="flag bos"></div>
+                <div class="name"><strong>Bosnia</strong><span>4 shots · 2 yellows</span></div>
+                <div class="score">2</div>
+              </div>
+              <div class="timer">81:32</div>
+              <div class="team away">
+                <div class="score">3</div>
+                <div class="name"><strong>Italy</strong><span>5 shots · 1 yellow</span></div>
+                <div class="flag ita"></div>
+              </div>
+            </div>
+            <div class="shots"><span>Pressure 52%</span><span class="r">Possession 48%</span></div>
+          </div>
+          <div class="pitch">
+            <div class="ring"></div>
+            <div class="outline"></div>
+            <div class="centerline"></div>
+            <div class="goal"></div>
+            <div class="p2 player"></div>
+            <div class="p1 player"></div>
+            <div class="ball"></div>
+          </div>
+          <div class="bottom">
+            <div class="head">
+              <div>
+                <div class="title">Match Center</div>
+                <strong>Goals, Cards, Momentum</strong>
+              </div>
+              <div class="chips">
+                <div class="chip">BOS YC 2</div>
+                <div class="chip">ITA YC 1</div>
+              </div>
+            </div>
+            <div class="events">
+              <div class="event"><span class="t">12'</span><span>Bosnia goal after central collision</span><span class="tag">BOS</span></div>
+              <div class="event"><span class="t">44'</span><span>Italy yellow after edge trap</span><span class="tag">Card</span></div>
+              <div class="event"><span class="t">79'</span><span>Italy goal after rebound inside the box</span><span class="tag">ITA</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="notes">
+        <div class="card">
+          <h2>Why It Feels Different</h2>
+          <ul>
+            <li>The UI weight is at the top, not evenly spread.</li>
+            <li>The pitch gets a center line and more sport-broadcast geometry.</li>
+            <li>The lower panel is informational, not decorative.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

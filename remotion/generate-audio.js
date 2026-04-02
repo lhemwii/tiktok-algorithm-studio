@@ -45,14 +45,32 @@ function writeWav(filename, samples, sampleRate = SAMPLE_RATE) {
 
 // --- WHISTLE (referee) ---
 function generateWhistle() {
-  const duration = 0.8;
+  const duration = 0.55;
   const samples = new Float32Array(SAMPLE_RATE * duration);
   for (let i = 0; i < samples.length; i++) {
     const t = i / SAMPLE_RATE;
-    // High pitched whistle with vibrato
-    const freq = 3200 + Math.sin(t * 30) * 200;
-    const envelope = t < 0.05 ? t / 0.05 : t > 0.6 ? (0.8 - t) / 0.2 : 1;
-    samples[i] = Math.sin(2 * Math.PI * freq * t) * 0.5 * envelope;
+    const burstA = t >= 0.0 && t <= 0.18;
+    const burstB = t >= 0.24 && t <= 0.5;
+    const active = burstA || burstB;
+    if (!active) {
+      samples[i] = 0;
+      continue;
+    }
+
+    const localT = burstA ? t : t - 0.24;
+    const burstDur = burstA ? 0.18 : 0.26;
+    const attack = Math.min(1, localT / 0.012);
+    const release = Math.max(0, (burstDur - localT) / 0.04);
+    const envelope = Math.min(attack, release);
+
+    // Referee whistle: strong body around 1.1-1.4kHz plus airy noise.
+    const baseFreq = burstA ? 1180 : 1320;
+    const vibrato = Math.sin(2 * Math.PI * 18 * localT) * 18;
+    const tone =
+      Math.sin(2 * Math.PI * (baseFreq + vibrato) * t) * 0.62 +
+      Math.sin(2 * Math.PI * (baseFreq * 2.05 + vibrato * 0.8) * t) * 0.18;
+    const noise = (Math.random() * 2 - 1) * 0.14;
+    samples[i] = (tone + noise) * envelope * 0.9;
   }
   writeWav('whistle.wav', samples);
 }
@@ -100,27 +118,43 @@ function generateBounce() {
   writeWav('bounce.wav', samples);
 }
 
-// --- CROWD AMBIANCE (loopable, 10 seconds) ---
+// --- CROWD REACTION (short cheer burst) ---
 function generateCrowdAmbiance() {
-  const duration = 10;
+  const duration = 2.4;
   const samples = new Float32Array(SAMPLE_RATE * duration);
-  // Multiple noise bands filtered to sound like a crowd
+
   for (let i = 0; i < samples.length; i++) {
     const t = i / SAMPLE_RATE;
-    // Base crowd noise (filtered white noise)
-    let noise = (Math.random() * 2 - 1) * 0.08;
-    // Add some slow undulation (crowd waves)
-    noise *= 0.7 + 0.3 * Math.sin(t * 0.5) * Math.sin(t * 0.3);
-    // Occasional louder moments
-    if (Math.sin(t * 1.7) > 0.95) noise *= 2;
-    samples[i] = noise;
+    const rise = Math.min(1, t / 0.18);
+    const fall = Math.max(0, (duration - t) / 1.25);
+    const envelope = Math.min(rise, fall);
+
+    // Layered "voices" with random pitch clusters.
+    let crowd = 0;
+    for (let v = 0; v < 7; v++) {
+      const freq = 180 + v * 32 + Math.sin(t * (3 + v * 0.2)) * 12;
+      crowd += Math.sin(2 * Math.PI * freq * t + v) * (0.07 - v * 0.006);
+    }
+
+    // Breath/noise body to make it feel like many people rather than a synth pad.
+    let noise = (Math.random() * 2 - 1) * 0.2;
+    noise *= 0.6 + 0.4 * Math.sin(2 * Math.PI * 2.2 * t) * Math.sin(2 * Math.PI * 1.4 * t + 1.1);
+
+    // A few chant pulses so it feels like a reaction and not a static hiss.
+    const chantPulse =
+      Math.max(0, Math.sin(2 * Math.PI * 3.4 * t)) * 0.15 +
+      Math.max(0, Math.sin(2 * Math.PI * 4.1 * t + 0.8)) * 0.1;
+
+    samples[i] = (crowd + noise + chantPulse) * envelope * 0.55;
   }
-  // Simple low-pass filter (running average)
-  for (let pass = 0; pass < 3; pass++) {
+
+  // Light smoothing.
+  for (let pass = 0; pass < 2; pass++) {
     for (let i = 1; i < samples.length; i++) {
-      samples[i] = samples[i] * 0.3 + samples[i - 1] * 0.7;
+      samples[i] = samples[i] * 0.42 + samples[i - 1] * 0.58;
     }
   }
+
   writeWav('crowd.wav', samples);
 }
 

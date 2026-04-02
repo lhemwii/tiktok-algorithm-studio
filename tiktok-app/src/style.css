@@ -1,0 +1,131 @@
+:root {
+  --bg-color: #0f172a;
+  --pitch-color: #064E3B;
+  
+  --neon-white: #ffffff;
+  --glass-bg: rgba(255, 255, 255, 0.12);
+  --glass-border: rgba(255, 255, 255, 0.25);
+  --glass-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  
+  --team-blue: #002395;
+  --team-yellow: #FFC107;
+  --team-green: #008C45;
+  --team-red: #CE2B37;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background-color: var(--bg-color);
+  font-family: 'Inter', sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  color: #fff;
+  overflow: hidden;
+}
+
+.tiktok-frame {
+  width: 450px;
+  height: 800px;
+  position: relative;
+  background: var(--pitch-color);
+  background-image: 
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 40px, transparent 40px, transparent 80px);
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+  border-radius: 24px;
+}
+
+.pitch-bg-elements {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 1; /* Below the canvas where players are */
+}
+
+/* PITCH LINES (VERTICAL) */
+.pitch-outline {
+  position: absolute;
+  top: 172px; bottom: 278px; left: 20px; right: 20px;
+  border: 6px solid var(--neon-white);
+  box-shadow: 0 0 15px rgba(255,255,255,0.5), inset 0 0 15px rgba(255,255,255,0.5);
+  border-radius: 8px;
+}
+.mid-line {
+  position: absolute; top: 50%; left: 0; width: 100%; height: 6px;
+  background: var(--neon-white); transform: translateY(-50%);
+  box-shadow: 0 0 15px rgba(255,255,255,0.5);
+}
+.mid-circle {
+  position: absolute; top: 50%; left: 50%; width: 100px; height: 100px;
+  border: 6px solid var(--neon-white); border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 15px rgba(255,255,255,0.5), inset 0 0 15px rgba(255,255,255,0.5);
+}
+.net {
+  position: absolute; left: 50%; width: 140px; height: 40px;
+  border: 4px solid var(--neon-white); transform: translateX(-50%);
+  box-shadow: 0 0 15px rgba(255,255,255,0.4), inset 0 0 15px rgba(255,255,255,0.4);
+  background: repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(255,255,255,0.3) 5px, rgba(255,255,255,0.3) 7px),
+              repeating-linear-gradient(-45deg, transparent, transparent 5px, rgba(255,255,255,0.3) 5px, rgba(255,255,255,0.3) 7px);
+}
+.net.top { top: -40px; border-bottom: none; border-top-left-radius: 12px; border-top-right-radius: 12px; }
+.net.bottom { bottom: -40px; border-top: none; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; }
+.penalty-area {
+  position: absolute; left: 50%; width: 200px; height: 100px;
+  border: 4px solid var(--neon-white); transform: translateX(-50%);
+  box-shadow: 0 0 10px rgba(255,255,255,0.3), inset 0 0 10px rgba(255,255,255,0.3);
+}
+.penalty-area.top { top: 0; border-top: none; }
+.penalty-area.bottom { bottom: 0; border-bottom: none; }
+
+canvas#game-canvas {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 5;
+}
+
+#ui-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+
+.glass-ui {
+  background: var(--glass-bg); backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px); border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow); border-radius: 30px;
+}
+
+/* SCOREBOARD */
+.scoreboard {
+  position: absolute; top: 25px; left: 50%; transform: translateX(-50%);
+  width: 410px; height: 110px; display: flex; justify-content: space-between; align-items: center; padding: 0 12px;
+}
+.sb-team { display: flex; flex-direction: column; align-items: center; flex: 1; }
+.sb-flag-block { width: 70px; height: 45px; border-radius: 8px; margin-bottom: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); position: relative; }
+
+/* Styles for current setup using TEAMS info */
+.sb-flag-block.fra { background: linear-gradient(90deg, #002395 33.3%, #fff 33.3%, #fff 66.6%, #ED2939 66.6%); }
+.sb-flag-block.sen { background: linear-gradient(90deg, #00853F 33.3%, #FDEF42 33.3%, #FDEF42 66.6%, #EF3340 66.6%); }
+
+.sb-score { font-size: 52px; font-weight: 900; text-shadow: 0 4px 15px rgba(0,0,0,0.6); line-height: 1; }
+.sb-center { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 20px; }
+.sb-timer-box { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; padding: 8px 20px; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5); }
+.sb-timer { font-family: 'Fira Code', monospace; font-size: 28px; font-weight: 700; color: #fff; }
+.sb-half { font-size: 14px; font-weight: 800; color: rgba(255,255,255,0.6); text-transform: uppercase; margin-top: 6px; letter-spacing: 2px; }
+
+/* ACTION TIMELINE */
+.action-panel {
+  position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%); width: 410px; height: 220px;
+  padding: 20px; display: flex; flex-direction: column; overflow: hidden; pointer-events: auto;
+}
+.action-header { font-size: 14px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.8); margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+.action-list { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; flex: 1; }
+.action-list::-webkit-scrollbar { display: none; }
+.action-item { display: flex; align-items: center; background: rgba(0,0,0,0.4); border-radius: 12px; padding: 10px 14px; border-left: 4px solid transparent; animation: slideIn 0.3s ease-out forwards; }
+@keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+.action-item.goal { border-left-color: #fff; }
+.action-item.yellow-card { border-left-color: #FFD100; }
+.act-time { font-family: 'Fira Code', monospace; font-weight: 700; font-size: 16px; width: 55px; color: rgba(255,255,255,0.7); }
+.act-icon { font-size: 22px; margin-right: 12px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
+.act-desc { flex: 1; display: flex; flex-direction: column; }
+.act-title { font-size: 16px; font-weight: 800; line-height: 1.2; }
+.act-team { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.6); }

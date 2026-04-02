@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TikTok Vertical World Cup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@600;700&family=Inter:ital,wght@0,500;0,800;0,900;1,900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+
+  <div class="tiktok-frame">
+    <!-- PITCH ELEMENTS (HTML Overlay on Background, under Canvas) -->
+    <div class="pitch-bg-elements">
+      <div class="pitch-outline">
+        <div class="net top"></div>
+        <div class="penalty-area top"></div>
+        
+        <div class="mid-line"></div>
+        <div class="mid-circle"></div>
+        
+        <div class="net bottom"></div>
+        <div class="penalty-area bottom"></div>
+      </div>
+    </div>
+
+    <!-- Le Canvas pour le rendu de la simulation (joueurs, balle) -->
+    <canvas id="game-canvas" width="450" height="800"></canvas>
+
+    <!-- UI Overlay (indépendant du canvas) -->
+    <div id="ui-overlay">
+      <!-- THE SCOREBOARD -->
+      <div class="scoreboard glass-ui" id="scoreboard">
+        <div class="sb-team">
+          <div class="sb-flag-block fra" id="team1-flag"></div>
+          <span class="sb-score" id="team1-score">0</span>
+        </div>
+
+        <div class="sb-center">
+          <div class="sb-timer-box">
+            <span class="sb-timer" id="match-timer">00:00</span>
+          </div>
+          <span class="sb-half" id="match-half">1st Half</span>
+        </div>
+
+        <div class="sb-team">
+          <div class="sb-flag-block sen" id="team2-flag"></div>
+          <span class="sb-score" id="team2-score">0</span>
+        </div>
+      </div>
+
+      <!-- ACTION TIMELINE -->
+      <div class="action-panel glass-ui">
+        <div class="action-header">
+          <span>Timeline & Events</span>
+          <span>⏱️</span>
+        </div>
+
+        <!-- POSSESSION BAR -->
+        <div class="possession-box" style="margin-bottom:14px; position:relative;">
+          <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:800; color:#fff; text-transform:uppercase; margin-bottom:6px;">
+            <span id="pos-team1-label">FRA (50%)</span>
+            <span style="color:rgba(255,255,255,0.6)">Possession</span>
+            <span id="pos-team2-label">SEN (50%)</span>
+          </div>
+          <div style="width:100%; height:8px; background:rgba(0,0,0,0.5); border-radius:4px; overflow:hidden; display:flex;">
+            <div id="pos-bar-1" style="width:50%; background:#002395; transition:width 0.3s;"></div>
+            <div id="pos-bar-2" style="width:50%; background:#00853F; transition:width 0.3s;"></div>
+          </div>
+        </div>
+
+        <div class="action-list" id="action-list">
+          <!-- Dynamically filled by JS -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANNEAU DE RENDU VIDEO (En bas à droite / Hors du frame) -->
+  <div style="position: absolute; right: 20px; bottom: 20px; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2); width: 300px; color: white;">
+    <h3 style="margin-top: 0;">🎥 Export Vidéo TikTok</h3>
+    <p style="font-size: 13px; color: #ccc;">Poste-le directement sur TikTok en 4K 9:16 (65 secondes max).</p>
+    <button id="renderBtn" style="width: 100%; padding: 12px; background: #FE2C55; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">🚀 Générer Vidéo 4K</button>
+    <div id="renderStatus" style="display: none; margin-top: 15px;">
+      <div style="font-size: 12px; margin-bottom: 5px;" id="renderStatusText">Préparation...</div>
+      <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; overflow: hidden;">
+        <div id="renderProgressBar" style="width: 0%; height: 100%; background: #25F4EE; transition: width 0.3s;"></div>
+      </div>
+    </div>
+    <a id="renderDownload" style="display: none; width: 100%; padding: 12px; margin-top: 15px; background: #25F4EE; color: black; border-radius: 6px; text-decoration: none; text-align: center; font-weight: bold;">⬇️ Télécharger le MP4</a>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

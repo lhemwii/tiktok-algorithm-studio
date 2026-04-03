@@ -21,26 +21,26 @@ function seededRandom(seed) {
 function initState(seed, homeCode, awayCode, matchInfo) {
   const rand = seededRandom(seed);
   // VERTICAL pitch — goals at top and bottom
-  // Leave space: scoreboard ~370px from top, info panel ~300px from bottom
-  const px = 60, py = 420, pw = 880, ph = 950;
+  // py=480 leaves room for scoreboard + top cage. ph=820 leaves room for bottom cage + panel
+  const px = 60, py = 480, pw = 880, ph = 820;
   const midX = px + pw / 2, midY = py + ph / 2;
-  // Goals: horizontal bars, visible above/below the pitch
-  const goalW = 260, goalH = 50;
+  // Goals: big visible cages above/below
+  const goalW = 280, goalH = 60;
   const gLeft = midX - goalW / 2, gRight = midX + goalW / 2;
   const PR = 38; // BIG players
   const teams = getTeamPair(homeCode, awayCode);
   const players = [
     // Team 0 attacks DOWN, defends TOP goal
-    { x: midX, y: py + 50, vx: 0, vy: 0, r: PR, team: 0, role: 'gk' },
-    { x: midX - 130, y: midY - 140, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
-    { x: midX + 130, y: midY - 140, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
+    { x: midX, y: py + 55, vx: 0, vy: 0, r: PR, team: 0, role: 'gk' },
+    { x: midX - 150, y: midY - 120, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
+    { x: midX + 150, y: midY - 120, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
     // Team 1 attacks UP, defends BOTTOM goal
-    { x: midX, y: py + ph - 50, vx: 0, vy: 0, r: PR, team: 1, role: 'gk' },
-    { x: midX - 130, y: midY + 140, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
-    { x: midX + 130, y: midY + 140, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
+    { x: midX, y: py + ph - 55, vx: 0, vy: 0, r: PR, team: 1, role: 'gk' },
+    { x: midX - 150, y: midY + 120, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
+    { x: midX + 150, y: midY + 120, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
   ];
-  const referee = { x: midX + 60, y: midY, vx: 0, vy: 0, r: 20 };
-  const ball = { x: midX, y: midY, vx: 0, vy: 0, r: 16 };
+  const referee = { x: midX + 70, y: midY, vx: 0, vy: 0, r: 22 };
+  const ball = { x: midX, y: midY, vx: 0, vy: 0, r: 18 };
   return {
     rand, px, py, pw, ph, midX, midY, goalW, goalH, gLeft, gRight, teams, players, referee, ball,
     goalLog: [], foulLog: [], stuckTimer: 0, lastBallX: midX, lastBallY: midY,
@@ -82,14 +82,14 @@ function bounceRect(b, s) {
 function resetPos(s) {
   const { py, ph, midX, midY, players, ball, referee } = s;
   ball.x = midX; ball.y = midY; ball.vx = 0; ball.vy = 0;
-  players[0].x = midX; players[0].y = py + 50;
-  players[1].x = midX - 130; players[1].y = midY - 140;
-  players[2].x = midX + 130; players[2].y = midY - 140;
-  players[3].x = midX; players[3].y = py + ph - 50;
-  players[4].x = midX - 130; players[4].y = midY + 140;
-  players[5].x = midX + 130; players[5].y = midY + 140;
+  players[0].x = midX; players[0].y = py + 55;
+  players[1].x = midX - 150; players[1].y = midY - 120;
+  players[2].x = midX + 150; players[2].y = midY - 120;
+  players[3].x = midX; players[3].y = py + ph - 55;
+  players[4].x = midX - 150; players[4].y = midY + 120;
+  players[5].x = midX + 150; players[5].y = midY + 120;
   players.forEach(p => { p.vx = 0; p.vy = 0; });
-  referee.x = midX + 60; referee.y = midY; referee.vx = 0; referee.vy = 0;
+  referee.x = midX + 70; referee.y = midY; referee.vx = 0; referee.vy = 0;
 }
 
 function stepSim(s) {
@@ -353,24 +353,21 @@ function drawFrame(ctx, snap) {
   const sbW = W - 144;
   const sbH = 170;
   drawGlassPanel(sbX, sbY, sbW, sbH, 28);
-  drawFlagBadge(teams[0], sbX + 22, sbY + 34, 78);
-  drawFlagBadge(teams[1], sbX + sbW - 100, sbY + 34, 78);
+  // Row 1: flags + names (vertically aligned)
+  const flagSize = 52;
+  const flagY = sbY + 22;
+  drawFlagBadge(teams[0], sbX + 18, flagY, flagSize);
+  c.textAlign = 'left'; c.fillStyle = '#f8fbff'; c.font = '800 28px Inter, sans-serif';
+  c.fillText(teams[0].name, sbX + 18 + flagSize + 14, flagY + flagSize / 2 + 10);
 
-  c.textAlign = 'left';
-  c.fillStyle = '#f8fbff';
-  c.font = '800 27px Inter, sans-serif';
-  c.fillText(teams[0].name, sbX + 118, sbY + 74);
+  drawFlagBadge(teams[1], sbX + sbW - 18 - flagSize, flagY, flagSize);
+  c.textAlign = 'right'; c.fillStyle = '#f8fbff'; c.font = '800 28px Inter, sans-serif';
+  c.fillText(teams[1].name, sbX + sbW - 18 - flagSize - 14, flagY + flagSize / 2 + 10);
 
-  c.textAlign = 'right';
-  c.fillStyle = '#f8fbff';
-  c.font = '800 27px Inter, sans-serif';
-  c.fillText(teams[1].name, sbX + sbW - 118, sbY + 74);
-
-  c.textAlign = 'center';
-  c.fillStyle = '#fff';
-  c.font = '900 88px Inter, sans-serif';
-  c.fillText(String(teams[0].score), sbX + sbW / 2 - 150, sbY + 132);
-  c.fillText(String(teams[1].score), sbX + sbW / 2 + 150, sbY + 132);
+  // Row 2: scores (centered, large)
+  c.textAlign = 'center'; c.fillStyle = '#fff'; c.font = '900 88px Inter, sans-serif';
+  c.fillText(String(teams[0].score), sbX + sbW / 2 - 150, sbY + 140);
+  c.fillText(String(teams[1].score), sbX + sbW / 2 + 150, sbY + 140);
 
   const tSecs = Math.max(0, 90 * (1 - snap.timerFrames / snap.totalFrames));
   const mins = Math.floor(tSecs / 60).toString().padStart(2, '0');
@@ -539,95 +536,85 @@ function drawFrame(ctx, snap) {
     ].slice(-5).reverse(),
   ];
 
-  // INFO PANEL — compact, left-aligned (right margin for TikTok buttons)
-  const panelX = 60;
-  const panelY = py + ph + goalH + 16;
-  const panelW = W - 160; // 80px right margin for TikTok buttons
-  const panelH = H - panelY - 30;
+  // INFO PANEL — same left margin as pitch, right margin for TikTok buttons
+  const panelX = px;
+  const panelY = py + ph + goalH + 20;
+  const panelW = pw; // same width as pitch
+  const panelH = H - panelY - 20;
   drawGlassPanel(panelX, panelY, panelW, panelH, 20);
 
-  // FIFA WORLD CUP title — big
-  c.fillStyle = 'rgba(255,255,255,0.85)';
-  c.font = '800 28px Inter, sans-serif';
+  // FIFA WORLD CUP 2026 — BIG
+  c.fillStyle = '#fff';
+  c.font = '900 36px Inter, sans-serif';
   c.textAlign = 'center';
-  c.fillText('FIFA WORLD CUP 2026', panelX + panelW / 2, panelY + 36);
+  c.fillText('FIFA WORLD CUP 2026', panelX + panelW / 2, panelY + 42);
 
-  // Possession bar — bigger
-  const possessionY = panelY + 56;
+  // Possession bar — BIG
+  const possessionY = panelY + 68;
   const possessionX = panelX + 24;
   const possessionW = panelW - 48;
-  const leftPW = Math.max(18, (possessionW * possession[0]) / 100);
+  const leftPW = Math.max(24, (possessionW * possession[0]) / 100);
   c.fillStyle = 'rgba(255,255,255,0.08)';
-  roundRect(possessionX, possessionY, possessionW, 24, 12);
+  roundRect(possessionX, possessionY, possessionW, 30, 15);
   c.fill();
   c.fillStyle = teams[0].color || '#fff';
-  roundRect(possessionX, possessionY, leftPW, 24, [12, 0, 0, 12]);
+  roundRect(possessionX, possessionY, leftPW, 30, 15);
   c.fill();
   c.fillStyle = teams[1].color || '#fff';
-  roundRect(possessionX + leftPW, possessionY, possessionW - leftPW, 24, [0, 12, 12, 0]);
+  roundRect(possessionX + leftPW, possessionY, possessionW - leftPW, 30, 15);
   c.fill();
-  c.fillStyle = '#fff'; c.font = '800 20px Inter, sans-serif';
+  c.fillStyle = '#fff'; c.font = '900 24px Inter, sans-serif';
   c.textAlign = 'left'; c.fillText(`${possession[0]}%`, possessionX, possessionY - 8);
   c.textAlign = 'right'; c.fillText(`${possession[1]}%`, possessionX + possessionW, possessionY - 8);
-  c.textAlign = 'center'; c.fillStyle = 'rgba(255,255,255,0.7)'; c.font = '700 18px Inter, sans-serif';
+  c.textAlign = 'center'; c.fillStyle = 'rgba(255,255,255,0.8)'; c.font = '800 22px Inter, sans-serif';
   c.fillText('Possession', panelX + panelW / 2, possessionY - 8);
 
-  // Two columns: team name + flag + yellow card rectangles
-  const colY = possessionY + 40;
-  const colW = panelW / 2 - 16;
+  // Two columns: flag + team name + yellow card rectangles (no text, just visual)
+  const colY = possessionY + 48;
 
   // Left column (team 0)
-  drawFlagBadge(teams[0], panelX + 20, colY, 48);
-  c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = '900 32px Inter, sans-serif';
-  c.fillText(teams[0].name, panelX + 80, colY + 34);
-  // Yellow card rectangles
+  drawFlagBadge(teams[0], panelX + 20, colY, 56);
+  c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = '900 38px Inter, sans-serif';
+  c.fillText(teams[0].name, panelX + 90, colY + 40);
   for (let yc = 0; yc < teams[0].fouls; yc++) {
     c.fillStyle = '#f4c845';
-    roundRect(panelX + 80 + yc * 28, colY + 48, 22, 30, 4);
+    roundRect(panelX + 90 + yc * 32, colY + 54, 24, 34, 5);
     c.fill();
-  }
-  if (teams[0].fouls === 0) {
-    c.fillStyle = 'rgba(255,255,255,0.2)'; c.font = '600 16px Inter, sans-serif';
-    c.fillText('No cards', panelX + 80, colY + 68);
   }
 
   // Right column (team 1)
-  drawFlagBadge(teams[1], panelX + panelW / 2 + 20, colY, 48);
-  c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = '900 32px Inter, sans-serif';
-  c.fillText(teams[1].name, panelX + panelW / 2 + 80, colY + 34);
+  drawFlagBadge(teams[1], panelX + panelW / 2 + 20, colY, 56);
+  c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = '900 38px Inter, sans-serif';
+  c.fillText(teams[1].name, panelX + panelW / 2 + 90, colY + 40);
   for (let yc = 0; yc < teams[1].fouls; yc++) {
     c.fillStyle = '#f4c845';
-    roundRect(panelX + panelW / 2 + 80 + yc * 28, colY + 48, 22, 30, 4);
+    roundRect(panelX + panelW / 2 + 90 + yc * 32, colY + 54, 24, 34, 5);
     c.fill();
   }
-  if (teams[1].fouls === 0) {
-    c.fillStyle = 'rgba(255,255,255,0.2)'; c.font = '600 16px Inter, sans-serif';
-    c.fillText('No cards', panelX + panelW / 2 + 80, colY + 68);
-  }
 
-  // Events list — scrolling from bottom, most recent on top
-  const eventsY = colY + 95;
+  // Events list — goals and fouls pop up, most recent first
+  const eventsY = colY + 100;
   const allMatchEvents = [
     ...goalLog.map(g => ({ type: 'goal', team: g.team, timeStr: g.timeStr, label: 'GOAL', accent: '#4ADE80' })),
     ...foulLog.map(f => ({ type: 'foul', team: f.team, timeStr: f.timeStr, label: 'FOUL', accent: '#f4c845' })),
   ].sort((a, b) => {
-    const ta = parseInt(a.timeStr.replace("'", '.'));
-    const tb = parseInt(b.timeStr.replace("'", '.'));
-    return tb - ta; // most recent first
-  }).slice(0, 4); // show max 4
+    const ta = parseFloat(a.timeStr.replace("'", '.'));
+    const tb = parseFloat(b.timeStr.replace("'", '.'));
+    return tb - ta;
+  }).slice(0, 3);
 
   allMatchEvents.forEach((evt, i) => {
-    const rowY = eventsY + i * 46;
-    if (rowY + 36 > panelY + panelH - 10) return; // don't overflow panel
+    const rowY = eventsY + i * 50;
+    if (rowY + 40 > panelY + panelH - 8) return;
     c.fillStyle = 'rgba(255,255,255,0.06)';
-    roundRect(panelX + 16, rowY, panelW - 32, 38, 10);
+    roundRect(panelX + 16, rowY, panelW - 32, 42, 12);
     c.fill();
     c.fillStyle = teams[evt.team].color;
-    c.fillRect(panelX + 16, rowY, 5, 38);
-    c.fillStyle = evt.accent; c.font = '800 18px Fira Code, monospace'; c.textAlign = 'left';
-    c.fillText(evt.timeStr, panelX + 32, rowY + 26);
-    c.fillStyle = '#fff'; c.font = '800 22px Inter, sans-serif';
-    c.fillText(`${evt.label} — ${teams[evt.team].shortName || teams[evt.team].name}`, panelX + 130, rowY + 26);
+    c.fillRect(panelX + 16, rowY, 6, 42);
+    c.fillStyle = evt.accent; c.font = '900 22px Fira Code, monospace'; c.textAlign = 'left';
+    c.fillText(evt.timeStr, panelX + 36, rowY + 30);
+    c.fillStyle = '#fff'; c.font = '900 26px Inter, sans-serif';
+    c.fillText(`${evt.label} — ${teams[evt.team].shortName || teams[evt.team].name}`, panelX + 150, rowY + 30);
   });
 
   if (snap.foulFlash > 0) {

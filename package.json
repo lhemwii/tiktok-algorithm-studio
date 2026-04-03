@@ -10,7 +10,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "studio": "remotion studio remotion/index.jsx",
-    "render": "remotion render remotion/index.jsx WorldCup out/worldcup_4k.mp4 --codec h264 --video-bitrate 80M --image-format png --color-space bt709",
+    "render": "remotion render remotion/index.jsx WorldCup out/worldcup_4k.mp4 --codec h264 --crf 1 --image-format png --color-space bt709",
     "render:match": "node render-match.js",
     "render:all": "node render-match.js all"
   },

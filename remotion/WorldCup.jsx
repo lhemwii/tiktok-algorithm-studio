@@ -39,7 +39,7 @@ function initState(seed, homeCode, awayCode, matchInfo) {
     { x: midX - 150, y: midY + 120, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
     { x: midX + 150, y: midY + 120, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
   ];
-  const referee = { x: midX + 70, y: midY, vx: 0, vy: 0, r: 22 };
+  const referee = { x: midX + 70, y: midY, vx: 0, vy: 0, r: PR };
   const ball = { x: midX, y: midY, vx: 0, vy: 0, r: 18 };
   return {
     rand, px, py, pw, ph, midX, midY, goalW, goalH, gLeft, gRight, teams, players, referee, ball,
@@ -501,17 +501,14 @@ function drawFrame(ctx, snap) {
     c.lineWidth = 2;
     c.beginPath(); c.arc(0, 0, pl.r, 0, Math.PI * 2); c.stroke();
     const eyeAngle = Math.atan2(ball.y - pl.y, ball.x - pl.x);
-    // Eyes proportional to player size
-    const es = pl.r / 22; // scale factor (22 was original PR)
+    // Eyes — smaller, no border
+    const es = pl.r / 28;
     c.fillStyle = '#fff';
-    c.beginPath(); c.ellipse(-9 * es, -5 * es, 11 * es, 14 * es, 0, 0, Math.PI * 2); c.fill();
-    c.beginPath(); c.ellipse(9 * es, -5 * es, 11 * es, 14 * es, 0, 0, Math.PI * 2); c.fill();
-    c.strokeStyle = '#222'; c.lineWidth = 1.5;
-    c.beginPath(); c.ellipse(-9 * es, -5 * es, 11 * es, 14 * es, 0, 0, Math.PI * 2); c.stroke();
-    c.beginPath(); c.ellipse(9 * es, -5 * es, 11 * es, 14 * es, 0, 0, Math.PI * 2); c.stroke();
+    c.beginPath(); c.ellipse(-8 * es, -4 * es, 9 * es, 12 * es, 0, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.ellipse(8 * es, -4 * es, 9 * es, 12 * es, 0, 0, Math.PI * 2); c.fill();
     c.fillStyle = '#111';
-    c.beginPath(); c.arc(-9 * es + Math.cos(eyeAngle) * 4 * es, -5 * es + Math.sin(eyeAngle) * 4 * es, 5 * es, 0, Math.PI * 2); c.fill();
-    c.beginPath(); c.arc(9 * es + Math.cos(eyeAngle) * 4 * es, -5 * es + Math.sin(eyeAngle) * 4 * es, 5 * es, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.arc(-8 * es + Math.cos(eyeAngle) * 3.5 * es, -4 * es + Math.sin(eyeAngle) * 3.5 * es, 4 * es, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.arc(8 * es + Math.cos(eyeAngle) * 3.5 * es, -4 * es + Math.sin(eyeAngle) * 3.5 * es, 4 * es, 0, Math.PI * 2); c.fill();
     c.restore();
   });
 
@@ -523,14 +520,16 @@ function drawFrame(ctx, snap) {
   c.fillStyle = '#131313';
   c.beginPath(); c.arc(0, 0, referee.r, 0, Math.PI * 2); c.fill();
   c.fillStyle = '#ffd54a';
-  c.fillRect(-referee.r, -4, referee.r * 2, 8);
+  c.fillRect(-referee.r, -5, referee.r * 2, 10);
   const rea = Math.atan2(ball.y - referee.y, ball.x - referee.x);
+  // Same eye size as players, no border
+  const res = referee.r / 28;
   c.fillStyle = '#fff';
-  c.beginPath(); c.ellipse(-5, -4, 6, 8, 0, 0, Math.PI * 2); c.fill();
-  c.beginPath(); c.ellipse(5, -4, 6, 8, 0, 0, Math.PI * 2); c.fill();
+  c.beginPath(); c.ellipse(-8 * res, -4 * res, 9 * res, 12 * res, 0, 0, Math.PI * 2); c.fill();
+  c.beginPath(); c.ellipse(8 * res, -4 * res, 9 * res, 12 * res, 0, 0, Math.PI * 2); c.fill();
   c.fillStyle = '#111';
-  c.beginPath(); c.arc(-5 + Math.cos(rea) * 2, -4 + Math.sin(rea) * 2, 2.7, 0, Math.PI * 2); c.fill();
-  c.beginPath(); c.arc(5 + Math.cos(rea) * 2, -4 + Math.sin(rea) * 2, 2.7, 0, Math.PI * 2); c.fill();
+  c.beginPath(); c.arc(-8 * res + Math.cos(rea) * 3.5 * res, -4 * res + Math.sin(rea) * 3.5 * res, 4 * res, 0, Math.PI * 2); c.fill();
+  c.beginPath(); c.arc(8 * res + Math.cos(rea) * 3.5 * res, -4 * res + Math.sin(rea) * 3.5 * res, 4 * res, 0, Math.PI * 2); c.fill();
   c.restore();
 
   const teamEvents = [

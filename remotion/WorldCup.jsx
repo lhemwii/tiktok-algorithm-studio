@@ -759,21 +759,25 @@ function drawFrame(ctx, snap) {
   if (snap.foulFlash > 0) {
     c.fillStyle = `rgba(244,200,69,${(snap.foulFlash / 40) * 0.24})`;
     c.fillRect(0, 0, W, H);
-    c.fillStyle = '#f4c845';
+    // YELLOW CARD — centered in pitch, white with glow
+    c.save();
+    c.shadowColor = 'rgba(255,255,255,0.6)'; c.shadowBlur = 20;
+    c.fillStyle = '#fff';
     c.textAlign = 'center';
-    c.font = '900 86px Inter, sans-serif';
-    c.fillText('YELLOW CARD', W / 2, midY - 16);
+    c.font = '900 76px Inter, sans-serif';
+    c.fillText('YELLOW CARD', midX, midY);
+    c.restore();
   }
   if (snap.goalFlash > 0) {
     c.fillStyle = `rgba(255,255,255,${(snap.goalFlash / 30) * 0.26})`;
     c.fillRect(0, 0, W, H);
   }
-  // === SCROLLING TICKER above scoreboard ===
-  const tickerY = sbY - 36;
-  const tickerText = 'NEXT MATCH? TOP COMMENT PICKS THE TEAMS!     \u26BD     NEXT MATCH? TOP COMMENT PICKS THE TEAMS!     \u26BD     ';
-  const tickerSpeed = elapsed * 3; // pixels scroll based on match time
-  c.fillStyle = 'rgba(244,200,69,0.9)';
-  c.font = '800 22px Inter, sans-serif';
+  // === SCROLLING TICKER above scoreboard — bigger, faster, white ===
+  const tickerY = sbY - 30;
+  const tickerText = 'NEXT MATCH ?  TOP COMMENT PICKS THE TEAMS !     \u26BD     NEXT MATCH ?  TOP COMMENT PICKS THE TEAMS !     \u26BD     ';
+  const tickerSpeed = elapsed * 8;
+  c.fillStyle = '#fff';
+  c.font = '900 30px Inter, sans-serif';
   c.textAlign = 'left';
   const textW = c.measureText(tickerText).width;
   const offsetX = -(tickerSpeed % textW);
@@ -781,44 +785,56 @@ function drawFrame(ctx, snap) {
     c.fillText(tickerText, tx2, tickerY);
   }
 
-  // === HOOK OVERLAY (first 4 seconds = 120 frames) ===
+  // === HOOK OVERLAY (first 4 seconds = 120 frames) — glassmorphism ===
   if (snap.timerFrames < 120) {
-    const hookAlpha = snap.timerFrames < 90 ? 0.85 : 0.85 * ((120 - snap.timerFrames) / 30);
-    c.fillStyle = `rgba(0,0,0,${hookAlpha * 0.6})`;
-    c.fillRect(0, midY - 100, W, 200);
-    c.fillStyle = `rgba(255,255,255,${hookAlpha})`;
+    const hookAlpha = snap.timerFrames < 90 ? 1 : ((120 - snap.timerFrames) / 30);
+    const hookH = 220;
+    const hookY = midY - hookH / 2;
+    c.save();
+    c.globalAlpha = hookAlpha;
+    drawGlassPanel(px + 20, hookY, pw - 40, hookH, 20);
+    c.fillStyle = '#fff';
     c.textAlign = 'center';
-    c.font = '900 56px Inter, sans-serif';
-    c.fillText('WHO WINS? \u26BD', W / 2, midY - 20);
+    c.font = '900 58px Inter, sans-serif';
+    c.fillText('WHO WINS ?  \u26BD', midX, hookY + 60);
+    c.fillStyle = '#fff';
     c.font = '800 34px Inter, sans-serif';
-    c.fillStyle = `rgba(74,222,128,${hookAlpha})`;
-    c.fillText('Comment your prediction!', W / 2, midY + 30);
-    c.font = '700 26px Inter, sans-serif';
-    c.fillStyle = `rgba(255,255,255,${hookAlpha * 0.7})`;
-    c.fillText(`Like = ${teams[0].shortName || teams[0].name}     Save = ${teams[1].shortName || teams[1].name}`, W / 2, midY + 74);
+    c.fillText('Comment your prediction !', midX, hookY + 110);
+    c.fillStyle = '#fff';
+    c.font = '700 28px Inter, sans-serif';
+    c.fillText(`Like = ${teams[0].shortName || teams[0].name}          Save = ${teams[1].shortName || teams[1].name}`, midX, hookY + 160);
+    c.restore();
   }
 
   // === TENSION MOMENTS ===
   const totalGoals = teams[0].score + teams[1].score;
-  // TIED alert
+  // Pitch upper quarter for tension text
+  const pitchTopQuarter = py + ph / 4;
+
+  // TIED alert — inside pitch, white with glow
   if (teams[0].score === teams[1].score && totalGoals > 0 && snap.goalFlash > 15) {
-    c.fillStyle = 'rgba(244,200,69,0.9)';
+    c.save();
+    c.shadowColor = 'rgba(255,255,255,0.7)'; c.shadowBlur = 20;
+    c.fillStyle = '#fff';
     c.textAlign = 'center';
     c.font = '900 52px Inter, sans-serif';
-    c.fillText('TIED! Who breaks it?', W / 2, py - 20);
+    c.fillText('TIED !  Who breaks it ?', midX, pitchTopQuarter);
+    c.restore();
   }
-  // COMEBACK alert — check if a team just equalized or overtook
+  // COMEBACK alert — inside pitch, white with glow
   if (snap.goalFlash > 10 && snap.goalFlash < 25) {
     const lastGoal = goalLog.length > 0 ? goalLog[goalLog.length - 1] : null;
     if (lastGoal) {
       const scoringTeam = lastGoal.team;
       const otherTeam = scoringTeam === 0 ? 1 : 0;
-      // If scoring team was behind before this goal
       if (teams[scoringTeam].score >= teams[otherTeam].score && goalLog.filter(g => g.team === scoringTeam).length > 1) {
-        c.fillStyle = 'rgba(239,68,68,0.9)';
+        c.save();
+        c.shadowColor = 'rgba(255,255,255,0.7)'; c.shadowBlur = 20;
+        c.fillStyle = '#fff';
         c.textAlign = 'center';
-        c.font = '900 58px Inter, sans-serif';
-        c.fillText('COMEBACK?!', W / 2, py - 20);
+        c.font = '900 62px Inter, sans-serif';
+        c.fillText('COMEBACK ?!', midX, pitchTopQuarter);
+        c.restore();
       }
     }
   }
@@ -829,37 +845,40 @@ function drawFrame(ctx, snap) {
     const countdownNum = Math.ceil(framesLeft / 30);
     const pulse2 = 1 + Math.sin(snap.timerFrames * 0.3) * 0.1;
     c.save();
-    c.translate(W / 2, midY);
+    c.translate(midX, midY);
     c.scale(pulse2, pulse2);
-    c.fillStyle = `rgba(255,255,255,${Math.min(1, (framesLeft - 90) / 60) * 0.5})`;
+    c.shadowColor = 'rgba(255,255,255,0.7)'; c.shadowBlur = 25;
+    c.fillStyle = `rgba(255,255,255,${Math.min(1, (framesLeft - 90) / 60) * 0.7})`;
     c.textAlign = 'center';
-    c.font = '900 120px Inter, sans-serif';
-    c.fillText(countdownNum, 0, 40);
+    c.font = '900 140px Inter, sans-serif';
+    c.fillText(countdownNum, 0, 50);
     c.restore();
   }
 
   // === FULL TIME + WERE YOU RIGHT (last 3 seconds = 90 frames) ===
   if (framesLeft <= 90) {
-    c.fillStyle = 'rgba(6,10,16,0.85)';
-    c.fillRect(0, H / 2 - 160, W, 320);
+    // Glassmorphism panel centered in pitch
+    const ftH = 300;
+    const ftY = midY - ftH / 2;
+    drawGlassPanel(px + 20, ftY, pw - 40, ftH, 22);
     c.textAlign = 'center';
     c.fillStyle = 'rgba(255,255,255,0.7)';
-    c.font = '700 28px Inter, sans-serif';
-    c.fillText('FULL TIME', W / 2, H / 2 - 100);
+    c.font = '700 30px Inter, sans-serif';
+    c.fillText('FULL TIME', midX, ftY + 45);
     c.fillStyle = '#fff';
-    c.font = '900 96px Inter, sans-serif';
-    c.fillText(`${teams[0].score} - ${teams[1].score}`, W / 2, H / 2 - 10);
+    c.font = '900 90px Inter, sans-serif';
+    c.fillText(`${teams[0].score} - ${teams[1].score}`, midX, ftY + 130);
     c.fillStyle = '#f4c845';
     c.font = '800 38px Inter, sans-serif';
     const winner = teams[0].score > teams[1].score ? teams[0].name : teams[1].score > teams[0].score ? teams[1].name : 'DRAW';
-    c.fillText(winner === 'DRAW' ? 'DRAW' : `${winner} WINS`, W / 2, H / 2 + 50);
-    // WERE YOU RIGHT
+    c.fillText(winner === 'DRAW' ? 'DRAW' : `${winner} WINS`, midX, ftY + 185);
+    // WERE YOU RIGHT — inside the glassmorphism panel
     c.fillStyle = '#4ADE80';
     c.font = '900 32px Inter, sans-serif';
-    c.fillText('Were you right? \uD83D\uDC40', W / 2, H / 2 + 100);
-    c.fillStyle = 'rgba(255,255,255,0.5)';
+    c.fillText('Were you right ?  \uD83D\uDC40', midX, ftY + 235);
+    c.fillStyle = 'rgba(255,255,255,0.6)';
     c.font = '700 24px Inter, sans-serif';
-    c.fillText('Comment the exact score to be featured!', W / 2, H / 2 + 140);
+    c.fillText('Comment the exact score to be featured !', midX, ftY + 275);
   }
 
   c.restore();

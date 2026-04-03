@@ -21,8 +21,8 @@ function seededRandom(seed) {
 function initState(seed, homeCode, awayCode, matchInfo) {
   const rand = seededRandom(seed);
   // VERTICAL pitch — goals at top and bottom
-  // py=480 leaves room for scoreboard + top cage. ph=820 leaves room for bottom cage + panel
-  const px = 60, py = 480, pw = 880, ph = 820;
+  // Taller pitch — more rectangular, panel reduced below
+  const px = 60, py = 470, pw = 880, ph = 920;
   const midX = px + pw / 2, midY = py + ph / 2;
   // Goals: big visible cages above/below
   const goalW = 280, goalH = 60;
@@ -402,10 +402,10 @@ function drawFrame(ctx, snap) {
   }
   // Neon glow lines
   c.save();
-  c.shadowColor = 'rgba(255,255,255,0.25)';
-  c.shadowBlur = 22;
-  c.strokeStyle = 'rgba(255,255,255,0.98)';
-  c.lineWidth = 6;
+  c.shadowColor = 'rgba(255,255,255,0.5)';
+  c.shadowBlur = 30;
+  c.strokeStyle = '#fff';
+  c.lineWidth = 8;
   c.strokeRect(px, py, pw, ph);
   // Center line (horizontal for vertical pitch)
   c.beginPath(); c.moveTo(px, midY); c.lineTo(px + pw, midY); c.stroke();
@@ -501,8 +501,8 @@ function drawFrame(ctx, snap) {
     c.lineWidth = 2;
     c.beginPath(); c.arc(0, 0, pl.r, 0, Math.PI * 2); c.stroke();
     const eyeAngle = Math.atan2(ball.y - pl.y, ball.x - pl.x);
-    // Eyes — smaller, no border
-    const es = pl.r / 28;
+    // Eyes — no border
+    const es = pl.r / 25;
     c.fillStyle = '#fff';
     c.beginPath(); c.ellipse(-8 * es, -4 * es, 9 * es, 12 * es, 0, 0, Math.PI * 2); c.fill();
     c.beginPath(); c.ellipse(8 * es, -4 * es, 9 * es, 12 * es, 0, 0, Math.PI * 2); c.fill();
@@ -523,7 +523,7 @@ function drawFrame(ctx, snap) {
   c.fillRect(-referee.r, -5, referee.r * 2, 10);
   const rea = Math.atan2(ball.y - referee.y, ball.x - referee.x);
   // Same eye size as players, no border
-  const res = referee.r / 28;
+  const res = referee.r / 25;
   c.fillStyle = '#fff';
   c.beginPath(); c.ellipse(-8 * res, -4 * res, 9 * res, 12 * res, 0, 0, Math.PI * 2); c.fill();
   c.beginPath(); c.ellipse(8 * res, -4 * res, 9 * res, 12 * res, 0, 0, Math.PI * 2); c.fill();
@@ -545,9 +545,9 @@ function drawFrame(ctx, snap) {
 
   // INFO PANEL — same left margin as pitch, right margin for TikTok buttons
   const panelX = px;
-  const panelY = py + ph + goalH + 20;
-  const panelW = pw; // same width as pitch
-  const panelH = H - panelY - 20;
+  const panelY = py + ph + goalH + 10;
+  const panelW = pw;
+  const panelH = H - panelY - 16;
   drawGlassPanel(panelX, panelY, panelW, panelH, 20);
 
   // FIFA WORLD CUP 2026 — BIG

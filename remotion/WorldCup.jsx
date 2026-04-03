@@ -21,25 +21,26 @@ function seededRandom(seed) {
 function initState(seed, homeCode, awayCode, matchInfo) {
   const rand = seededRandom(seed);
   // VERTICAL pitch — goals at top and bottom
-  const px = 60, py = 280, pw = 880, ph = 1100;
+  // Leave space: scoreboard ~370px from top, info panel ~300px from bottom
+  const px = 60, py = 420, pw = 880, ph = 950;
   const midX = px + pw / 2, midY = py + ph / 2;
-  // Goals are horizontal bars at top and bottom of pitch
-  const goalW = 240, goalH = 45; // width of goal opening, depth of net
+  // Goals: horizontal bars, visible above/below the pitch
+  const goalW = 260, goalH = 50;
   const gLeft = midX - goalW / 2, gRight = midX + goalW / 2;
-  const PR = 30; // bigger players
+  const PR = 38; // BIG players
   const teams = getTeamPair(homeCode, awayCode);
   const players = [
     // Team 0 attacks DOWN, defends TOP goal
-    { x: midX, y: py + 40, vx: 0, vy: 0, r: PR, team: 0, role: 'gk' },
-    { x: midX - 100, y: midY - 160, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
-    { x: midX + 100, y: midY - 160, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
+    { x: midX, y: py + 50, vx: 0, vy: 0, r: PR, team: 0, role: 'gk' },
+    { x: midX - 130, y: midY - 140, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
+    { x: midX + 130, y: midY - 140, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
     // Team 1 attacks UP, defends BOTTOM goal
-    { x: midX, y: py + ph - 40, vx: 0, vy: 0, r: PR, team: 1, role: 'gk' },
-    { x: midX - 100, y: midY + 160, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
-    { x: midX + 100, y: midY + 160, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
+    { x: midX, y: py + ph - 50, vx: 0, vy: 0, r: PR, team: 1, role: 'gk' },
+    { x: midX - 130, y: midY + 140, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
+    { x: midX + 130, y: midY + 140, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
   ];
-  const referee = { x: midX + 50, y: midY, vx: 0, vy: 0, r: 16 };
-  const ball = { x: midX, y: midY, vx: 0, vy: 0, r: 14 };
+  const referee = { x: midX + 60, y: midY, vx: 0, vy: 0, r: 20 };
+  const ball = { x: midX, y: midY, vx: 0, vy: 0, r: 16 };
   return {
     rand, px, py, pw, ph, midX, midY, goalW, goalH, gLeft, gRight, teams, players, referee, ball,
     goalLog: [], foulLog: [], stuckTimer: 0, lastBallX: midX, lastBallY: midY,
@@ -81,16 +82,14 @@ function bounceRect(b, s) {
 function resetPos(s) {
   const { py, ph, midX, midY, players, ball, referee } = s;
   ball.x = midX; ball.y = midY; ball.vx = 0; ball.vy = 0;
-  // Team 0: GK top, fields upper half
-  players[0].x = midX; players[0].y = py + 40;
-  players[1].x = midX - 100; players[1].y = midY - 160;
-  players[2].x = midX + 100; players[2].y = midY - 160;
-  // Team 1: GK bottom, fields lower half
-  players[3].x = midX; players[3].y = py + ph - 40;
-  players[4].x = midX - 100; players[4].y = midY + 160;
-  players[5].x = midX + 100; players[5].y = midY + 160;
+  players[0].x = midX; players[0].y = py + 50;
+  players[1].x = midX - 130; players[1].y = midY - 140;
+  players[2].x = midX + 130; players[2].y = midY - 140;
+  players[3].x = midX; players[3].y = py + ph - 50;
+  players[4].x = midX - 130; players[4].y = midY + 140;
+  players[5].x = midX + 130; players[5].y = midY + 140;
   players.forEach(p => { p.vx = 0; p.vy = 0; });
-  referee.x = midX + 50; referee.y = midY; referee.vx = 0; referee.vy = 0;
+  referee.x = midX + 60; referee.y = midY; referee.vx = 0; referee.vy = 0;
 }
 
 function stepSim(s) {
@@ -540,120 +539,96 @@ function drawFrame(ctx, snap) {
     ].slice(-5).reverse(),
   ];
 
-  const panelX = 56;
-  const panelY = py + ph + 26;
-  const panelW = W - 112;
-  const panelH = H - panelY - 48;
-  drawGlassPanel(panelX, panelY, panelW, panelH, 24);
-  c.fillStyle = 'rgba(255,255,255,0.06)';
-  c.fillRect(panelX + panelW / 2 - 1, panelY + 168, 2, panelH - 192);
+  // INFO PANEL — compact, left-aligned (right margin for TikTok buttons)
+  const panelX = 60;
+  const panelY = py + ph + goalH + 16;
+  const panelW = W - 160; // 80px right margin for TikTok buttons
+  const panelH = H - panelY - 30;
+  drawGlassPanel(panelX, panelY, panelW, panelH, 20);
 
-  c.fillStyle = 'rgba(255,255,255,0.7)';
-  c.font = '800 19px Inter, sans-serif';
+  // FIFA WORLD CUP title — big
+  c.fillStyle = 'rgba(255,255,255,0.85)';
+  c.font = '800 28px Inter, sans-serif';
   c.textAlign = 'center';
-  c.fillText('FIFA WORLD CUP', panelX + panelW / 2, panelY + 38);
-  c.fillStyle = '#fff';
-  c.font = '900 48px Inter, sans-serif';
-  c.fillText(`${teams[0].name} vs ${teams[1].name}`, panelX + panelW / 2, panelY + 92);
+  c.fillText('FIFA WORLD CUP 2026', panelX + panelW / 2, panelY + 36);
 
-  const possessionY = panelY + 126;
-  const possessionX = panelX + 34;
-  const possessionW = panelW - 68;
-  const leftPossessionW = Math.max(18, (possessionW * possession[0]) / 100);
-  const rightPossessionW = Math.max(18, possessionW - leftPossessionW);
+  // Possession bar — bigger
+  const possessionY = panelY + 56;
+  const possessionX = panelX + 24;
+  const possessionW = panelW - 48;
+  const leftPW = Math.max(18, (possessionW * possession[0]) / 100);
   c.fillStyle = 'rgba(255,255,255,0.08)';
-  roundRect(possessionX, possessionY, possessionW, 22, 12);
+  roundRect(possessionX, possessionY, possessionW, 24, 12);
   c.fill();
-  c.fillStyle = teams[0].color || '#ffffff';
-  c.beginPath();
-  c.moveTo(possessionX + 12, possessionY);
-  c.lineTo(possessionX + leftPossessionW, possessionY);
-  c.lineTo(possessionX + leftPossessionW, possessionY + 22);
-  c.lineTo(possessionX + 12, possessionY + 22);
-  c.quadraticCurveTo(possessionX, possessionY + 22, possessionX, possessionY + 10);
-  c.lineTo(possessionX, possessionY + 12);
-  c.quadraticCurveTo(possessionX, possessionY, possessionX + 12, possessionY);
-  c.closePath();
+  c.fillStyle = teams[0].color || '#fff';
+  roundRect(possessionX, possessionY, leftPW, 24, [12, 0, 0, 12]);
   c.fill();
-  c.fillStyle = teams[1].color || '#ffffff';
-  const rightX = possessionX + possessionW - rightPossessionW;
-  c.beginPath();
-  c.moveTo(rightX, possessionY);
-  c.lineTo(possessionX + possessionW - 12, possessionY);
-  c.quadraticCurveTo(possessionX + possessionW, possessionY, possessionX + possessionW, possessionY + 12);
-  c.lineTo(possessionX + possessionW, possessionY + 10);
-  c.quadraticCurveTo(possessionX + possessionW, possessionY + 22, possessionX + possessionW - 12, possessionY + 22);
-  c.lineTo(rightX, possessionY + 22);
-  c.closePath();
+  c.fillStyle = teams[1].color || '#fff';
+  roundRect(possessionX + leftPW, possessionY, possessionW - leftPW, 24, [0, 12, 12, 0]);
   c.fill();
-  c.fillStyle = '#fff';
-  c.font = '800 17px Inter, sans-serif';
-  c.textAlign = 'left';
-  c.fillText(`${possession[0]}%`, possessionX, possessionY - 10);
-  c.textAlign = 'right';
-  c.fillText(`${possession[1]}%`, possessionX + possessionW, possessionY - 10);
-  c.textAlign = 'center';
-  c.fillStyle = 'rgba(255,255,255,0.72)';
-  c.font = '700 15px Inter, sans-serif';
-  c.fillText('Possession', panelX + panelW / 2, possessionY - 10);
+  c.fillStyle = '#fff'; c.font = '800 20px Inter, sans-serif';
+  c.textAlign = 'left'; c.fillText(`${possession[0]}%`, possessionX, possessionY - 8);
+  c.textAlign = 'right'; c.fillText(`${possession[1]}%`, possessionX + possessionW, possessionY - 8);
+  c.textAlign = 'center'; c.fillStyle = 'rgba(255,255,255,0.7)'; c.font = '700 18px Inter, sans-serif';
+  c.fillText('Possession', panelX + panelW / 2, possessionY - 8);
 
-  const drawTeamColumn = (team, side, x, y, width, events) => {
-    const isLeft = side === 'left';
-    const flagX = isLeft ? x : x + width - 72;
-    drawFlagBadge(team, flagX, y, 54);
-    c.textAlign = isLeft ? 'left' : 'right';
-    c.fillStyle = '#fff';
-    c.font = '900 36px Inter, sans-serif';
-    c.fillText(team.name, isLeft ? x + 84 : x + width - 84, y + 36);
+  // Two columns: team name + flag + yellow card rectangles
+  const colY = possessionY + 40;
+  const colW = panelW / 2 - 16;
 
-    const cardY = y + 84;
-    c.fillStyle = 'rgba(255,255,255,0.08)';
-    roundRect(x, cardY, width, 44, 18);
-    c.fill();
+  // Left column (team 0)
+  drawFlagBadge(teams[0], panelX + 20, colY, 48);
+  c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = '900 32px Inter, sans-serif';
+  c.fillText(teams[0].name, panelX + 80, colY + 34);
+  // Yellow card rectangles
+  for (let yc = 0; yc < teams[0].fouls; yc++) {
     c.fillStyle = '#f4c845';
-    roundRect(isLeft ? x + 14 : x + width - 78, cardY + 9, 64, 26, 10);
+    roundRect(panelX + 80 + yc * 28, colY + 48, 22, 30, 4);
     c.fill();
-    c.fillStyle = '#20242c';
-    c.font = '900 15px Inter, sans-serif';
-    c.textAlign = 'center';
-    c.fillText(`YC ${team.fouls}`, isLeft ? x + 46 : x + width - 46, cardY + 27);
-    c.fillStyle = 'rgba(255,255,255,0.72)';
-    c.font = '700 16px Inter, sans-serif';
-    c.fillText('Cards', isLeft ? x + 126 : x + width - 126, cardY + 27);
+  }
+  if (teams[0].fouls === 0) {
+    c.fillStyle = 'rgba(255,255,255,0.2)'; c.font = '600 16px Inter, sans-serif';
+    c.fillText('No cards', panelX + 80, colY + 68);
+  }
 
-    const listTitleY = y + 164;
-    c.textAlign = isLeft ? 'left' : 'right';
-    c.fillStyle = 'rgba(255,255,255,0.75)';
-    c.font = '800 18px Inter, sans-serif';
-    c.fillText('Events', isLeft ? x : x + width, listTitleY);
+  // Right column (team 1)
+  drawFlagBadge(teams[1], panelX + panelW / 2 + 20, colY, 48);
+  c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = '900 32px Inter, sans-serif';
+  c.fillText(teams[1].name, panelX + panelW / 2 + 80, colY + 34);
+  for (let yc = 0; yc < teams[1].fouls; yc++) {
+    c.fillStyle = '#f4c845';
+    roundRect(panelX + panelW / 2 + 80 + yc * 28, colY + 48, 22, 30, 4);
+    c.fill();
+  }
+  if (teams[1].fouls === 0) {
+    c.fillStyle = 'rgba(255,255,255,0.2)'; c.font = '600 16px Inter, sans-serif';
+    c.fillText('No cards', panelX + panelW / 2 + 80, colY + 68);
+  }
 
-    if (events.length > 0) {
-      events.forEach((event, idx) => {
-        const rowY = listTitleY + 34 + idx * 56;
-        c.fillStyle = 'rgba(255,255,255,0.07)';
-        roundRect(x, rowY - 24, width, 44, 16);
-        c.fill();
-        c.fillStyle = event.accent;
-        c.font = '900 20px Fira Code, monospace';
-        c.textAlign = isLeft ? 'left' : 'right';
-        c.fillText(event.timeStr, isLeft ? x + 16 : x + width - 16, rowY + 4);
-        c.fillStyle = '#fff';
-        c.font = '900 22px Inter, sans-serif';
-        c.fillText(event.label, isLeft ? x + 124 : x + width - 124, rowY + 4);
-      });
-    } else {
-      c.fillStyle = 'rgba(255,255,255,0.07)';
-      roundRect(x, listTitleY + 12, width, 44, 16);
-      c.fill();
-      c.fillStyle = 'rgba(255,255,255,0.68)';
-      c.font = '700 18px Inter, sans-serif';
-      c.textAlign = isLeft ? 'left' : 'right';
-      c.fillText('No major event yet', isLeft ? x + 16 : x + width - 16, listTitleY + 40);
-    }
-  };
+  // Events list — scrolling from bottom, most recent on top
+  const eventsY = colY + 95;
+  const allMatchEvents = [
+    ...goalLog.map(g => ({ type: 'goal', team: g.team, timeStr: g.timeStr, label: 'GOAL', accent: '#4ADE80' })),
+    ...foulLog.map(f => ({ type: 'foul', team: f.team, timeStr: f.timeStr, label: 'FOUL', accent: '#f4c845' })),
+  ].sort((a, b) => {
+    const ta = parseInt(a.timeStr.replace("'", '.'));
+    const tb = parseInt(b.timeStr.replace("'", '.'));
+    return tb - ta; // most recent first
+  }).slice(0, 4); // show max 4
 
-  drawTeamColumn(teams[0], 'left', panelX + 32, panelY + 176, panelW / 2 - 48, teamEvents[0]);
-  drawTeamColumn(teams[1], 'right', panelX + panelW / 2 + 16, panelY + 176, panelW / 2 - 48, teamEvents[1]);
+  allMatchEvents.forEach((evt, i) => {
+    const rowY = eventsY + i * 46;
+    if (rowY + 36 > panelY + panelH - 10) return; // don't overflow panel
+    c.fillStyle = 'rgba(255,255,255,0.06)';
+    roundRect(panelX + 16, rowY, panelW - 32, 38, 10);
+    c.fill();
+    c.fillStyle = teams[evt.team].color;
+    c.fillRect(panelX + 16, rowY, 5, 38);
+    c.fillStyle = evt.accent; c.font = '800 18px Fira Code, monospace'; c.textAlign = 'left';
+    c.fillText(evt.timeStr, panelX + 32, rowY + 26);
+    c.fillStyle = '#fff'; c.font = '800 22px Inter, sans-serif';
+    c.fillText(`${evt.label} — ${teams[evt.team].shortName || teams[evt.team].name}`, panelX + 130, rowY + 26);
+  });
 
   if (snap.foulFlash > 0) {
     c.fillStyle = `rgba(244,200,69,${(snap.foulFlash / 40) * 0.24})`;

@@ -115,13 +115,23 @@ function stepSim(s) {
     const ownGoalY = pl.team === 0 ? py : py + ph;
     let tx, ty;
     if (pl.role === 'gk') {
-      // GK: aggressive — tracks ball closely, rushes out far
-      ty = ownGoalY + (pl.team === 0 ? 45 : -45);
-      tx = midX + (ball.x - midX) * 0.9;
-      tx = Math.max(gLeft + 10, Math.min(gRight - 10, tx));
-      // Rush out if ball is anywhere in own half
-      const ballInOwnHalf = pl.team === 0 ? ball.y < midY : ball.y > midY;
-      if (Math.abs(ball.y - ownGoalY) < 250 || ballInOwnHalf) { tx = ball.x; ty = ball.y; }
+      // GK: aggressive but STAYS IN GOAL ZONE. Never leaves the cage area.
+      // Track ball X aggressively within goal width
+      tx = midX + (ball.x - midX) * 0.95;
+      tx = Math.max(gLeft + 5, Math.min(gRight - 5, tx));
+      // Stay on goal line — only go a tiny bit forward
+      const goalLineY = ownGoalY + (pl.team === 0 ? 30 : -30);
+      ty = goalLineY;
+      // If ball is VERY close to goal, rush toward ball but still clamp Y
+      if (Math.abs(ball.y - ownGoalY) < 100) {
+        tx = ball.x;
+        tx = Math.max(gLeft - 10, Math.min(gRight + 10, tx));
+        ty = ball.y;
+        // Clamp Y to goal zone — never more than goalH/2 from goal line
+        const maxDist = s.goalH / 2 + 20;
+        if (pl.team === 0) ty = Math.min(py + maxDist, Math.max(py - s.goalH, ty));
+        else ty = Math.max(py + ph - maxDist, Math.min(py + ph + s.goalH, ty));
+      }
     } else {
       // Field: ALWAYS rush the ball, get behind it to smash toward goal
       const gdx = midX - ball.x, gdy = oppGoalY - ball.y, gd = Math.sqrt(gdx * gdx + gdy * gdy) || 1;
@@ -136,11 +146,11 @@ function stepSim(s) {
       }
     }
     const dx = tx - pl.x, dy = ty - pl.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
-    const accel = pl.role === 'gk' ? 0.9 : 1.1; // MUCH faster
+    const accel = pl.role === 'gk' ? 1.0 : 1.3; // field players VERY fast
     pl.vx += (dx / d) * accel; pl.vy += (dy / d) * accel;
     pl.vx += (rand() - 0.5) * 0.4; pl.vy += (rand() - 0.5) * 0.4;
-    pl.vx *= 0.91; pl.vy *= 0.91;
-    const ms = pl.role === 'gk' ? 10 : 12; // FAST
+    pl.vx *= 0.90; pl.vy *= 0.90;
+    const ms = pl.role === 'gk' ? 9 : 14; // field players VERY fast
     const sp = Math.sqrt(pl.vx * pl.vx + pl.vy * pl.vy);
     if (sp > ms) { pl.vx = (pl.vx / sp) * ms; pl.vy = (pl.vy / sp) * ms; }
     pl.x += pl.vx; pl.y += pl.vy;
@@ -407,11 +417,10 @@ function drawFrame(ctx, snap) {
   const sbMidY = sbY + sbH / 2;
   const centerCX = sbX + sbW / 2;
 
-  // Timer — center pill
-  // Timer goes UP: 0:00 → 90:00 over 65 real seconds
-  const tSecs = Math.min(90, 90 * (snap.timerFrames / snap.totalFrames));
-  const mins = Math.floor(tSecs / 60).toString().padStart(2, '0');
-  const secs = Math.floor(tSecs % 60).toString().padStart(2, '0');
+  // Timer — center pill — goes 00:00 → 90:00 (match minutes) over 65 real seconds
+  const matchMinutes = Math.min(90, 90 * (snap.timerFrames / snap.totalFrames));
+  const mins = Math.floor(matchMinutes).toString().padStart(2, '0');
+  const secs = Math.floor((matchMinutes % 1) * 60).toString().padStart(2, '0');
   c.save();
   c.translate(centerCX, sbMidY - 4);
   c.scale(pulse, pulse);

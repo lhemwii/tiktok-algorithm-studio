@@ -45,7 +45,7 @@ function initState(seed, homeCode, awayCode, matchInfo) {
     rand, px, py, pw, ph, midX, midY, goalW, goalH, gLeft, gRight, teams, players, referee, ball,
     goalLog: [], foulLog: [], stuckTimer: 0, lastBallX: midX, lastBallY: midY,
     foulFlash: 0, goalFlash: 0, kickoff: true, kickoffTimer: 30,
-    timerFrames: 0, totalFrames: 30 * 110, matchInfo: matchInfo || '',
+    timerFrames: 0, totalFrames: 30 * 65, matchInfo: matchInfo || '',
     events: [], // events THIS frame
   };
 }
@@ -96,6 +96,9 @@ function stepSim(s) {
   s.events = []; // clear events for this frame
   const { rand, px, py, pw, ph, midX, midY, gLeft, gRight, players, ball, referee, teams, goalLog, foulLog } = s;
 
+  // Timer ALWAYS ticks — never stops, even during kickoff
+  s.timerFrames++;
+
   if (s.kickoff) {
     s.kickoffTimer--;
     if (s.kickoffTimer <= 0) {
@@ -103,70 +106,94 @@ function stepSim(s) {
       ball.vx = (rand() - 0.5) * 3; ball.vy = (rand() - 0.5) * 3;
       s.events.push('whistle');
     }
-    s.timerFrames++; return;
+    return; // skip physics during kickoff but timer keeps going
   }
-  s.timerFrames++;
 
-  // AI — VERTICAL: team 0 defends TOP, attacks DOWN. Team 1 defends BOTTOM, attacks UP.
+  // AI — ULTRA AGGRESSIVE. Everyone rushes the ball. GK included.
   players.forEach(pl => {
-    const oppGoalY = pl.team === 0 ? py + ph : py; // team 0 attacks bottom, team 1 attacks top
+    const oppGoalY = pl.team === 0 ? py + ph : py;
     const ownGoalY = pl.team === 0 ? py : py + ph;
     let tx, ty;
     if (pl.role === 'gk') {
-      // GK stays on own goal line, tracks ball X
-      ty = ownGoalY + (pl.team === 0 ? 35 : -35);
-      tx = midX + (ball.x - midX) * 0.8;
-      tx = Math.max(gLeft + 15, Math.min(gRight - 15, tx));
-      if (Math.abs(ball.y - ownGoalY) < 150) { tx = ball.x; ty = ball.y; }
+      // GK: aggressive — tracks ball closely, rushes out far
+      ty = ownGoalY + (pl.team === 0 ? 45 : -45);
+      tx = midX + (ball.x - midX) * 0.9;
+      tx = Math.max(gLeft + 10, Math.min(gRight - 10, tx));
+      // Rush out if ball is anywhere in own half
+      const ballInOwnHalf = pl.team === 0 ? ball.y < midY : ball.y > midY;
+      if (Math.abs(ball.y - ownGoalY) < 250 || ballInOwnHalf) { tx = ball.x; ty = ball.y; }
     } else {
-      // Field: get behind ball to push toward opponent goal
+      // Field: ALWAYS rush the ball, get behind it to smash toward goal
       const gdx = midX - ball.x, gdy = oppGoalY - ball.y, gd = Math.sqrt(gdx * gdx + gdy * gdy) || 1;
-      tx = ball.x - (gdx / gd) * (ball.r + pl.r + 5);
-      ty = ball.y - (gdy / gd) * (ball.r + pl.r + 5);
+      tx = ball.x - (gdx / gd) * (ball.r + pl.r + 3);
+      ty = ball.y - (gdy / gd) * (ball.r + pl.r + 3);
       const dist = Math.sqrt((pl.x - ball.x) ** 2 + (pl.y - ball.y) ** 2);
-      if (dist < 55) { tx = ball.x + (gdx / gd) * 8; ty = ball.y + (gdy / gd) * 8; }
+      // When close, RAM the ball toward goal
+      if (dist < 70) { tx = ball.x + (gdx / gd) * 12; ty = ball.y + (gdy / gd) * 12; }
       // Anti-corner
-      if ((pl.y < py + 35 || pl.y > py + ph - 35) && (pl.x < px + 35 || pl.x > px + pw - 35)) {
+      if ((pl.y < py + 30 || pl.y > py + ph - 30) && (pl.x < px + 30 || pl.x > px + pw - 30)) {
         tx = midX + (rand() - 0.5) * 100; ty = midY + (rand() - 0.5) * 100;
       }
     }
     const dx = tx - pl.x, dy = ty - pl.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
-    pl.vx += (dx / d) * 0.75; pl.vy += (dy / d) * 0.75;
-    pl.vx += (rand() - 0.5) * 0.3; pl.vy += (rand() - 0.5) * 0.3;
-    pl.vx *= 0.92; pl.vy *= 0.92;
-    const ms = pl.role === 'gk' ? 7 : 9.5;
+    const accel = pl.role === 'gk' ? 0.9 : 1.1; // MUCH faster
+    pl.vx += (dx / d) * accel; pl.vy += (dy / d) * accel;
+    pl.vx += (rand() - 0.5) * 0.4; pl.vy += (rand() - 0.5) * 0.4;
+    pl.vx *= 0.91; pl.vy *= 0.91;
+    const ms = pl.role === 'gk' ? 10 : 12; // FAST
     const sp = Math.sqrt(pl.vx * pl.vx + pl.vy * pl.vy);
     if (sp > ms) { pl.vx = (pl.vx / sp) * ms; pl.vy = (pl.vy / sp) * ms; }
     pl.x += pl.vx; pl.y += pl.vy;
   });
 
-  // Referee
-  const rtx = ball.x + (ball.x > midX ? -40 : 40), rty = ball.y + 25;
-  const rdx = rtx - referee.x, rdy = rty - referee.y, rd = Math.sqrt(rdx * rdx + rdy * rdy) || 1;
-  referee.vx += (rdx / rd) * 0.2; referee.vy += (rdy / rd) * 0.2;
-  referee.vx *= 0.93; referee.vy *= 0.93;
+  // Referee — follows action but NEVER touches ball. Repels from ball.
+  const refDist = Math.sqrt((referee.x - ball.x) ** 2 + (referee.y - ball.y) ** 2);
+  const refMinDist = referee.r + ball.r + 30; // keep 30px gap from ball
+  if (refDist < refMinDist) {
+    // REPEL — push referee away from ball
+    const repelX = (referee.x - ball.x) / refDist;
+    const repelY = (referee.y - ball.y) / refDist;
+    referee.vx += repelX * 1.5;
+    referee.vy += repelY * 1.5;
+  } else {
+    // Follow action at safe distance
+    const rtx = ball.x + (ball.x > midX ? -60 : 60);
+    const rty = ball.y + (ball.y > midY ? -50 : 50);
+    const rdx = rtx - referee.x, rdy = rty - referee.y, rd = Math.sqrt(rdx * rdx + rdy * rdy) || 1;
+    referee.vx += (rdx / rd) * 0.25; referee.vy += (rdy / rd) * 0.25;
+  }
+  referee.vx *= 0.92; referee.vy *= 0.92;
+  const rspd = Math.sqrt(referee.vx * referee.vx + referee.vy * referee.vy);
+  if (rspd > 8) { referee.vx = (referee.vx / rspd) * 8; referee.vy = (referee.vy / rspd) * 8; }
   referee.x += referee.vx; referee.y += referee.vy;
   bounceRect(referee, s);
 
-  // Stuck detection
+  // Stuck detection — ball must ALWAYS be moving. 2s without real movement = foul
+  const ballSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
   const bmd = Math.sqrt((ball.x - s.lastBallX) ** 2 + (ball.y - s.lastBallY) ** 2);
-  if (bmd < ball.r) s.stuckTimer++; else { s.stuckTimer = 0; s.lastBallX = ball.x; s.lastBallY = ball.y; }
+  if (bmd < ball.r * 2 && ballSpeed < 2) s.stuckTimer++; else { s.stuckTimer = 0; s.lastBallX = ball.x; s.lastBallY = ball.y; }
   if (s.stuckTimer >= 60) {
     s.foulFlash = 40;
-    const atk = ball.y < midY ? 0 : 1; // ball in top half = team 0's territory
+    const atk = ball.y < midY ? 0 : 1;
     teams[atk === 0 ? 1 : 0].fouls++;
     const foulTeam = atk === 0 ? 1 : 0;
     const elapsed = 90 * (s.timerFrames / s.totalFrames);
     foulLog.push({ team: foulTeam, timeStr: `${Math.floor(elapsed / 60)}'${Math.floor(elapsed % 60).toString().padStart(2, '0')}` });
-    ball.vx = (midX - ball.x) * 0.06 + (rand() - 0.5) * 7;
-    ball.vy = (midY - ball.y) * 0.06 + (rand() - 0.5) * 7;
-    // Send opponent back to their half (vertical)
+    // STRONG kick toward center
+    ball.vx = (midX - ball.x) * 0.1 + (rand() - 0.5) * 10;
+    ball.vy = (midY - ball.y) * 0.1 + (rand() - 0.5) * 10;
     players.forEach(pl => { if (pl.team !== atk) { pl.y = pl.team === 0 ? py + ph / 4 : py + ph * 3 / 4; pl.x = midX + (rand() - 0.5) * 200; pl.vx = 0; pl.vy = 0; } });
     s.stuckTimer = 0; s.lastBallX = ball.x; s.lastBallY = ball.y;
     s.events.push('whistle');
   }
 
-  ball.vx *= 0.997; ball.vy *= 0.997; ball.x += ball.vx; ball.y += ball.vy;
+  // Ball — FASTER, less friction, more energy
+  ball.vx *= 0.998; ball.vy *= 0.998; ball.x += ball.vx; ball.y += ball.vy;
+  // Minimum ball speed — if too slow, give it a nudge
+  if (ballSpeed < 1.5 && !s.kickoff) {
+    ball.vx += (rand() - 0.5) * 2;
+    ball.vy += (rand() - 0.5) * 2;
+  }
   if (bounceRect(ball, s)) s.events.push('bounce');
   players.forEach(pl => {
     bounceRect(pl, s);
@@ -180,8 +207,26 @@ function stepSim(s) {
       collide(players[i], players[j]);
     }
   }
-  if (collide(referee, ball)) s.events.push('kick');
-  players.forEach(pl => collide(referee, pl));
+  // Referee NEVER touches ball — force separation if too close
+  const rbDist = Math.sqrt((referee.x - ball.x) ** 2 + (referee.y - ball.y) ** 2);
+  if (rbDist < referee.r + ball.r + 5) {
+    const rnx = (referee.x - ball.x) / rbDist;
+    const rny = (referee.y - ball.y) / rbDist;
+    referee.x = ball.x + rnx * (referee.r + ball.r + 6);
+    referee.y = ball.y + rny * (referee.r + ball.r + 6);
+    referee.vx += rnx * 3; referee.vy += rny * 3;
+  }
+  // Referee is STRONGER than players — players bounce off him harder
+  players.forEach(pl => {
+    const pd = Math.sqrt((referee.x - pl.x) ** 2 + (referee.y - pl.y) ** 2);
+    if (pd < referee.r + pl.r && pd > 0) {
+      const pnx = (pl.x - referee.x) / pd, pny = (pl.y - referee.y) / pd;
+      pl.vx += pnx * 3; pl.vy += pny * 3; // player gets pushed back hard
+      referee.vx -= pnx * 0.5; referee.vy -= pny * 0.5; // referee barely moves
+      pl.x = referee.x + pnx * (referee.r + pl.r + 1);
+      pl.y = referee.y + pny * (referee.r + pl.r + 1);
+    }
+  });
 
   // Goals — VERTICAL: top goal = team 0 defends, bottom goal = team 1 defends
   let scored = -1;
@@ -363,7 +408,8 @@ function drawFrame(ctx, snap) {
   const centerCX = sbX + sbW / 2;
 
   // Timer — center pill
-  const tSecs = Math.max(0, 90 * (1 - snap.timerFrames / snap.totalFrames));
+  // Timer goes UP: 0:00 → 90:00 over 65 real seconds
+  const tSecs = Math.min(90, 90 * (snap.timerFrames / snap.totalFrames));
   const mins = Math.floor(tSecs / 60).toString().padStart(2, '0');
   const secs = Math.floor(tSecs % 60).toString().padStart(2, '0');
   c.save();
@@ -607,15 +653,15 @@ function drawFrame(ctx, snap) {
   c.textAlign = 'center';
   c.fillText('FIFA WORLD CUP 2026', panelX + panelW / 2, panelY + 46);
 
-  // Possession label + percentages — bigger, with spacing
-  const possessionY = panelY + 90;
+  // Possession label + percentages — SAME SIZE as FIFA title (40px)
+  const possessionY = panelY + 96;
   const possessionX = panelX + 24;
   const possessionW = panelW - 48;
-  c.fillStyle = '#fff'; c.font = '900 28px Inter, sans-serif';
-  c.textAlign = 'left'; c.fillText(`${possession[0]}%`, possessionX, possessionY - 6);
-  c.textAlign = 'right'; c.fillText(`${possession[1]}%`, possessionX + possessionW, possessionY - 6);
-  c.textAlign = 'center'; c.fillStyle = 'rgba(255,255,255,0.8)'; c.font = '800 28px Inter, sans-serif';
-  c.fillText('Possession', panelX + panelW / 2, possessionY - 6);
+  c.fillStyle = '#fff'; c.font = '900 40px Inter, sans-serif';
+  c.textAlign = 'left'; c.fillText(`${possession[0]}%`, possessionX, possessionY - 4);
+  c.textAlign = 'right'; c.fillText(`${possession[1]}%`, possessionX + possessionW, possessionY - 4);
+  c.textAlign = 'center'; c.fillStyle = 'rgba(255,255,255,0.8)'; c.font = '800 36px Inter, sans-serif';
+  c.fillText('Possession', panelX + panelW / 2, possessionY - 4);
 
   // Possession bar — rounded ends, STRAIGHT middle join
   const barY = possessionY + 8;
@@ -648,9 +694,9 @@ function drawFrame(ctx, snap) {
   const colY = barY + barH + 16;
 
   // Left column (team 0)
-  drawFlagBadge(teams[0], panelX + 16, colY, 50);
-  c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = '900 34px Inter, sans-serif';
-  c.fillText(teams[0].name, panelX + 80, colY + 36);
+  drawFlagBadge(teams[0], panelX + 16, colY, 56);
+  c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = '900 40px Inter, sans-serif';
+  c.fillText(teams[0].name, panelX + 86, colY + 40);
   for (let yc = 0; yc < teams[0].fouls; yc++) {
     c.fillStyle = '#f4c845';
     roundRect(panelX + 80 + yc * 30, colY + 48, 22, 32, 5);
@@ -658,9 +704,9 @@ function drawFrame(ctx, snap) {
   }
 
   // Right column (team 1)
-  drawFlagBadge(teams[1], panelX + panelW / 2 + 16, colY, 50);
-  c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = '900 34px Inter, sans-serif';
-  c.fillText(teams[1].name, panelX + panelW / 2 + 80, colY + 36);
+  drawFlagBadge(teams[1], panelX + panelW / 2 + 16, colY, 56);
+  c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = '900 40px Inter, sans-serif';
+  c.fillText(teams[1].name, panelX + panelW / 2 + 86, colY + 40);
   for (let yc = 0; yc < teams[1].fouls; yc++) {
     c.fillStyle = '#f4c845';
     roundRect(panelX + panelW / 2 + 80 + yc * 30, colY + 48, 22, 32, 5);
@@ -679,17 +725,17 @@ function drawFrame(ctx, snap) {
   }).slice(0, 3);
 
   allMatchEvents.forEach((evt, i) => {
-    const rowY = eventsY + i * 50;
-    if (rowY + 40 > panelY + panelH - 8) return;
+    const rowY = eventsY + i * 62;
+    if (rowY + 54 > panelY + panelH - 8) return;
     c.fillStyle = 'rgba(255,255,255,0.06)';
-    roundRect(panelX + 16, rowY, panelW - 32, 42, 12);
+    roundRect(panelX + 16, rowY, panelW - 32, 54, 14);
     c.fill();
     c.fillStyle = teams[evt.team].color;
-    c.fillRect(panelX + 16, rowY, 6, 42);
-    c.fillStyle = evt.accent; c.font = '900 22px Fira Code, monospace'; c.textAlign = 'left';
-    c.fillText(evt.timeStr, panelX + 36, rowY + 30);
-    c.fillStyle = '#fff'; c.font = '900 26px Inter, sans-serif';
-    c.fillText(`${evt.label} — ${teams[evt.team].shortName || teams[evt.team].name}`, panelX + 150, rowY + 30);
+    c.fillRect(panelX + 16, rowY, 8, 54);
+    c.fillStyle = evt.accent; c.font = '900 32px Fira Code, monospace'; c.textAlign = 'left';
+    c.fillText(evt.timeStr, panelX + 40, rowY + 38);
+    c.fillStyle = '#fff'; c.font = '900 36px Inter, sans-serif';
+    c.fillText(`${evt.label} — ${teams[evt.team].shortName || teams[evt.team].name}`, panelX + 170, rowY + 38);
   });
 
   if (snap.foulFlash > 0) {

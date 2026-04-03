@@ -402,11 +402,13 @@ function drawFrame(ctx, snap) {
   }
   // Neon glow lines
   c.save();
-  c.shadowColor = 'rgba(255,255,255,0.5)';
-  c.shadowBlur = 30;
+  c.shadowColor = 'rgba(255,255,255,0.6)';
+  c.shadowBlur = 38;
   c.strokeStyle = '#fff';
-  c.lineWidth = 8;
-  c.strokeRect(px, py, pw, ph);
+  c.lineWidth = 10;
+  // Rounded corners pitch
+  roundRect(px, py, pw, ph, 24);
+  c.stroke();
   // Center line (horizontal for vertical pitch)
   c.beginPath(); c.moveTo(px, midY); c.lineTo(px + pw, midY); c.stroke();
   // Center circle
@@ -419,38 +421,57 @@ function drawFrame(ctx, snap) {
   c.strokeRect(midX - penW / 2, py + ph - penH, penW, penH);
   c.restore();
 
-  // GOALS (top and bottom) — visible cages with net fill
+  // GOALS (top and bottom) — rounded corners, same bg green, neon frame
   const drawGoal = (isTop) => {
     const gy = isTop ? py - goalH : py + ph;
     const gyEnd = isTop ? gy : gy + goalH;
     const gyStart = isTop ? py : py + ph;
+    const gw = gRight - gLeft;
+    const yMin = Math.min(gyStart, gyEnd);
 
-    // Background fill so cage is visible on green
-    c.fillStyle = 'rgba(0,0,0,0.25)';
-    c.fillRect(gLeft, Math.min(gyStart, gyEnd), gRight - gLeft, goalH);
+    // Background — same green as main background
+    c.fillStyle = '#0d5f35';
+    if (isTop) {
+      roundRect(gLeft, gy, gw, goalH, [16, 16, 0, 0]);
+    } else {
+      roundRect(gLeft, py + ph, gw, goalH, [0, 0, 16, 16]);
+    }
+    c.fill();
 
-    // Net pattern FIRST (behind frame)
-    c.strokeStyle = 'rgba(255,255,255,0.35)';
+    // Net pattern
+    c.strokeStyle = 'rgba(255,255,255,0.3)';
     c.lineWidth = 1.5;
     for (let nx = gLeft + 14; nx < gRight; nx += 14) {
       c.beginPath(); c.moveTo(nx, gyStart); c.lineTo(nx, gyEnd); c.stroke();
     }
     for (let ny = 1; ny < goalH; ny += 12) {
-      const yy = Math.min(gyStart, gyEnd) + ny;
+      const yy = yMin + ny;
       c.beginPath(); c.moveTo(gLeft, yy); c.lineTo(gRight, yy); c.stroke();
     }
 
-    // Frame — thick white neon
+    // Frame — thick white neon with rounded corners
     c.save();
-    c.shadowColor = 'rgba(255,255,255,0.5)';
-    c.shadowBlur = 16;
+    c.shadowColor = 'rgba(255,255,255,0.6)';
+    c.shadowBlur = 20;
     c.strokeStyle = '#fff';
-    c.lineWidth = 8;
+    c.lineWidth = 10;
     c.beginPath();
     if (isTop) {
-      c.moveTo(gLeft, py); c.lineTo(gLeft, gy); c.lineTo(gRight, gy); c.lineTo(gRight, py);
+      const cr = 16;
+      c.moveTo(gLeft, py);
+      c.lineTo(gLeft, gy + cr);
+      c.quadraticCurveTo(gLeft, gy, gLeft + cr, gy);
+      c.lineTo(gRight - cr, gy);
+      c.quadraticCurveTo(gRight, gy, gRight, gy + cr);
+      c.lineTo(gRight, py);
     } else {
-      c.moveTo(gLeft, py + ph); c.lineTo(gLeft, gyEnd); c.lineTo(gRight, gyEnd); c.lineTo(gRight, py + ph);
+      const cr = 16;
+      c.moveTo(gLeft, py + ph);
+      c.lineTo(gLeft, gyEnd - cr);
+      c.quadraticCurveTo(gLeft, gyEnd, gLeft + cr, gyEnd);
+      c.lineTo(gRight - cr, gyEnd);
+      c.quadraticCurveTo(gRight, gyEnd, gRight, gyEnd - cr);
+      c.lineTo(gRight, py + ph);
     }
     c.stroke();
     c.restore();

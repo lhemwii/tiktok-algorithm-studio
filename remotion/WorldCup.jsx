@@ -45,7 +45,7 @@ function initState(seed, homeCode, awayCode, matchInfo) {
     rand, px, py, pw, ph, midX, midY, goalW, goalH, gLeft, gRight, teams, players, referee, ball,
     goalLog: [], foulLog: [], stuckTimer: 0, lastBallX: midX, lastBallY: midY,
     foulFlash: 0, goalFlash: 0, kickoff: true, kickoffTimer: 30,
-    timerFrames: 0, totalFrames: 30 * 65, matchInfo: matchInfo || '',
+    timerFrames: 0, totalFrames: 30 * 110, matchInfo: matchInfo || '',
     events: [], // events THIS frame
   };
 }
@@ -348,46 +348,67 @@ function drawFrame(ctx, snap) {
       ];
   possession[1] = 100 - possession[0];
 
-  const sbX = 72;
-  const sbY = 190;
-  const sbW = W - 144;
-  const sbH = 170;
-  drawGlassPanel(sbX, sbY, sbW, sbH, 28);
-  // Row 1: flags + names (vertically aligned)
-  const flagSize = 52;
-  const flagY = sbY + 22;
-  drawFlagBadge(teams[0], sbX + 18, flagY, flagSize);
-  c.textAlign = 'left'; c.fillStyle = '#f8fbff'; c.font = '800 28px Inter, sans-serif';
-  c.fillText(teams[0].name, sbX + 18 + flagSize + 14, flagY + flagSize / 2 + 10);
+  // SCOREBOARD — clean layout:
+  // Row 1: [FLAG]  [FLAG]          (wide flags)
+  // Row 2: [SCORE] [TIMER] [SCORE] (big scores flanking timer)
+  // Row 3: [NAME]          [NAME]  (team names)
+  const sbX = px;
+  const sbY = 170;
+  const sbW = pw;
+  const sbH = 230;
+  drawGlassPanel(sbX, sbY, sbW, sbH, 24);
 
-  drawFlagBadge(teams[1], sbX + sbW - 18 - flagSize, flagY, flagSize);
-  c.textAlign = 'right'; c.fillStyle = '#f8fbff'; c.font = '800 28px Inter, sans-serif';
-  c.fillText(teams[1].name, sbX + sbW - 18 - flagSize - 14, flagY + flagSize / 2 + 10);
+  const leftCX = sbX + 160;   // center of left team column
+  const rightCX = sbX + sbW - 160; // center of right team column
+  const centerCX = sbX + sbW / 2;
 
-  // Row 2: scores (centered, large)
-  c.textAlign = 'center'; c.fillStyle = '#fff'; c.font = '900 88px Inter, sans-serif';
-  c.fillText(String(teams[0].score), sbX + sbW / 2 - 150, sbY + 140);
-  c.fillText(String(teams[1].score), sbX + sbW / 2 + 150, sbY + 140);
+  // Row 1: Wide flags
+  const flagW = 120, flagH = 50;
+  c.save();
+  roundRect(leftCX - flagW / 2, sbY + 18, flagW, flagH, 10);
+  c.clip();
+  drawFlag(c, teams[0].flag, leftCX - flagW / 2, sbY + 18, flagW, flagH);
+  c.restore();
+  c.strokeStyle = 'rgba(255,255,255,0.25)'; c.lineWidth = 1.5;
+  roundRect(leftCX - flagW / 2, sbY + 18, flagW, flagH, 10); c.stroke();
 
+  c.save();
+  roundRect(rightCX - flagW / 2, sbY + 18, flagW, flagH, 10);
+  c.clip();
+  drawFlag(c, teams[1].flag, rightCX - flagW / 2, sbY + 18, flagW, flagH);
+  c.restore();
+  roundRect(rightCX - flagW / 2, sbY + 18, flagW, flagH, 10); c.stroke();
+
+  // Row 2: Scores + Timer (all vertically centered)
+  const row2Y = sbY + 130;
+
+  // Scores — BIG
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillStyle = '#fff'; c.font = '900 82px Inter, sans-serif';
+  c.fillText(String(teams[0].score), leftCX, row2Y);
+  c.fillText(String(teams[1].score), rightCX, row2Y);
+
+  // Timer — center pill
   const tSecs = Math.max(0, 90 * (1 - snap.timerFrames / snap.totalFrames));
   const mins = Math.floor(tSecs / 60).toString().padStart(2, '0');
   const secs = Math.floor(tSecs % 60).toString().padStart(2, '0');
   c.save();
-  c.translate(sbX + sbW / 2, sbY + 54);
+  c.translate(centerCX, row2Y);
   c.scale(pulse, pulse);
-  c.fillStyle = '#253a31';
-  roundRect(-100, -6, 200, 58, 22);
+  c.fillStyle = '#1a3328';
+  roundRect(-68, -26, 136, 52, 18);
   c.fill();
-  c.strokeStyle = 'rgba(255,255,255,0.12)';
-  c.lineWidth = 1.75;
-  roundRect(-100, -6, 200, 58, 22);
-  c.stroke();
-  c.fillStyle = '#f6fbf7';
-  c.font = '900 34px Fira Code, monospace';
-  c.textBaseline = 'middle';
-  c.fillText(`${mins}:${secs}`, 0, 22);
+  c.strokeStyle = 'rgba(255,255,255,0.15)'; c.lineWidth = 1.5;
+  roundRect(-68, -26, 136, 52, 18); c.stroke();
+  c.fillStyle = '#fff'; c.font = '900 36px Fira Code, monospace';
+  c.fillText(`${mins}:${secs}`, 0, 0);
   c.restore();
+
+  // Row 3: Names — big, readable
   c.textBaseline = 'alphabetic';
+  c.fillStyle = '#fff'; c.font = '800 32px Inter, sans-serif'; c.textAlign = 'center';
+  c.fillText(teams[0].shortName || teams[0].name, leftCX, sbY + sbH - 16);
+  c.fillText(teams[1].shortName || teams[1].name, rightCX, sbY + sbH - 16);
 
   // VERTICAL PITCH
   const pitchGrad = c.createLinearGradient(px, py, px, py + ph);

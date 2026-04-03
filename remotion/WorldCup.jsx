@@ -20,24 +20,28 @@ function seededRandom(seed) {
 // ============== SIMULATION ==============
 function initState(seed, homeCode, awayCode, matchInfo) {
   const rand = seededRandom(seed);
-  const px = 70, py = 400, pw = W - 140, ph = 580;
+  // VERTICAL pitch — goals at top and bottom
+  const px = 60, py = 280, pw = 880, ph = 1100;
   const midX = px + pw / 2, midY = py + ph / 2;
-  const goalW = 50, goalH = 230;
-  const gTop = midY - goalH / 2, gBot = midY + goalH / 2;
-  const PR = 25;
+  // Goals are horizontal bars at top and bottom of pitch
+  const goalW = 240, goalH = 45; // width of goal opening, depth of net
+  const gLeft = midX - goalW / 2, gRight = midX + goalW / 2;
+  const PR = 30; // bigger players
   const teams = getTeamPair(homeCode, awayCode);
   const players = [
-    { x: px + 36, y: midY, vx: 0, vy: 0, r: PR, team: 0, role: 'gk' },
-    { x: midX - 122, y: midY - 82, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
-    { x: midX - 122, y: midY + 82, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
-    { x: px + pw - 36, y: midY, vx: 0, vy: 0, r: PR, team: 1, role: 'gk' },
-    { x: midX + 122, y: midY - 82, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
-    { x: midX + 122, y: midY + 82, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
+    // Team 0 attacks DOWN, defends TOP goal
+    { x: midX, y: py + 40, vx: 0, vy: 0, r: PR, team: 0, role: 'gk' },
+    { x: midX - 100, y: midY - 160, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
+    { x: midX + 100, y: midY - 160, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
+    // Team 1 attacks UP, defends BOTTOM goal
+    { x: midX, y: py + ph - 40, vx: 0, vy: 0, r: PR, team: 1, role: 'gk' },
+    { x: midX - 100, y: midY + 160, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
+    { x: midX + 100, y: midY + 160, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
   ];
-  const referee = { x: midX, y: midY + 35, vx: 0, vy: 0, r: 14 };
-  const ball = { x: midX, y: midY, vx: 0, vy: 0, r: 10 };
+  const referee = { x: midX + 50, y: midY, vx: 0, vy: 0, r: 16 };
+  const ball = { x: midX, y: midY, vx: 0, vy: 0, r: 14 };
   return {
-    rand, px, py, pw, ph, midX, midY, goalW, goalH, gTop, gBot, teams, players, referee, ball,
+    rand, px, py, pw, ph, midX, midY, goalW, goalH, gLeft, gRight, teams, players, referee, ball,
     goalLog: [], foulLog: [], stuckTimer: 0, lastBallX: midX, lastBallY: midY,
     foulFlash: 0, goalFlash: 0, kickoff: true, kickoffTimer: 30,
     timerFrames: 0, totalFrames: 30 * 65, matchInfo: matchInfo || '',
@@ -62,31 +66,36 @@ function collide(a, b) {
 }
 
 function bounceRect(b, s) {
-  const { px, py, pw, ph, gTop, gBot } = s;
+  const { px, py, pw, ph, gLeft, gRight } = s;
   let hit = false;
-  if (b.y - b.r < py) { b.y = py + b.r; b.vy = Math.abs(b.vy); hit = true; }
-  if (b.y + b.r > py + ph) { b.y = py + ph - b.r; b.vy = -Math.abs(b.vy); hit = true; }
-  if (b.x - b.r < px && !(b.y > gTop && b.y < gBot)) { b.x = px + b.r; b.vx = Math.abs(b.vx); hit = true; }
-  if (b.x + b.r > px + pw && !(b.y > gTop && b.y < gBot)) { b.x = px + pw - b.r; b.vx = -Math.abs(b.vx); hit = true; }
+  // Left/right walls — always solid
+  if (b.x - b.r < px) { b.x = px + b.r; b.vx = Math.abs(b.vx); hit = true; }
+  if (b.x + b.r > px + pw) { b.x = px + pw - b.r; b.vx = -Math.abs(b.vx); hit = true; }
+  // Top wall — open in goal zone (gLeft to gRight)
+  if (b.y - b.r < py && !(b.x > gLeft && b.x < gRight)) { b.y = py + b.r; b.vy = Math.abs(b.vy); hit = true; }
+  // Bottom wall — open in goal zone
+  if (b.y + b.r > py + ph && !(b.x > gLeft && b.x < gRight)) { b.y = py + ph - b.r; b.vy = -Math.abs(b.vy); hit = true; }
   return hit;
 }
 
 function resetPos(s) {
-  const { px, pw, midX, midY, players, ball, referee } = s;
+  const { py, ph, midX, midY, players, ball, referee } = s;
   ball.x = midX; ball.y = midY; ball.vx = 0; ball.vy = 0;
-  players[0].x = px + 36; players[0].y = midY;
-  players[1].x = midX - 122; players[1].y = midY - 82;
-  players[2].x = midX - 122; players[2].y = midY + 82;
-  players[3].x = px + pw - 36; players[3].y = midY;
-  players[4].x = midX + 122; players[4].y = midY - 82;
-  players[5].x = midX + 122; players[5].y = midY + 82;
+  // Team 0: GK top, fields upper half
+  players[0].x = midX; players[0].y = py + 40;
+  players[1].x = midX - 100; players[1].y = midY - 160;
+  players[2].x = midX + 100; players[2].y = midY - 160;
+  // Team 1: GK bottom, fields lower half
+  players[3].x = midX; players[3].y = py + ph - 40;
+  players[4].x = midX - 100; players[4].y = midY + 160;
+  players[5].x = midX + 100; players[5].y = midY + 160;
   players.forEach(p => { p.vx = 0; p.vy = 0; });
-  referee.x = midX; referee.y = midY + 35; referee.vx = 0; referee.vy = 0;
+  referee.x = midX + 50; referee.y = midY; referee.vx = 0; referee.vy = 0;
 }
 
 function stepSim(s) {
   s.events = []; // clear events for this frame
-  const { rand, px, pw, midX, midY, gTop, gBot, players, ball, referee, teams, goalLog, foulLog } = s;
+  const { rand, px, py, pw, ph, midX, midY, gLeft, gRight, players, ball, referee, teams, goalLog, foulLog } = s;
 
   if (s.kickoff) {
     s.kickoffTimer--;
@@ -99,24 +108,27 @@ function stepSim(s) {
   }
   s.timerFrames++;
 
-  // AI
+  // AI — VERTICAL: team 0 defends TOP, attacks DOWN. Team 1 defends BOTTOM, attacks UP.
   players.forEach(pl => {
-    const oppGoalX = pl.team === 0 ? px + pw : px;
-    const ownGoalX = pl.team === 0 ? px : px + pw;
+    const oppGoalY = pl.team === 0 ? py + ph : py; // team 0 attacks bottom, team 1 attacks top
+    const ownGoalY = pl.team === 0 ? py : py + ph;
     let tx, ty;
     if (pl.role === 'gk') {
-      tx = ownGoalX + (pl.team === 0 ? 28 : -28);
-      ty = midY + (ball.y - midY) * 0.8;
-      ty = Math.max(gTop + 12, Math.min(gBot - 12, ty));
-      if (Math.abs(ball.x - ownGoalX) < 120) { tx = ball.x; ty = ball.y; }
+      // GK stays on own goal line, tracks ball X
+      ty = ownGoalY + (pl.team === 0 ? 35 : -35);
+      tx = midX + (ball.x - midX) * 0.8;
+      tx = Math.max(gLeft + 15, Math.min(gRight - 15, tx));
+      if (Math.abs(ball.y - ownGoalY) < 150) { tx = ball.x; ty = ball.y; }
     } else {
-      const gdx = oppGoalX - ball.x, gdy = midY - ball.y, gd = Math.sqrt(gdx * gdx + gdy * gdy) || 1;
+      // Field: get behind ball to push toward opponent goal
+      const gdx = midX - ball.x, gdy = oppGoalY - ball.y, gd = Math.sqrt(gdx * gdx + gdy * gdy) || 1;
       tx = ball.x - (gdx / gd) * (ball.r + pl.r + 5);
       ty = ball.y - (gdy / gd) * (ball.r + pl.r + 5);
       const dist = Math.sqrt((pl.x - ball.x) ** 2 + (pl.y - ball.y) ** 2);
-      if (dist < 45) { tx = ball.x + (gdx / gd) * 8; ty = ball.y + (gdy / gd) * 8; }
-      if ((pl.x < px + 30 || pl.x > px + pw - 30) && (pl.y < gTop - 25 || pl.y > gBot + 25)) {
-        tx = midX + (rand() - 0.5) * 80; ty = midY + (rand() - 0.5) * 80;
+      if (dist < 55) { tx = ball.x + (gdx / gd) * 8; ty = ball.y + (gdy / gd) * 8; }
+      // Anti-corner
+      if ((pl.y < py + 35 || pl.y > py + ph - 35) && (pl.x < px + 35 || pl.x > px + pw - 35)) {
+        tx = midX + (rand() - 0.5) * 100; ty = midY + (rand() - 0.5) * 100;
       }
     }
     const dx = tx - pl.x, dy = ty - pl.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -142,14 +154,15 @@ function stepSim(s) {
   if (bmd < ball.r) s.stuckTimer++; else { s.stuckTimer = 0; s.lastBallX = ball.x; s.lastBallY = ball.y; }
   if (s.stuckTimer >= 60) {
     s.foulFlash = 40;
-    const atk = ball.x < midX ? 0 : 1;
+    const atk = ball.y < midY ? 0 : 1; // ball in top half = team 0's territory
     teams[atk === 0 ? 1 : 0].fouls++;
     const foulTeam = atk === 0 ? 1 : 0;
     const elapsed = 90 * (s.timerFrames / s.totalFrames);
     foulLog.push({ team: foulTeam, timeStr: `${Math.floor(elapsed / 60)}'${Math.floor(elapsed % 60).toString().padStart(2, '0')}` });
     ball.vx = (midX - ball.x) * 0.06 + (rand() - 0.5) * 7;
     ball.vy = (midY - ball.y) * 0.06 + (rand() - 0.5) * 7;
-    players.forEach(pl => { if (pl.team !== atk) { pl.x = pl.team === 0 ? px + pw / 4 : px + pw * 3 / 4; pl.y = midY + (rand() - 0.5) * 180; pl.vx = 0; pl.vy = 0; } });
+    // Send opponent back to their half (vertical)
+    players.forEach(pl => { if (pl.team !== atk) { pl.y = pl.team === 0 ? py + ph / 4 : py + ph * 3 / 4; pl.x = midX + (rand() - 0.5) * 200; pl.vx = 0; pl.vy = 0; } });
     s.stuckTimer = 0; s.lastBallX = ball.x; s.lastBallY = ball.y;
     s.events.push('whistle');
   }
@@ -171,10 +184,10 @@ function stepSim(s) {
   if (collide(referee, ball)) s.events.push('kick');
   players.forEach(pl => collide(referee, pl));
 
-  // Goals
+  // Goals — VERTICAL: top goal = team 0 defends, bottom goal = team 1 defends
   let scored = -1;
-  if (ball.x < px && ball.y > gTop && ball.y < gBot) scored = 1;
-  if (ball.x > px + pw && ball.y > gTop && ball.y < gBot) scored = 0;
+  if (ball.y < py && ball.x > gLeft && ball.x < gRight) scored = 1; // ball goes through top → team 1 scores
+  if (ball.y > py + ph && ball.x > gLeft && ball.x < gRight) scored = 0; // ball goes through bottom → team 0 scores
   if (scored >= 0) {
     teams[scored].score++;
     const elapsed = 90 * (s.timerFrames / s.totalFrames);
@@ -254,7 +267,7 @@ function drawFlag(c, flag, x, y, w, h) {
 }
 
 function drawFrame(ctx, snap) {
-  const { px, py, pw, ph, midX, midY, goalW, goalH, gTop, teams, players, referee, ball, goalLog, foulLog } = snap;
+  const { px, py, pw, ph, midX, midY, goalW, goalH, gLeft, gRight, teams, players, referee, ball, goalLog, foulLog } = snap;
   const c = ctx;
   c.save();
   c.imageSmoothingEnabled = true;
@@ -380,64 +393,65 @@ function drawFrame(ctx, snap) {
   c.restore();
   c.textBaseline = 'alphabetic';
 
+  // VERTICAL PITCH
   const pitchGrad = c.createLinearGradient(px, py, px, py + ph);
   pitchGrad.addColorStop(0, '#116742');
   pitchGrad.addColorStop(1, '#0b5a38');
   c.fillStyle = pitchGrad;
   c.fillRect(px, py, pw, ph);
-  for (let i = 0; i < 6; i++) {
+  // Grass stripes (horizontal)
+  for (let i = 0; i < 8; i++) {
     c.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.04)';
-    c.fillRect(px, py + (ph / 6) * i, pw, ph / 6);
+    c.fillRect(px, py + (ph / 8) * i, pw, ph / 8);
   }
+  // Neon glow lines
   c.save();
-  c.shadowColor = 'rgba(255,255,255,0.2)';
-  c.shadowBlur = 18;
+  c.shadowColor = 'rgba(255,255,255,0.25)';
+  c.shadowBlur = 22;
   c.strokeStyle = 'rgba(255,255,255,0.98)';
-  c.lineWidth = 12;
+  c.lineWidth = 6;
   c.strokeRect(px, py, pw, ph);
-  c.beginPath(); c.moveTo(midX, py); c.lineTo(midX, py + ph); c.stroke();
-  c.beginPath(); c.arc(midX, midY, 96, 0, Math.PI * 2); c.stroke();
+  // Center line (horizontal for vertical pitch)
+  c.beginPath(); c.moveTo(px, midY); c.lineTo(px + pw, midY); c.stroke();
+  // Center circle
+  c.beginPath(); c.arc(midX, midY, 80, 0, Math.PI * 2); c.stroke();
   c.fillStyle = '#fff';
-  c.beginPath(); c.arc(midX, midY, 9, 0, Math.PI * 2); c.fill();
-  const penW = 154;
-  const penH = 384;
-  c.strokeRect(px, midY - penH / 2, penW, penH);
-  c.strokeRect(px + pw - penW, midY - penH / 2, penW, penH);
+  c.beginPath(); c.arc(midX, midY, 7, 0, Math.PI * 2); c.fill();
+  // Penalty areas (horizontal bars at top and bottom)
+  const penW = 360, penH = 120;
+  c.strokeRect(midX - penW / 2, py, penW, penH);
+  c.strokeRect(midX - penW / 2, py + ph - penH, penW, penH);
   c.restore();
 
-  const drawGoal = (isLeft) => {
-    const gx = isLeft ? px - goalW : px + pw;
+  // GOALS (top and bottom)
+  const drawGoal = (isTop) => {
+    const gy = isTop ? py - goalH : py + ph;
     c.save();
-    c.shadowColor = 'rgba(255,255,255,0.16)';
-    c.shadowBlur = 10;
+    c.shadowColor = 'rgba(255,255,255,0.2)';
+    c.shadowBlur = 12;
     c.strokeStyle = 'rgba(255,255,255,0.96)';
     c.lineWidth = 6;
     c.beginPath();
-    if (isLeft) {
-      c.moveTo(px, gTop);
-      c.lineTo(gx, gTop);
-      c.lineTo(gx, gTop + goalH);
-      c.lineTo(px, gTop + goalH);
+    if (isTop) {
+      c.moveTo(gLeft, py); c.lineTo(gLeft, gy); c.lineTo(gRight, gy); c.lineTo(gRight, py);
     } else {
-      c.moveTo(px + pw, gTop);
-      c.lineTo(gx + goalW, gTop);
-      c.lineTo(gx + goalW, gTop + goalH);
-      c.lineTo(px + pw, gTop + goalH);
+      c.moveTo(gLeft, py + ph); c.lineTo(gLeft, gy + goalH); c.lineTo(gRight, gy + goalH); c.lineTo(gRight, py + ph);
     }
     c.stroke();
     c.shadowBlur = 0;
-    c.strokeStyle = 'rgba(255,255,255,0.28)';
+    // Net pattern
+    c.strokeStyle = 'rgba(255,255,255,0.25)';
     c.lineWidth = 1;
-    for (let ny = gTop + 14; ny < gTop + goalH; ny += 14) {
+    for (let nx = gLeft + 12; nx < gRight; nx += 12) {
       c.beginPath();
-      c.moveTo(isLeft ? gx : px + pw, ny);
-      c.lineTo(isLeft ? px : gx + goalW, ny);
+      c.moveTo(nx, isTop ? py : py + ph);
+      c.lineTo(nx, isTop ? gy : gy + goalH);
       c.stroke();
     }
-    for (let nx = 0; nx <= goalW; nx += 10) {
+    for (let ny = 0; ny < goalH; ny += 10) {
       c.beginPath();
-      c.moveTo((isLeft ? gx : px + pw) + nx, gTop);
-      c.lineTo((isLeft ? gx : px + pw) + nx, gTop + goalH);
+      c.moveTo(gLeft, (isTop ? gy : py + ph) + ny);
+      c.lineTo(gRight, (isTop ? gy : py + ph) + ny);
       c.stroke();
     }
     c.restore();

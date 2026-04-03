@@ -21,8 +21,8 @@ function seededRandom(seed) {
 function initState(seed, homeCode, awayCode, matchInfo) {
   const rand = seededRandom(seed);
   // VERTICAL pitch — goals at top and bottom
-  // Taller pitch — more rectangular, panel reduced below
-  const px = 60, py = 470, pw = 880, ph = 920;
+  // Pitch starts right after scoreboard (sbY+sbH+goalH+12 ≈ 362)
+  const px = 60, py = 370, pw = 880, ph = 1020;
   const midX = px + pw / 2, midY = py + ph / 2;
   // Goals: big visible cages above/below
   const goalW = 280, goalH = 60;
@@ -350,63 +350,72 @@ function drawFrame(ctx, snap) {
 
   // SCOREBOARD — single row, compact:
   // [FLAG/NAME] [SCORE] [TIMER] [SCORE] [FLAG/NAME]
+  // SCOREBOARD — full width flags, full country names, scores tight around timer
+  // [FLAG——————] [SCORE] [TIMER] [SCORE] [FLAG——————]
+  // [  NAME    ]                         [   NAME   ]
   const sbX = px;
   const sbY = 190;
   const sbW = pw;
-  const sbH = 110;
+  const sbH = 100;
   drawGlassPanel(sbX, sbY, sbW, sbH, 20);
 
-  const sbMidY = sbY + sbH / 2; // vertical center of scoreboard
+  const sbMidY = sbY + sbH / 2;
   const centerCX = sbX + sbW / 2;
 
-  // Timer — center, big
+  // Timer — center pill
   const tSecs = Math.max(0, 90 * (1 - snap.timerFrames / snap.totalFrames));
   const mins = Math.floor(tSecs / 60).toString().padStart(2, '0');
   const secs = Math.floor(tSecs % 60).toString().padStart(2, '0');
   c.save();
-  c.translate(centerCX, sbMidY);
+  c.translate(centerCX, sbMidY - 4);
   c.scale(pulse, pulse);
   c.fillStyle = '#1a3328';
-  roundRect(-62, -24, 124, 48, 16);
+  roundRect(-58, -22, 116, 44, 14);
   c.fill();
   c.strokeStyle = 'rgba(255,255,255,0.15)'; c.lineWidth = 1.5;
-  roundRect(-62, -24, 124, 48, 16); c.stroke();
-  c.fillStyle = '#fff'; c.font = '900 34px Fira Code, monospace';
+  roundRect(-58, -22, 116, 44, 14); c.stroke();
+  c.fillStyle = '#fff'; c.font = '900 32px Fira Code, monospace';
   c.textAlign = 'center'; c.textBaseline = 'middle';
   c.fillText(`${mins}:${secs}`, 0, 0);
   c.restore();
 
-  // Scores — flanking timer, vertically centered, BIG
+  // Scores — tight next to timer
   c.textAlign = 'center'; c.textBaseline = 'middle';
-  c.fillStyle = '#fff'; c.font = '900 72px Inter, sans-serif';
-  c.fillText(String(teams[0].score), centerCX - 110, sbMidY);
-  c.fillText(String(teams[1].score), centerCX + 110, sbMidY);
+  c.fillStyle = '#fff'; c.font = '900 64px Inter, sans-serif';
+  c.fillText(String(teams[0].score), centerCX - 90, sbMidY - 4);
+  c.fillText(String(teams[1].score), centerCX + 90, sbMidY - 4);
 
-  // Left: flag on top, name below — to the left of score
-  const flagW = 90, flagH = 38;
-  const lFlagX = sbX + 16;
-  const lFlagY = sbMidY - 30;
+  // Left side: wide flag stretched from edge to score area
+  const scoreEdgeL = centerCX - 130; // left edge of score zone
+  const flagMargin = 10;
+  const lFlagX = sbX + flagMargin;
+  const lFlagW = scoreEdgeL - lFlagX - 8;
+  const flagH = 34;
+  const flagY = sbY + 14;
   c.save();
-  roundRect(lFlagX, lFlagY, flagW, flagH, 8); c.clip();
-  drawFlag(c, teams[0].flag, lFlagX, lFlagY, flagW, flagH);
+  roundRect(lFlagX, flagY, lFlagW, flagH, 8); c.clip();
+  drawFlag(c, teams[0].flag, lFlagX, flagY, lFlagW, flagH);
   c.restore();
   c.strokeStyle = 'rgba(255,255,255,0.2)'; c.lineWidth = 1;
-  roundRect(lFlagX, lFlagY, flagW, flagH, 8); c.stroke();
-  c.fillStyle = '#fff'; c.font = '800 24px Inter, sans-serif';
+  roundRect(lFlagX, flagY, lFlagW, flagH, 8); c.stroke();
+  // Full country name below flag
+  c.fillStyle = '#fff'; c.font = '800 26px Inter, sans-serif';
   c.textAlign = 'center'; c.textBaseline = 'alphabetic';
-  c.fillText(teams[0].shortName || teams[0].name, lFlagX + flagW / 2, sbMidY + 32);
+  c.fillText(teams[0].name, lFlagX + lFlagW / 2, sbY + sbH - 12);
 
-  // Right: flag on top, name below — to the right of score
-  const rFlagX = sbX + sbW - 16 - flagW;
+  // Right side: wide flag
+  const scoreEdgeR = centerCX + 130;
+  const rFlagX = scoreEdgeR + 8;
+  const rFlagW = sbX + sbW - flagMargin - rFlagX;
   c.save();
-  roundRect(rFlagX, lFlagY, flagW, flagH, 8); c.clip();
-  drawFlag(c, teams[1].flag, rFlagX, lFlagY, flagW, flagH);
+  roundRect(rFlagX, flagY, rFlagW, flagH, 8); c.clip();
+  drawFlag(c, teams[1].flag, rFlagX, flagY, rFlagW, flagH);
   c.restore();
   c.strokeStyle = 'rgba(255,255,255,0.2)'; c.lineWidth = 1;
-  roundRect(rFlagX, lFlagY, flagW, flagH, 8); c.stroke();
-  c.fillStyle = '#fff'; c.font = '800 24px Inter, sans-serif';
+  roundRect(rFlagX, flagY, rFlagW, flagH, 8); c.stroke();
+  c.fillStyle = '#fff'; c.font = '800 26px Inter, sans-serif';
   c.textAlign = 'center';
-  c.fillText(teams[1].shortName || teams[1].name, rFlagX + flagW / 2, sbMidY + 32);
+  c.fillText(teams[1].name, rFlagX + rFlagW / 2, sbY + sbH - 12);
 
   c.textBaseline = 'alphabetic';
 

@@ -178,10 +178,18 @@ function stepSim(s) {
   referee.x += referee.vx; referee.y += referee.vy;
   bounceRect(referee, s);
 
-  // Stuck detection — ball must ALWAYS be moving. 2s without real movement = foul
-  const ballSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-  const bmd = Math.sqrt((ball.x - s.lastBallX) ** 2 + (ball.y - s.lastBallY) ** 2);
-  if (bmd < ball.r * 2 && ballSpeed < 2) s.stuckTimer++; else { s.stuckTimer = 0; s.lastBallX = ball.x; s.lastBallY = ball.y; }
+  // Stuck detection — if ball stays within a ~50px zone for 2s = foul
+  // This catches the "vibrating between two players" case where speed > 0 but position barely changes
+  const stuckZoneRadius = 50;
+  const distFromAnchor = Math.sqrt((ball.x - s.lastBallX) ** 2 + (ball.y - s.lastBallY) ** 2);
+  if (distFromAnchor < stuckZoneRadius) {
+    s.stuckTimer++;
+  } else {
+    // Ball escaped the zone — reset anchor to current position
+    s.stuckTimer = 0;
+    s.lastBallX = ball.x;
+    s.lastBallY = ball.y;
+  }
   if (s.stuckTimer >= 60) {
     s.foulFlash = 40;
     const atk = ball.y < midY ? 0 : 1;

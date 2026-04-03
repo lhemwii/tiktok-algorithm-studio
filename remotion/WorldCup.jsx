@@ -208,6 +208,7 @@ function stepSim(s) {
   // Ball — FASTER, less friction, more energy
   ball.vx *= 0.998; ball.vy *= 0.998; ball.x += ball.vx; ball.y += ball.vy;
   // Minimum ball speed — if too slow, give it a nudge
+  const ballSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
   if (ballSpeed < 1.5 && !s.kickoff) {
     ball.vx += (rand() - 0.5) * 2;
     ball.vy += (rand() - 0.5) * 2;

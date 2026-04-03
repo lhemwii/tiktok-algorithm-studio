@@ -222,7 +222,7 @@ function simulateAll(seed, home, away, info, totalFrames) {
       matchInfo: s.matchInfo,
       px: s.px, py: s.py, pw: s.pw, ph: s.ph,
       midX: s.midX, midY: s.midY,
-      goalW: s.goalW, goalH: s.goalH, gTop: s.gTop, gBot: s.gBot,
+      goalW: s.goalW, goalH: s.goalH, gLeft: s.gLeft, gRight: s.gRight,
     });
     // Record events with frame number
     s.events.forEach(e => allEvents.push({ type: e, frame: f }));
@@ -419,37 +419,40 @@ function drawFrame(ctx, snap) {
   c.strokeRect(midX - penW / 2, py + ph - penH, penW, penH);
   c.restore();
 
-  // GOALS (top and bottom)
+  // GOALS (top and bottom) — visible cages with net fill
   const drawGoal = (isTop) => {
     const gy = isTop ? py - goalH : py + ph;
+    const gyEnd = isTop ? gy : gy + goalH;
+    const gyStart = isTop ? py : py + ph;
+
+    // Background fill so cage is visible on green
+    c.fillStyle = 'rgba(0,0,0,0.25)';
+    c.fillRect(gLeft, Math.min(gyStart, gyEnd), gRight - gLeft, goalH);
+
+    // Net pattern FIRST (behind frame)
+    c.strokeStyle = 'rgba(255,255,255,0.35)';
+    c.lineWidth = 1.5;
+    for (let nx = gLeft + 14; nx < gRight; nx += 14) {
+      c.beginPath(); c.moveTo(nx, gyStart); c.lineTo(nx, gyEnd); c.stroke();
+    }
+    for (let ny = 1; ny < goalH; ny += 12) {
+      const yy = Math.min(gyStart, gyEnd) + ny;
+      c.beginPath(); c.moveTo(gLeft, yy); c.lineTo(gRight, yy); c.stroke();
+    }
+
+    // Frame — thick white neon
     c.save();
-    c.shadowColor = 'rgba(255,255,255,0.2)';
-    c.shadowBlur = 12;
-    c.strokeStyle = 'rgba(255,255,255,0.96)';
-    c.lineWidth = 6;
+    c.shadowColor = 'rgba(255,255,255,0.5)';
+    c.shadowBlur = 16;
+    c.strokeStyle = '#fff';
+    c.lineWidth = 8;
     c.beginPath();
     if (isTop) {
       c.moveTo(gLeft, py); c.lineTo(gLeft, gy); c.lineTo(gRight, gy); c.lineTo(gRight, py);
     } else {
-      c.moveTo(gLeft, py + ph); c.lineTo(gLeft, gy + goalH); c.lineTo(gRight, gy + goalH); c.lineTo(gRight, py + ph);
+      c.moveTo(gLeft, py + ph); c.lineTo(gLeft, gyEnd); c.lineTo(gRight, gyEnd); c.lineTo(gRight, py + ph);
     }
     c.stroke();
-    c.shadowBlur = 0;
-    // Net pattern
-    c.strokeStyle = 'rgba(255,255,255,0.25)';
-    c.lineWidth = 1;
-    for (let nx = gLeft + 12; nx < gRight; nx += 12) {
-      c.beginPath();
-      c.moveTo(nx, isTop ? py : py + ph);
-      c.lineTo(nx, isTop ? gy : gy + goalH);
-      c.stroke();
-    }
-    for (let ny = 0; ny < goalH; ny += 10) {
-      c.beginPath();
-      c.moveTo(gLeft, (isTop ? gy : py + ph) + ny);
-      c.lineTo(gRight, (isTop ? gy : py + ph) + ny);
-      c.stroke();
-    }
     c.restore();
   };
   drawGoal(true);
@@ -498,12 +501,17 @@ function drawFrame(ctx, snap) {
     c.lineWidth = 2;
     c.beginPath(); c.arc(0, 0, pl.r, 0, Math.PI * 2); c.stroke();
     const eyeAngle = Math.atan2(ball.y - pl.y, ball.x - pl.x);
+    // Eyes proportional to player size
+    const es = pl.r / 22; // scale factor (22 was original PR)
     c.fillStyle = '#fff';
-    c.beginPath(); c.ellipse(-7, -4, 8, 10, 0, 0, Math.PI * 2); c.fill();
-    c.beginPath(); c.ellipse(7, -4, 8, 10, 0, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.ellipse(-9 * es, -5 * es, 11 * es, 14 * es, 0, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.ellipse(9 * es, -5 * es, 11 * es, 14 * es, 0, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = '#222'; c.lineWidth = 1.5;
+    c.beginPath(); c.ellipse(-9 * es, -5 * es, 11 * es, 14 * es, 0, 0, Math.PI * 2); c.stroke();
+    c.beginPath(); c.ellipse(9 * es, -5 * es, 11 * es, 14 * es, 0, 0, Math.PI * 2); c.stroke();
     c.fillStyle = '#111';
-    c.beginPath(); c.arc(-7 + Math.cos(eyeAngle) * 2.6, -4 + Math.sin(eyeAngle) * 2.6, 3.4, 0, Math.PI * 2); c.fill();
-    c.beginPath(); c.arc(7 + Math.cos(eyeAngle) * 2.6, -4 + Math.sin(eyeAngle) * 2.6, 3.4, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.arc(-9 * es + Math.cos(eyeAngle) * 4 * es, -5 * es + Math.sin(eyeAngle) * 4 * es, 5 * es, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.arc(9 * es + Math.cos(eyeAngle) * 4 * es, -5 * es + Math.sin(eyeAngle) * 4 * es, 5 * es, 0, Math.PI * 2); c.fill();
     c.restore();
   });
 

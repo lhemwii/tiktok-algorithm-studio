@@ -379,14 +379,14 @@ function drawFrame(ctx, snap) {
   c.fillText(`${mins}:${secs}`, 0, 0);
   c.restore();
 
-  // Scores — tight next to timer
+  // Scores — space for 2 digits each side
   c.textAlign = 'center'; c.textBaseline = 'middle';
-  c.fillStyle = '#fff'; c.font = '900 64px Inter, sans-serif';
-  c.fillText(String(teams[0].score), centerCX - 90, sbMidY - 4);
-  c.fillText(String(teams[1].score), centerCX + 90, sbMidY - 4);
+  c.fillStyle = '#fff'; c.font = '900 60px Inter, sans-serif';
+  c.fillText(String(teams[0].score), centerCX - 100, sbMidY - 4);
+  c.fillText(String(teams[1].score), centerCX + 100, sbMidY - 4);
 
   // Left side: wide flag stretched from edge to score area
-  const scoreEdgeL = centerCX - 130; // left edge of score zone
+  const scoreEdgeL = centerCX - 140; // leave room for 2-digit score
   const flagMargin = 10;
   const lFlagX = sbX + flagMargin;
   const lFlagW = scoreEdgeL - lFlagX - 8;
@@ -404,7 +404,7 @@ function drawFrame(ctx, snap) {
   c.fillText(teams[0].name, lFlagX + lFlagW / 2, sbY + sbH - 12);
 
   // Right side: wide flag
-  const scoreEdgeR = centerCX + 130;
+  const scoreEdgeR = centerCX + 140;
   const rFlagX = scoreEdgeR + 8;
   const rFlagW = sbX + sbW - flagMargin - rFlagX;
   c.save();
@@ -601,52 +601,69 @@ function drawFrame(ctx, snap) {
   const panelH = H - panelY - 16;
   drawGlassPanel(panelX, panelY, panelW, panelH, 20);
 
-  // FIFA WORLD CUP 2026 — BIG
+  // FIFA WORLD CUP 2026 — BIGGER
   c.fillStyle = '#fff';
-  c.font = '900 36px Inter, sans-serif';
+  c.font = '900 40px Inter, sans-serif';
   c.textAlign = 'center';
-  c.fillText('FIFA WORLD CUP 2026', panelX + panelW / 2, panelY + 42);
+  c.fillText('FIFA WORLD CUP 2026', panelX + panelW / 2, panelY + 46);
 
-  // Possession bar — BIG
-  const possessionY = panelY + 68;
+  // Possession label + percentages — bigger, with spacing
+  const possessionY = panelY + 90;
   const possessionX = panelX + 24;
   const possessionW = panelW - 48;
-  const leftPW = Math.max(24, (possessionW * possession[0]) / 100);
-  c.fillStyle = 'rgba(255,255,255,0.08)';
-  roundRect(possessionX, possessionY, possessionW, 30, 15);
-  c.fill();
-  c.fillStyle = teams[0].color || '#fff';
-  roundRect(possessionX, possessionY, leftPW, 30, 15);
-  c.fill();
-  c.fillStyle = teams[1].color || '#fff';
-  roundRect(possessionX + leftPW, possessionY, possessionW - leftPW, 30, 15);
-  c.fill();
-  c.fillStyle = '#fff'; c.font = '900 24px Inter, sans-serif';
-  c.textAlign = 'left'; c.fillText(`${possession[0]}%`, possessionX, possessionY - 8);
-  c.textAlign = 'right'; c.fillText(`${possession[1]}%`, possessionX + possessionW, possessionY - 8);
-  c.textAlign = 'center'; c.fillStyle = 'rgba(255,255,255,0.8)'; c.font = '800 22px Inter, sans-serif';
-  c.fillText('Possession', panelX + panelW / 2, possessionY - 8);
+  c.fillStyle = '#fff'; c.font = '900 28px Inter, sans-serif';
+  c.textAlign = 'left'; c.fillText(`${possession[0]}%`, possessionX, possessionY - 6);
+  c.textAlign = 'right'; c.fillText(`${possession[1]}%`, possessionX + possessionW, possessionY - 6);
+  c.textAlign = 'center'; c.fillStyle = 'rgba(255,255,255,0.8)'; c.font = '800 28px Inter, sans-serif';
+  c.fillText('Possession', panelX + panelW / 2, possessionY - 6);
 
-  // Two columns: flag + team name + yellow card rectangles (no text, just visual)
-  const colY = possessionY + 48;
+  // Possession bar — rounded ends, STRAIGHT middle join
+  const barY = possessionY + 8;
+  const barH = 28;
+  const leftPW = Math.max(24, (possessionW * possession[0]) / 100);
+  const rightPW = possessionW - leftPW;
+  // Left portion — rounded left, straight right
+  c.fillStyle = teams[0].color || '#fff';
+  c.beginPath();
+  c.moveTo(possessionX + 14, barY);
+  c.lineTo(possessionX + leftPW, barY);
+  c.lineTo(possessionX + leftPW, barY + barH);
+  c.lineTo(possessionX + 14, barY + barH);
+  c.quadraticCurveTo(possessionX, barY + barH, possessionX, barY + barH - 14);
+  c.lineTo(possessionX, barY + 14);
+  c.quadraticCurveTo(possessionX, barY, possessionX + 14, barY);
+  c.fill();
+  // Right portion — straight left, rounded right
+  c.fillStyle = teams[1].color || '#fff';
+  c.beginPath();
+  c.moveTo(possessionX + leftPW, barY);
+  c.lineTo(possessionX + possessionW - 14, barY);
+  c.quadraticCurveTo(possessionX + possessionW, barY, possessionX + possessionW, barY + 14);
+  c.lineTo(possessionX + possessionW, barY + barH - 14);
+  c.quadraticCurveTo(possessionX + possessionW, barY + barH, possessionX + possessionW - 14, barY + barH);
+  c.lineTo(possessionX + leftPW, barY + barH);
+  c.fill();
+
+  // Two columns: flag + team name + yellow card rectangles
+  const colY = barY + barH + 16;
 
   // Left column (team 0)
-  drawFlagBadge(teams[0], panelX + 20, colY, 56);
-  c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = '900 38px Inter, sans-serif';
-  c.fillText(teams[0].name, panelX + 90, colY + 40);
+  drawFlagBadge(teams[0], panelX + 16, colY, 50);
+  c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = '900 34px Inter, sans-serif';
+  c.fillText(teams[0].name, panelX + 80, colY + 36);
   for (let yc = 0; yc < teams[0].fouls; yc++) {
     c.fillStyle = '#f4c845';
-    roundRect(panelX + 90 + yc * 32, colY + 54, 24, 34, 5);
+    roundRect(panelX + 80 + yc * 30, colY + 48, 22, 32, 5);
     c.fill();
   }
 
   // Right column (team 1)
-  drawFlagBadge(teams[1], panelX + panelW / 2 + 20, colY, 56);
-  c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = '900 38px Inter, sans-serif';
-  c.fillText(teams[1].name, panelX + panelW / 2 + 90, colY + 40);
+  drawFlagBadge(teams[1], panelX + panelW / 2 + 16, colY, 50);
+  c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = '900 34px Inter, sans-serif';
+  c.fillText(teams[1].name, panelX + panelW / 2 + 80, colY + 36);
   for (let yc = 0; yc < teams[1].fouls; yc++) {
     c.fillStyle = '#f4c845';
-    roundRect(panelX + panelW / 2 + 90 + yc * 32, colY + 54, 24, 34, 5);
+    roundRect(panelX + panelW / 2 + 80 + yc * 30, colY + 48, 22, 32, 5);
     c.fill();
   }
 

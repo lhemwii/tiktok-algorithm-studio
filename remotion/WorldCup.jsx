@@ -40,11 +40,11 @@ function initState(seed, homeCode, awayCode, matchInfo) {
     { x: midX + 150, y: midY + 120, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
   ];
   const referee = { x: midX + 70, y: midY, vx: 0, vy: 0, r: PR };
-  const ball = { x: midX, y: midY, vx: 0, vy: 0, r: 18 };
+  const ball = { x: midX, y: midY, vx: (rand() - 0.5) * 4, vy: (rand() - 0.5) * 4, r: 18 };
   return {
     rand, px, py, pw, ph, midX, midY, goalW, goalH, gLeft, gRight, teams, players, referee, ball,
     goalLog: [], foulLog: [], stuckTimer: 0, lastBallX: midX, lastBallY: midY,
-    foulFlash: 0, goalFlash: 0, kickoff: true, kickoffTimer: 30,
+    foulFlash: 0, goalFlash: 0, kickoff: false, kickoffTimer: 0,
     timerFrames: 0, totalFrames: 30 * 65, matchInfo: matchInfo || '',
     events: [], // events THIS frame
   };
@@ -268,7 +268,7 @@ function stepSim(s) {
 function simulateAll(seed, home, away, info, totalFrames) {
   const s = initState(seed, home, away, info);
   const snapshots = [];
-  const allEvents = [{ type: 'whistle', frame: 1 }]; // opening whistle
+  const allEvents = []; // no opening whistle — match starts instantly
 
   for (let f = 0; f < totalFrames; f++) {
     stepSim(s);
@@ -768,30 +768,100 @@ function drawFrame(ctx, snap) {
     c.fillStyle = `rgba(255,255,255,${(snap.goalFlash / 30) * 0.26})`;
     c.fillRect(0, 0, W, H);
   }
-  if (snap.kickoff && snap.kickoffTimer > 0) {
-    c.fillStyle = 'rgba(8,16,24,0.52)';
-    roundRect(midX - 170, midY - 44, 340, 88, 20);
-    c.fill();
-    c.fillStyle = '#fff';
-    c.textAlign = 'center';
-    c.font = '900 48px Inter, sans-serif';
-    c.fillText(snap.kickoffTimer > 20 ? 'KICK OFF' : snap.kickoffTimer > 10 ? '2' : '1', midX, midY + 16);
+  // === SCROLLING TICKER above scoreboard ===
+  const tickerY = sbY - 36;
+  const tickerText = 'NEXT MATCH? TOP COMMENT PICKS THE TEAMS!     \u26BD     NEXT MATCH? TOP COMMENT PICKS THE TEAMS!     \u26BD     ';
+  const tickerSpeed = elapsed * 3; // pixels scroll based on match time
+  c.fillStyle = 'rgba(244,200,69,0.9)';
+  c.font = '800 22px Inter, sans-serif';
+  c.textAlign = 'left';
+  const textW = c.measureText(tickerText).width;
+  const offsetX = -(tickerSpeed % textW);
+  for (let tx2 = offsetX; tx2 < W; tx2 += textW) {
+    c.fillText(tickerText, tx2, tickerY);
   }
-  if (snap.timerFrames >= snap.totalFrames - 90) {
-    c.fillStyle = 'rgba(6,10,16,0.82)';
-    c.fillRect(0, H / 2 - 130, W, 260);
+
+  // === HOOK OVERLAY (first 4 seconds = 120 frames) ===
+  if (snap.timerFrames < 120) {
+    const hookAlpha = snap.timerFrames < 90 ? 0.85 : 0.85 * ((120 - snap.timerFrames) / 30);
+    c.fillStyle = `rgba(0,0,0,${hookAlpha * 0.6})`;
+    c.fillRect(0, midY - 100, W, 200);
+    c.fillStyle = `rgba(255,255,255,${hookAlpha})`;
     c.textAlign = 'center';
-    c.fillStyle = 'rgba(255,255,255,0.72)';
+    c.font = '900 56px Inter, sans-serif';
+    c.fillText('WHO WINS? \u26BD', W / 2, midY - 20);
+    c.font = '800 34px Inter, sans-serif';
+    c.fillStyle = `rgba(74,222,128,${hookAlpha})`;
+    c.fillText('Comment your prediction!', W / 2, midY + 30);
+    c.font = '700 26px Inter, sans-serif';
+    c.fillStyle = `rgba(255,255,255,${hookAlpha * 0.7})`;
+    c.fillText(`Like = ${teams[0].shortName || teams[0].name}     Save = ${teams[1].shortName || teams[1].name}`, W / 2, midY + 74);
+  }
+
+  // === TENSION MOMENTS ===
+  const totalGoals = teams[0].score + teams[1].score;
+  // TIED alert
+  if (teams[0].score === teams[1].score && totalGoals > 0 && snap.goalFlash > 15) {
+    c.fillStyle = 'rgba(244,200,69,0.9)';
+    c.textAlign = 'center';
+    c.font = '900 52px Inter, sans-serif';
+    c.fillText('TIED! Who breaks it?', W / 2, py - 20);
+  }
+  // COMEBACK alert — check if a team just equalized or overtook
+  if (snap.goalFlash > 10 && snap.goalFlash < 25) {
+    const lastGoal = goalLog.length > 0 ? goalLog[goalLog.length - 1] : null;
+    if (lastGoal) {
+      const scoringTeam = lastGoal.team;
+      const otherTeam = scoringTeam === 0 ? 1 : 0;
+      // If scoring team was behind before this goal
+      if (teams[scoringTeam].score >= teams[otherTeam].score && goalLog.filter(g => g.team === scoringTeam).length > 1) {
+        c.fillStyle = 'rgba(239,68,68,0.9)';
+        c.textAlign = 'center';
+        c.font = '900 58px Inter, sans-serif';
+        c.fillText('COMEBACK?!', W / 2, py - 20);
+      }
+    }
+  }
+
+  // === FINAL COUNTDOWN (last 10 real seconds = 300 frames) ===
+  const framesLeft = snap.totalFrames - snap.timerFrames;
+  if (framesLeft <= 300 && framesLeft > 90) {
+    const countdownNum = Math.ceil(framesLeft / 30);
+    const pulse2 = 1 + Math.sin(snap.timerFrames * 0.3) * 0.1;
+    c.save();
+    c.translate(W / 2, midY);
+    c.scale(pulse2, pulse2);
+    c.fillStyle = `rgba(255,255,255,${Math.min(1, (framesLeft - 90) / 60) * 0.5})`;
+    c.textAlign = 'center';
+    c.font = '900 120px Inter, sans-serif';
+    c.fillText(countdownNum, 0, 40);
+    c.restore();
+  }
+
+  // === FULL TIME + WERE YOU RIGHT (last 3 seconds = 90 frames) ===
+  if (framesLeft <= 90) {
+    c.fillStyle = 'rgba(6,10,16,0.85)';
+    c.fillRect(0, H / 2 - 160, W, 320);
+    c.textAlign = 'center';
+    c.fillStyle = 'rgba(255,255,255,0.7)';
     c.font = '700 28px Inter, sans-serif';
-    c.fillText('FULL TIME', W / 2, H / 2 - 52);
+    c.fillText('FULL TIME', W / 2, H / 2 - 100);
     c.fillStyle = '#fff';
     c.font = '900 96px Inter, sans-serif';
-    c.fillText(`${teams[0].score} - ${teams[1].score}`, W / 2, H / 2 + 24);
+    c.fillText(`${teams[0].score} - ${teams[1].score}`, W / 2, H / 2 - 10);
     c.fillStyle = '#f4c845';
-    c.font = '800 34px Inter, sans-serif';
+    c.font = '800 38px Inter, sans-serif';
     const winner = teams[0].score > teams[1].score ? teams[0].name : teams[1].score > teams[0].score ? teams[1].name : 'DRAW';
-    c.fillText(winner === 'DRAW' ? 'DRAW' : `${winner} WINS`, W / 2, H / 2 + 78);
+    c.fillText(winner === 'DRAW' ? 'DRAW' : `${winner} WINS`, W / 2, H / 2 + 50);
+    // WERE YOU RIGHT
+    c.fillStyle = '#4ADE80';
+    c.font = '900 32px Inter, sans-serif';
+    c.fillText('Were you right? \uD83D\uDC40', W / 2, H / 2 + 100);
+    c.fillStyle = 'rgba(255,255,255,0.5)';
+    c.font = '700 24px Inter, sans-serif';
+    c.fillText('Comment the exact score to be featured!', W / 2, H / 2 + 140);
   }
+
   c.restore();
 }
 

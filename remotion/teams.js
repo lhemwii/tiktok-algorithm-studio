@@ -71,6 +71,10 @@ export const TEAMS = {
   CRO: { name: 'CROATIA', shortName: 'CRO', color: '#FF0000', altColor: '#171796', flag: [['#FF0000',0,0,1,0.33],['#fff',0,0.33,1,0.34],['#171796',0,0.67,1,0.33]] },
   GHA: { name: 'GHANA', shortName: 'GHA', color: '#EF3340', altColor: '#FCD116', flag: [['#EF3340',0,0,1,0.33],['#FCD116',0,0.33,1,0.34],['#006B3F',0,0.67,1,0.33]] },
   PAN: { name: 'PANAMA', shortName: 'PAN', color: '#D21034', altColor: '#005293', flag: [['#fff',0,0,0.5,0.5],['#005293',0.5,0,0.5,0.5],['#D21034',0,0.5,0.5,0.5],['#fff',0.5,0.5,0.5,0.5]] },
+
+  // === CLUB TEAMS ===
+  LOSC: { name: 'LILLE', shortName: 'LOSC', color: '#1B2A5B', altColor: '#E30613', flag: [['#1B2A5B',0,0,1,1],['#E30613',0.35,0,0.3,0.4],['#fff',0.4,0.45,0.2,0.2]] },
+  RCL: { name: 'LENS', shortName: 'RCL', color: '#D4213D', altColor: '#F7D417', flag: [['#D4213D',0,0,0.5,1],['#F7D417',0.5,0,0.5,1]] },
 };
 
 // Group stage schedule - all 96 matches

@@ -27,20 +27,22 @@ function initState(seed, homeCode, awayCode, matchInfo) {
   // Goals: big visible cages above/below
   const goalW = 280, goalH = 60;
   const gLeft = midX - goalW / 2, gRight = midX + goalW / 2;
-  const PR = 38; // BIG players
+  const PR = 57; // 50% bigger players (was 38)
   const teams = getTeamPair(homeCode, awayCode);
   const players = [
     // Team 0 attacks DOWN, defends TOP goal
-    { x: midX, y: py + 55, vx: 0, vy: 0, r: PR, team: 0, role: 'gk' },
-    { x: midX - 150, y: midY - 120, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
-    { x: midX + 150, y: midY - 120, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
+    { x: midX, y: py + 70, vx: 0, vy: 0, r: PR, team: 0, role: 'gk' },
+    { x: midX - 160, y: midY - 130, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
+    { x: midX + 160, y: midY - 130, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
     // Team 1 attacks UP, defends BOTTOM goal
-    { x: midX, y: py + ph - 55, vx: 0, vy: 0, r: PR, team: 1, role: 'gk' },
-    { x: midX - 150, y: midY + 120, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
-    { x: midX + 150, y: midY + 120, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
+    { x: midX, y: py + ph - 70, vx: 0, vy: 0, r: PR, team: 1, role: 'gk' },
+    { x: midX - 160, y: midY + 130, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
+    { x: midX + 160, y: midY + 130, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
   ];
-  const referee = { x: midX + 70, y: midY, vx: 0, vy: 0, r: PR };
-  const ball = { x: midX, y: midY, vx: (rand() - 0.5) * 4, vy: (rand() - 0.5) * 4, r: 18 };
+  const referee = { x: midX + 80, y: midY, vx: 0, vy: 0, r: PR };
+  // Ball 50% bigger (was 18), starts with strong velocity toward a goal for instant action
+  const ballDir = rand() > 0.5 ? 1 : -1;
+  const ball = { x: midX + (rand() - 0.5) * 100, y: midY, vx: (rand() - 0.5) * 6, vy: ballDir * 12, r: 27 };
   return {
     rand, px, py, pw, ph, midX, midY, goalW, goalH, gLeft, gRight, teams, players, referee, ball,
     goalLog: [], foulLog: [], stuckTimer: 0, lastBallX: midX, lastBallY: midY,
@@ -96,18 +98,9 @@ function stepSim(s) {
   s.events = []; // clear events for this frame
   const { rand, px, py, pw, ph, midX, midY, gLeft, gRight, players, ball, referee, teams, goalLog, foulLog } = s;
 
-  // Timer ALWAYS ticks — never stops, even during kickoff
+  // Timer ALWAYS ticks
   s.timerFrames++;
-
-  if (s.kickoff) {
-    s.kickoffTimer--;
-    if (s.kickoffTimer <= 0) {
-      s.kickoff = false;
-      ball.vx = (rand() - 0.5) * 3; ball.vy = (rand() - 0.5) * 3;
-      s.events.push('whistle');
-    }
-    return; // skip physics during kickoff but timer keeps going
-  }
+  // No kickoff pause — action never stops
 
   // AI — ULTRA AGGRESSIVE. Everyone rushes the ball. GK included.
   players.forEach(pl => {
@@ -257,7 +250,10 @@ function stepSim(s) {
     goalLog.push({ team: scored, timeStr: `${Math.floor(elapsed / 60)}'${Math.floor(elapsed % 60).toString().padStart(2, '0')}` });
     s.goalFlash = 30;
     resetPos(s);
-    s.kickoff = true; s.kickoffTimer = 30; s.stuckTimer = 0;
+    s.stuckTimer = 0;
+    // No pause — ball gets strong velocity immediately after goal
+    ball.vx = (rand() - 0.5) * 6;
+    ball.vy = (rand() > 0.5 ? 1 : -1) * (8 + rand() * 4);
     s.events.push('goal');
   }
   if (s.foulFlash > 0) s.foulFlash--;
@@ -785,24 +781,8 @@ function drawFrame(ctx, snap) {
     c.fillText(tickerText, tx2, tickerY);
   }
 
-  // === HOOK OVERLAY (first 4 seconds = 120 frames) — glassmorphism ===
-  if (snap.timerFrames < 120) {
-    const hookAlpha = snap.timerFrames < 90 ? 1 : ((120 - snap.timerFrames) / 30);
-    const hookH = 220;
-    const hookY = midY - hookH / 2;
-    c.save();
-    c.globalAlpha = hookAlpha;
-    drawGlassPanel(px + 20, hookY, pw - 40, hookH, 20);
-    c.fillStyle = '#fff';
-    c.textAlign = 'center';
-    c.font = '900 58px Inter, sans-serif';
-    c.fillText('QUI VA GAGNER ?  \u26BD', midX, hookY + 60);
-    c.fillStyle = '#fff';
-    c.font = '800 34px Inter, sans-serif';
-    c.fillText('Commente ta prediction !', midX, hookY + 110);
-    c.fillStyle = '#fff';
-    c.font = '700 28px Inter, sans-serif';
-    c.fillText(`Like = ${teams[0].shortName || teams[0].name}          Enregistre = ${teams[1].shortName || teams[1].name}`, midX, hookY + 160);
+  // === HOOK OVERLAY — REMOVED (match starts with instant action) ===
+  if (false) {
     c.restore();
   }
 

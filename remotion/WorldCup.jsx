@@ -649,12 +649,12 @@ function drawFrame(ctx, snap) {
 
   const teamEvents = [
     [
-      ...goalLog.filter((g) => g.team === 0).map((g) => ({ timeStr: g.timeStr, label: 'GOAL', accent: '#4ade80' })),
-      ...(foulLog || []).filter((foul) => foul.team === 0).map((foul) => ({ timeStr: foul.timeStr, label: 'YELLOW CARD', accent: '#f4c845' })),
+      ...goalLog.filter((g) => g.team === 0).map((g) => ({ timeStr: g.timeStr, label: 'BUT', accent: '#4ade80' })),
+      ...(foulLog || []).filter((foul) => foul.team === 0).map((foul) => ({ timeStr: foul.timeStr, label: 'CARTON JAUNE', accent: '#f4c845' })),
     ].slice(-5).reverse(),
     [
-      ...goalLog.filter((g) => g.team === 1).map((g) => ({ timeStr: g.timeStr, label: 'GOAL', accent: '#4ade80' })),
-      ...(foulLog || []).filter((foul) => foul.team === 1).map((foul) => ({ timeStr: foul.timeStr, label: 'YELLOW CARD', accent: '#f4c845' })),
+      ...goalLog.filter((g) => g.team === 1).map((g) => ({ timeStr: g.timeStr, label: 'BUT', accent: '#4ade80' })),
+      ...(foulLog || []).filter((foul) => foul.team === 1).map((foul) => ({ timeStr: foul.timeStr, label: 'CARTON JAUNE', accent: '#f4c845' })),
     ].slice(-5).reverse(),
   ];
 
@@ -669,7 +669,7 @@ function drawFrame(ctx, snap) {
   c.fillStyle = '#fff';
   c.font = '900 40px Inter, sans-serif';
   c.textAlign = 'center';
-  c.fillText('FIFA WORLD CUP 2026', panelX + panelW / 2, panelY + 46);
+  c.fillText('COUPE DU MONDE FIFA 2026', panelX + panelW / 2, panelY + 46);
 
   // Possession label + percentages — SAME SIZE as FIFA title (40px)
   const possessionY = panelY + 96;
@@ -734,8 +734,8 @@ function drawFrame(ctx, snap) {
   // Events list — goals and fouls pop up, most recent first
   const eventsY = colY + 100;
   const allMatchEvents = [
-    ...goalLog.map(g => ({ type: 'goal', team: g.team, timeStr: g.timeStr, label: 'GOAL', accent: '#4ADE80' })),
-    ...foulLog.map(f => ({ type: 'foul', team: f.team, timeStr: f.timeStr, label: 'FOUL', accent: '#f4c845' })),
+    ...goalLog.map(g => ({ type: 'goal', team: g.team, timeStr: g.timeStr, label: 'BUT', accent: '#4ADE80' })),
+    ...foulLog.map(f => ({ type: 'foul', team: f.team, timeStr: f.timeStr, label: 'FAUTE', accent: '#f4c845' })),
   ].sort((a, b) => {
     const ta = parseFloat(a.timeStr.replace("'", '.'));
     const tb = parseFloat(b.timeStr.replace("'", '.'));
@@ -765,7 +765,7 @@ function drawFrame(ctx, snap) {
     c.fillStyle = '#fff';
     c.textAlign = 'center';
     c.font = '900 76px Inter, sans-serif';
-    c.fillText('YELLOW CARD', midX, midY);
+    c.fillText('CARTON JAUNE', midX, midY);
     c.restore();
   }
   if (snap.goalFlash > 0) {
@@ -774,7 +774,7 @@ function drawFrame(ctx, snap) {
   }
   // === SCROLLING TICKER above scoreboard — bigger, faster, white ===
   const tickerY = sbY - 30;
-  const tickerText = 'NEXT MATCH ?  TOP COMMENT PICKS THE TEAMS !     \u26BD     NEXT MATCH ?  TOP COMMENT PICKS THE TEAMS !     \u26BD     ';
+  const tickerText = 'PROCHAIN MATCH ?  LE TOP COMMENTAIRE CHOISIT LES EQUIPES !     \u26BD     PROCHAIN MATCH ?  LE TOP COMMENTAIRE CHOISIT LES EQUIPES !     \u26BD     ';
   const tickerSpeed = elapsed * 8;
   c.fillStyle = '#fff';
   c.font = '900 30px Inter, sans-serif';
@@ -796,13 +796,13 @@ function drawFrame(ctx, snap) {
     c.fillStyle = '#fff';
     c.textAlign = 'center';
     c.font = '900 58px Inter, sans-serif';
-    c.fillText('WHO WINS ?  \u26BD', midX, hookY + 60);
+    c.fillText('QUI VA GAGNER ?  \u26BD', midX, hookY + 60);
     c.fillStyle = '#fff';
     c.font = '800 34px Inter, sans-serif';
-    c.fillText('Comment your prediction !', midX, hookY + 110);
+    c.fillText('Commente ta prediction !', midX, hookY + 110);
     c.fillStyle = '#fff';
     c.font = '700 28px Inter, sans-serif';
-    c.fillText(`Like = ${teams[0].shortName || teams[0].name}          Save = ${teams[1].shortName || teams[1].name}`, midX, hookY + 160);
+    c.fillText(`Like = ${teams[0].shortName || teams[0].name}          Enregistre = ${teams[1].shortName || teams[1].name}`, midX, hookY + 160);
     c.restore();
   }
 
@@ -818,7 +818,7 @@ function drawFrame(ctx, snap) {
     c.fillStyle = '#fff';
     c.textAlign = 'center';
     c.font = '900 52px Inter, sans-serif';
-    c.fillText('TIED !  Who breaks it ?', midX, pitchTopQuarter);
+    c.fillText('EGALITE !  Qui va marquer ?', midX, pitchTopQuarter);
     c.restore();
   }
   // COMEBACK alert — inside pitch, white with glow
@@ -833,7 +833,7 @@ function drawFrame(ctx, snap) {
         c.fillStyle = '#fff';
         c.textAlign = 'center';
         c.font = '900 62px Inter, sans-serif';
-        c.fillText('COMEBACK ?!', midX, pitchTopQuarter);
+        c.fillText('REMONTADA ?!', midX, pitchTopQuarter);
         c.restore();
       }
     }
@@ -864,21 +864,21 @@ function drawFrame(ctx, snap) {
     c.textAlign = 'center';
     c.fillStyle = 'rgba(255,255,255,0.7)';
     c.font = '700 30px Inter, sans-serif';
-    c.fillText('FULL TIME', midX, ftY + 45);
+    c.fillText('COUP DE SIFFLET FINAL', midX, ftY + 45);
     c.fillStyle = '#fff';
     c.font = '900 90px Inter, sans-serif';
     c.fillText(`${teams[0].score} - ${teams[1].score}`, midX, ftY + 130);
     c.fillStyle = '#f4c845';
     c.font = '800 38px Inter, sans-serif';
-    const winner = teams[0].score > teams[1].score ? teams[0].name : teams[1].score > teams[0].score ? teams[1].name : 'DRAW';
-    c.fillText(winner === 'DRAW' ? 'DRAW' : `${winner} WINS`, midX, ftY + 185);
+    const winner = teams[0].score > teams[1].score ? teams[0].name : teams[1].score > teams[0].score ? teams[1].name : 'NUL';
+    c.fillText(winner === 'NUL' ? 'MATCH NUL' : `${winner} GAGNE !`, midX, ftY + 185);
     // WERE YOU RIGHT — inside the glassmorphism panel
     c.fillStyle = '#4ADE80';
     c.font = '900 32px Inter, sans-serif';
-    c.fillText('Were you right ?  \uD83D\uDC40', midX, ftY + 235);
+    c.fillText('Tu avais raison ?  \uD83D\uDC40', midX, ftY + 235);
     c.fillStyle = 'rgba(255,255,255,0.6)';
     c.font = '700 24px Inter, sans-serif';
-    c.fillText('Comment the exact score to be featured !', midX, ftY + 275);
+    c.fillText('Commente le score exact pour apparaitre !', midX, ftY + 275);
   }
 
   c.restore();

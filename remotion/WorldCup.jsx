@@ -184,7 +184,7 @@ function stepSim(s) {
     s.lastBallY = ball.y;
   }
   if (s.stuckTimer >= 30) { // 1 second instead of 2 — faster foul
-    s.foulFlash = 40;
+    s.foulFlash = 75; // 2.5 seconds visible
     const atk = ball.y < midY ? 0 : 1;
     teams[atk === 0 ? 1 : 0].fouls++;
     const foulTeam = atk === 0 ? 1 : 0;
@@ -248,7 +248,7 @@ function stepSim(s) {
     teams[scored].score++;
     const elapsed = 90 * (s.timerFrames / s.totalFrames);
     goalLog.push({ team: scored, timeStr: `${Math.floor(elapsed / 60)}'${Math.floor(elapsed % 60).toString().padStart(2, '0')}` });
-    s.goalFlash = 30;
+    s.goalFlash = 90; // 3 seconds visible
     resetPos(s);
     s.stuckTimer = 0;
     // No pause — ball gets strong velocity immediately after goal
@@ -753,7 +753,7 @@ function drawFrame(ctx, snap) {
   });
 
   if (snap.foulFlash > 0) {
-    c.fillStyle = `rgba(244,200,69,${(snap.foulFlash / 40) * 0.24})`;
+    c.fillStyle = `rgba(244,200,69,${(snap.foulFlash / 75) * 0.24})`;
     c.fillRect(0, 0, W, H);
     // YELLOW CARD — centered in pitch, white with glow
     c.save();
@@ -765,7 +765,7 @@ function drawFrame(ctx, snap) {
     c.restore();
   }
   if (snap.goalFlash > 0) {
-    c.fillStyle = `rgba(255,255,255,${(snap.goalFlash / 30) * 0.26})`;
+    c.fillStyle = `rgba(255,255,255,${(snap.goalFlash / 90) * 0.26})`;
     c.fillRect(0, 0, W, H);
   }
   // === SCROLLING TICKER above scoreboard — bigger, faster, white ===
@@ -791,8 +791,8 @@ function drawFrame(ctx, snap) {
   // Pitch upper quarter for tension text
   const pitchTopQuarter = py + ph / 4;
 
-  // TIED alert — inside pitch, white with glow
-  if (teams[0].score === teams[1].score && totalGoals > 0 && snap.goalFlash > 15) {
+  // TIED alert — inside pitch upper quarter, white with glow, visible for ~2.5s
+  if (teams[0].score === teams[1].score && totalGoals > 0 && snap.goalFlash > 10 && snap.goalFlash < 85) {
     c.save();
     c.shadowColor = 'rgba(255,255,255,0.7)'; c.shadowBlur = 20;
     c.fillStyle = '#fff';
@@ -801,8 +801,8 @@ function drawFrame(ctx, snap) {
     c.fillText('EGALITE !  Qui va marquer ?', midX, pitchTopQuarter);
     c.restore();
   }
-  // COMEBACK alert — inside pitch, white with glow
-  if (snap.goalFlash > 10 && snap.goalFlash < 25) {
+  // COMEBACK alert — inside pitch upper quarter, white with glow, visible for ~2.5s
+  if (snap.goalFlash > 10 && snap.goalFlash < 85) {
     const lastGoal = goalLog.length > 0 ? goalLog[goalLog.length - 1] : null;
     if (lastGoal) {
       const scoringTeam = lastGoal.team;

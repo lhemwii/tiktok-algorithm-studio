@@ -180,7 +180,7 @@ function stepSim(s) {
 
   // Stuck detection — if ball stays within a ~50px zone for 2s = foul
   // This catches the "vibrating between two players" case where speed > 0 but position barely changes
-  const stuckZoneRadius = 50;
+  const stuckZoneRadius = 35; // smaller zone = faster foul detection
   const distFromAnchor = Math.sqrt((ball.x - s.lastBallX) ** 2 + (ball.y - s.lastBallY) ** 2);
   if (distFromAnchor < stuckZoneRadius) {
     s.stuckTimer++;
@@ -190,7 +190,7 @@ function stepSim(s) {
     s.lastBallX = ball.x;
     s.lastBallY = ball.y;
   }
-  if (s.stuckTimer >= 60) {
+  if (s.stuckTimer >= 30) { // 1 second instead of 2 — faster foul
     s.foulFlash = 40;
     const atk = ball.y < midY ? 0 : 1;
     teams[atk === 0 ? 1 : 0].fouls++;

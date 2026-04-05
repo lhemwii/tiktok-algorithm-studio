@@ -1,11 +1,11 @@
 import { useCurrentFrame, useVideoConfig, Sequence, Audio } from 'remotion';
 import { useEffect, useRef, useMemo } from 'react';
 import { TEAMS } from './teams';
-import '../tiktok-app/src/style.css'; // Inject TikTok styles
+import '../tiktok-app/src/style.css';
 
 const PITCH_LEFT = 20, PITCH_RIGHT = 430;
-const PITCH_TOP = 172, PITCH_BOTTOM = 522;
-const GOAL_LEFT = 155, GOAL_RIGHT = 295; // 140px wide net
+const PITCH_TOP = 200, PITCH_BOTTOM = 660;
+const GOAL_LEFT = 155, GOAL_RIGHT = 295;
 
 function dist(a, b) {
   return Math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2);
@@ -16,15 +16,25 @@ function seededRandom(seed) {
   return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
 }
 
+function flagGradient(teamInfo) {
+  if (!teamInfo.flag) return teamInfo.color;
+  const stops = teamInfo.flag.map(([color, x, , w]) =>
+    `${color} ${(x*100).toFixed(1)}%, ${color} ${((x+w)*100).toFixed(1)}%`
+  ).join(', ');
+  return `linear-gradient(90deg, ${stops})`;
+}
+
 function initState(seed, homeCode, awayCode) {
   const rand = seededRandom(seed);
-  const homeTeamInfo = TEAMS[homeCode] || { color: '#002395', altColor: '#ED2939', name: 'FRANCE' };
-  const awayTeamInfo = TEAMS[awayCode] || { color: '#00853F', altColor: '#EF3340', name: 'SENEGAL' };
-  
+  const homeTeamInfo = TEAMS[homeCode] || { color: '#002395', altColor: '#ED2939', name: 'HOME', shortName: homeCode, flag: [['#002395',0,0,0.33,1],['#fff',0.33,0,0.34,1],['#ED2939',0.67,0,0.33,1]] };
+  const awayTeamInfo = TEAMS[awayCode] || { color: '#00853F', altColor: '#EF3340', name: 'AWAY', shortName: awayCode, flag: [['#00853F',0,0,0.33,1],['#FDEF42',0.33,0,0.34,1],['#EF3340',0.67,0,0.33,1]] };
+
   const state = {
     rand,
     homeScore: 0,
     awayScore: 0,
+    homeCards: 0,
+    awayCards: 0,
     phase: 'play',
     timerFrames: 0,
     events: [],
@@ -32,7 +42,7 @@ function initState(seed, homeCode, awayCode) {
     touches1: 50,
     touches2: 50,
     ballZoneX: 225,
-    ballZoneY: 365,
+    ballZoneY: (PITCH_TOP + PITCH_BOTTOM) / 2,
     ballStuckFrames: 0,
     goalCelebrationTimer: 0,
     homeTeamInfo,
@@ -40,24 +50,25 @@ function initState(seed, homeCode, awayCode) {
     matchInfo: ''
   };
 
-  const ball = { x: 225, y: 347, vx: 0, vy: 0, r: 10 };
+  const centerY = (PITCH_TOP + PITCH_BOTTOM) / 2;
+  const ball = { x: 225, y: centerY, vx: 0, vy: 0, r: 12 };
   const players = [];
 
   const resetPositions = () => {
     players.length = 0;
-    const centerY = (PITCH_TOP + PITCH_BOTTOM) / 2;
-    players.push({ x: 225, y: PITCH_BOTTOM - 20, vx: 0, vy: 0, r: 22, type: 'gk', team: 1, baseColor: homeTeamInfo.color, hasCard: false });
-    players.push({ x: 130, y: centerY + 60, vx: 0, vy: 0, r: 19, type: 'field', team: 1, baseColor: homeTeamInfo.color, hasCard: false });
-    players.push({ x: 320, y: centerY + 60, vx: 0, vy: 0, r: 19, type: 'field', team: 1, baseColor: homeTeamInfo.color, hasCard: false });
-    players.push({ x: 225, y: PITCH_TOP + 20, vx: 0, vy: 0, r: 22, type: 'gk', team: 2, baseColor: awayTeamInfo.color, hasCard: false });
-    players.push({ x: 130, y: centerY - 60, vx: 0, vy: 0, r: 19, type: 'field', team: 2, baseColor: awayTeamInfo.color, hasCard: false });
-    players.push({ x: 320, y: centerY - 60, vx: 0, vy: 0, r: 19, type: 'field', team: 2, baseColor: awayTeamInfo.color, hasCard: false });
-    players.push({ x: 225 - 80, y: centerY, vx: 0, vy: 0, r: 17, type: 'ref', team: 0, baseColor: '#222', hasCard: false });
-    
-    ball.x = 225; ball.y = centerY; ball.vx = 0; ball.vy = 0;
+    const cy = (PITCH_TOP + PITCH_BOTTOM) / 2;
+    players.push({ x: 225, y: PITCH_BOTTOM - 25, vx: 0, vy: 0, r: 24, type: 'gk', team: 1, baseColor: homeTeamInfo.color, hasCard: false });
+    players.push({ x: 130, y: cy + 90, vx: 0, vy: 0, r: 21, type: 'field', team: 1, baseColor: homeTeamInfo.color, hasCard: false });
+    players.push({ x: 320, y: cy + 90, vx: 0, vy: 0, r: 21, type: 'field', team: 1, baseColor: homeTeamInfo.color, hasCard: false });
+    players.push({ x: 225, y: PITCH_TOP + 25, vx: 0, vy: 0, r: 24, type: 'gk', team: 2, baseColor: awayTeamInfo.color, hasCard: false });
+    players.push({ x: 130, y: cy - 90, vx: 0, vy: 0, r: 21, type: 'field', team: 2, baseColor: awayTeamInfo.color, hasCard: false });
+    players.push({ x: 320, y: cy - 90, vx: 0, vy: 0, r: 21, type: 'field', team: 2, baseColor: awayTeamInfo.color, hasCard: false });
+    players.push({ x: 225 - 80, y: cy, vx: 0, vy: 0, r: 18, type: 'ref', team: 0, baseColor: '#222', hasCard: false });
+
+    ball.x = 225; ball.y = cy; ball.vx = 0; ball.vy = 0;
     state.ballZoneX = ball.x; state.ballZoneY = ball.y; state.ballStuckFrames = 0;
   };
-  
+
   resetPositions();
   state.resetPositions = resetPositions;
   return { state, ball, players };
@@ -75,11 +86,9 @@ function physicsStep(state, ball, players) {
     }
   }
 
-  // Ball physics
   ball.x += ball.vx; ball.y += ball.vy;
   ball.vx *= 0.98; ball.vy *= 0.98;
 
-  // Stuck logic
   if (dist({x: ball.x, y: ball.y}, {x: state.ballZoneX, y: state.ballZoneY}) > 50) {
     state.ballZoneX = ball.x;
     state.ballZoneY = ball.y;
@@ -98,7 +107,9 @@ function physicsStep(state, ball, players) {
     }
     if (closestP) {
       closestP.hasCard = true;
-      state.events.push({ type: 'card', title: 'YELLOW CARD (Stalling)', teamName: closestP.team === 1 ? state.homeTeamInfo.name : state.awayTeamInfo.name });
+      if (closestP.team === 1) state.homeCards++;
+      else if (closestP.team === 2) state.awayCards++;
+      state.events.push({ type: 'card', title: 'YELLOW CARD', teamName: closestP.team === 1 ? state.homeTeamInfo.name : state.awayTeamInfo.name });
     }
     state.ballStuckFrames = 0;
     ball.vx += (state.rand()-0.5)*25;
@@ -106,26 +117,24 @@ function physicsStep(state, ball, players) {
     state.events.push({ type: 'whistle' });
   }
 
-  // Pitch boundary bounces
   if (ball.x - ball.r < PITCH_LEFT) { ball.x = PITCH_LEFT + ball.r; ball.vx *= -1; state.events.push({ type: 'bounce' }); }
   if (ball.x + ball.r > PITCH_RIGHT) { ball.x = PITCH_RIGHT - ball.r; ball.vx *= -1; state.events.push({ type: 'bounce' }); }
-  
-  // Goals logic (stuck inside net)
+
   if (ball.y < PITCH_TOP) {
     if (ball.x > GOAL_LEFT && ball.x < GOAL_RIGHT) {
       if (state.phase === 'play') {
         state.homeScore++;
         state.phase = 'goal_celebration';
-        state.goalCelebrationTimer = 150; // 2.5 seconds at 60fps
+        state.goalCelebrationTimer = 150;
         state.events.push({ type: 'goal', title: 'GOAL!', teamName: state.homeTeamInfo.name });
       }
       ball.vy *= 0.7; ball.vx *= 0.7;
-      if (ball.y < PITCH_TOP - 25) { ball.y = PITCH_TOP - 25; ball.vy *= -0.3; } // back of net
+      if (ball.y < PITCH_TOP - 25) { ball.y = PITCH_TOP - 25; ball.vy *= -0.3; }
     } else {
       ball.y = PITCH_TOP + ball.r; ball.vy *= -1; state.events.push({ type: 'bounce' });
     }
   }
-  
+
   if (ball.y > PITCH_BOTTOM) {
     if (ball.x > GOAL_LEFT && ball.x < GOAL_RIGHT) {
       if (state.phase === 'play') {
@@ -135,13 +144,12 @@ function physicsStep(state, ball, players) {
         state.events.push({ type: 'goal', title: 'GOAL!', teamName: state.awayTeamInfo.name });
       }
       ball.vy *= 0.7; ball.vx *= 0.7;
-      if (ball.y > PITCH_BOTTOM + 25) { ball.y = PITCH_BOTTOM + 25; ball.vy *= -0.3; } // back of net
+      if (ball.y > PITCH_BOTTOM + 25) { ball.y = PITCH_BOTTOM + 25; ball.vy *= -0.3; }
     } else {
       ball.y = PITCH_BOTTOM - ball.r; ball.vy *= -1; state.events.push({ type: 'bounce' });
     }
   }
 
-  // Player physics and basic AI
   for (const p of players) {
     p.x += p.vx; p.y += p.vy;
     p.vx *= 0.9; p.vy *= 0.9;
@@ -158,7 +166,7 @@ function physicsStep(state, ball, players) {
       if (d > 0) {
         const ax = (ball.x - p.x) / d;
         const ay = (ball.y - p.y) / d;
-        const speed = p.hasCard ? 0.2 : 0.45;
+        const speed = p.hasCard ? 0.25 : 0.65;
         p.vx += ax * speed;
         p.vy += ay * speed;
       }
@@ -166,7 +174,7 @@ function physicsStep(state, ball, players) {
 
     if (p.type === 'gk') {
       const targetX = Math.max(GOAL_LEFT+10, Math.min(GOAL_RIGHT-10, ball.x));
-      const targetY = p.team === 1 ? 800 - 80 : 80;
+      const targetY = p.team === 1 ? PITCH_BOTTOM - 5 : PITCH_TOP + 5;
       p.vx += (targetX - p.x) * 0.05;
       p.vy += (targetY - p.y) * 0.05;
     }
@@ -181,13 +189,13 @@ function physicsStep(state, ball, players) {
     const db = dist(p, ball);
     if (db < p.r + ball.r) {
       if (p.type !== 'ref') {
-         if (p.team === 1) state.touches1++;
-         else if (p.team === 2) state.touches2++;
+        if (p.team === 1) state.touches1++;
+        else if (p.team === 2) state.touches2++;
       }
-      
+
       const nx = (ball.x - p.x) / db;
       const ny = (ball.y - p.y) / db;
-      const impulse = 3;
+      const impulse = 4.5;
       ball.vx += nx * impulse;
       ball.vy += ny * impulse;
       p.vx -= nx * impulse * 0.5;
@@ -200,7 +208,7 @@ function physicsStep(state, ball, players) {
     for(let j=i+1; j<players.length; j++){
       const p1 = players[i], p2 = players[j];
       if (p1.type === 'ref' || p2.type === 'ref') continue;
-      
+
       const d = dist(p1, p2);
       if (d < p1.r + p2.r) {
         const nx = (p2.x - p1.x)/d;
@@ -214,17 +222,12 @@ function physicsStep(state, ball, players) {
 }
 
 function simulateAll(seed, homeTeam, awayTeam, totalFrames) {
-  // TikTok app runs at 60fps logic. If Remotion renders at 30 fps, we should step twice per Remotion frame.
   const { state, ball, players } = initState(seed, homeTeam, awayTeam);
   const snapshots = [];
   const allEvents = [{ type: 'whistle', frame: 1 }];
   const actionLog = [];
 
   for (let f = 0; f < totalFrames; f++) {
-    // 2 physics steps per visual frame to match 60fps logic on a 30fps export (or 1 step if exported at 60fps)
-    // To be safe and identical to the original browser speed (65 seconds * 60 fps = 3900 logic steps)
-    // If we render at 30 fps for 65 seconds, totalFrames is 1950. 
-    // We step twice per frame!
     const frameEvents = [];
     for (let step = 0; step < 2; step++) {
       if (state.phase === 'play') {
@@ -249,6 +252,8 @@ function simulateAll(seed, homeTeam, awayTeam, totalFrames) {
       timerFrames: state.timerFrames,
       homeScore: state.homeScore,
       awayScore: state.awayScore,
+      homeCards: state.homeCards,
+      awayCards: state.awayCards,
       touches1: state.touches1,
       touches2: state.touches2,
       homeTeamInfo: state.homeTeamInfo,
@@ -263,7 +268,7 @@ function simulateAll(seed, homeTeam, awayTeam, totalFrames) {
 // ============== COMPONENT ==============
 export const TikTokWorldCup = ({ homeTeam = 'FRA', awayTeam = 'SEN', seed = 42 }) => {
   const frame = useCurrentFrame();
-  const { width, height, durationInFrames } = useVideoConfig(); // expect 1080x1920
+  const { width, height, durationInFrames } = useVideoConfig();
   const canvasRef = useRef(null);
 
   const { snapshots, allEvents } = useMemo(
@@ -279,29 +284,28 @@ export const TikTokWorldCup = ({ homeTeam = 'FRA', awayTeam = 'SEN', seed = 42 }
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, 450, 800);
 
-    // Draw Players
     for (const p of snap.players) {
       ctx.save();
       ctx.translate(p.x, p.y);
       ctx.shadowColor = 'rgba(0,0,0,0.2)';
       ctx.shadowBlur = 18;
       ctx.shadowOffsetY = 10;
-      
+
       ctx.beginPath();
       ctx.arc(0, 0, p.r, 0, Math.PI*2);
       ctx.clip();
-      
+
       if (p.team === 2) {
         ctx.fillStyle = snap.awayTeamInfo.color;
         ctx.fillRect(-p.r, -p.r, (p.r*2)/3, p.r*2);
-        ctx.fillStyle = '#FDEF42'; // SEN yellow fallback
-        ctx.fillRect(-p.r + (p.r*2)/3, -p.r, (p.r*2)/3, p.r*2);
         ctx.fillStyle = snap.awayTeamInfo.altColor;
+        ctx.fillRect(-p.r + (p.r*2)/3, -p.r, (p.r*2)/3, p.r*2);
+        ctx.fillStyle = snap.awayTeamInfo.flag?.[2]?.[0] || snap.awayTeamInfo.altColor;
         ctx.fillRect(-p.r + ((p.r*2)/3)*2, -p.r, (p.r*2)/3, p.r*2);
       } else if (p.team === 1) {
         ctx.fillStyle = snap.homeTeamInfo.color;
         ctx.fillRect(-p.r, -p.r, (p.r*2)/3, p.r*2);
-        ctx.fillStyle = '#fff';      // FRA white fallback
+        ctx.fillStyle = '#fff';
         ctx.fillRect(-p.r + (p.r*2)/3, -p.r, (p.r*2)/3, p.r*2);
         ctx.fillStyle = snap.homeTeamInfo.altColor;
         ctx.fillRect(-p.r + ((p.r*2)/3)*2, -p.r, (p.r*2)/3, p.r*2);
@@ -309,8 +313,8 @@ export const TikTokWorldCup = ({ homeTeam = 'FRA', awayTeam = 'SEN', seed = 42 }
         ctx.fillStyle = '#131313';
         ctx.fillRect(-p.r, -p.r, p.r*2, p.r*2);
         if (p.type === 'ref') {
-           ctx.fillStyle = '#ffd54a';
-           ctx.fillRect(-p.r, -4, p.r*2, 8);
+          ctx.fillStyle = '#ffd54a';
+          ctx.fillRect(-p.r, -4, p.r*2, 8);
         }
       }
       ctx.restore();
@@ -364,26 +368,23 @@ export const TikTokWorldCup = ({ homeTeam = 'FRA', awayTeam = 'SEN', seed = 42 }
   }, [frame, snap]);
 
   let gameMinute = Math.min(90, Math.floor((snap.timerFrames / 3900) * 90));
-  const totalPos = snap.touches1 + snap.touches2;
-  const p1Pct = Math.round((snap.touches1 / totalPos) * 100);
-  const p2Pct = 100 - p1Pct;
 
-  // Audio Processing (Copied from WorldCup)
+  // Audio
   function normalizeAudioEvents(events, duration) {
     const rules = { whistle: { cooldown: 10 }, goal: { cooldown: 20 }, kick: { cooldown: 2 }, bounce: { cooldown: 3 } };
     const last = new Map();
     const norm = [];
     events.slice().sort((a,b) => a.frame - b.frame).forEach(e => {
-        if (!e.type) return;
-        const r = rules[e.type] || { cooldown: 0 };
-        const prev = last.get(e.type);
-        if (prev !== undefined && e.frame - prev < r.cooldown) return;
-        last.set(e.type, e.frame);
-        norm.push(e);
+      if (!e.type) return;
+      const r = rules[e.type] || { cooldown: 0 };
+      const prev = last.get(e.type);
+      if (prev !== undefined && e.frame - prev < r.cooldown) return;
+      last.set(e.type, e.frame);
+      norm.push(e);
     });
     return norm;
   }
-  
+
   const crowdSrc = new URL('./audio/clean-stadium-loop.mp3', import.meta.url).href;
   const goalSrc = new URL('./audio/goal-cheer.mp3', import.meta.url).href;
   const goalNetSrc = new URL('./audio/goal-net-impact.mp3', import.meta.url).href;
@@ -393,20 +394,23 @@ export const TikTokWorldCup = ({ homeTeam = 'FRA', awayTeam = 'SEN', seed = 42 }
   const bounceSrc = new URL('./audio/bounce.wav', import.meta.url).href;
   const normEvents = useMemo(() => normalizeAudioEvents(allEvents, durationInFrames), [allEvents, durationInFrames]);
 
+  const homeFlagBg = flagGradient(snap.homeTeamInfo);
+  const awayFlagBg = flagGradient(snap.awayTeamInfo);
+
   return (
     <div style={{ width: 1080, height: 1920, backgroundColor: '#131e18', overflow: 'hidden' }}>
       <div style={{ transform: 'scale(2.4)', transformOrigin: 'top left', width: 450, height: 800 }}>
-        
-        {/* TikTok DOM Layout */}
+
+        {/* Pitch lines */}
         <div className="tiktok-frame">
           <div className="pitch-bg-elements">
-            <div className="pitch-outline">
+            <div className="pitch-outline" style={{ top: PITCH_TOP, bottom: 800 - PITCH_BOTTOM }}>
               <div className="net top"></div>
-              <div className="penalty-area top"></div>
+              <div className="penalty-area top" style={{ height: 120 }}></div>
               <div className="mid-line"></div>
-              <div className="mid-circle"></div>
+              <div className="mid-circle" style={{ width: 120, height: 120 }}></div>
               <div className="net bottom"></div>
-              <div className="penalty-area bottom"></div>
+              <div className="penalty-area bottom" style={{ height: 120 }}></div>
             </div>
           </div>
 
@@ -414,10 +418,18 @@ export const TikTokWorldCup = ({ homeTeam = 'FRA', awayTeam = 'SEN', seed = 42 }
 
           <div id="ui-overlay" style={{ zIndex: 20 }}>
             {/* SCOREBOARD */}
-            <div className="scoreboard glass-ui" id="scoreboard">
+            <div className="scoreboard glass-ui" id="scoreboard" style={{ top: 40, height: 130 }}>
               <div className="sb-team">
-                <div className="sb-flag-block fra"></div>
+                <div className="sb-flag-block" style={{ background: homeFlagBg }}></div>
+                <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: 1, color: 'rgba(255,255,255,0.85)', marginBottom: 2 }}>{snap.homeTeamInfo.shortName || homeTeam}</span>
                 <span className="sb-score">{snap.homeScore}</span>
+                {snap.homeCards > 0 && (
+                  <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
+                    {Array.from({length: snap.homeCards}).map((_, i) => (
+                      <div key={i} style={{ width: 9, height: 13, background: '#FFD100', borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.5)' }}></div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="sb-center">
                 <div className="sb-timer-box">
@@ -426,41 +438,16 @@ export const TikTokWorldCup = ({ homeTeam = 'FRA', awayTeam = 'SEN', seed = 42 }
                 <span className="sb-half">{snap.phase === 'end' ? 'FULL TIME' : gameMinute >= 45 ? '2ND HALF' : '1ST HALF'}</span>
               </div>
               <div className="sb-team">
-                <div className="sb-flag-block sen"></div>
+                <div className="sb-flag-block" style={{ background: awayFlagBg }}></div>
+                <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: 1, color: 'rgba(255,255,255,0.85)', marginBottom: 2 }}>{snap.awayTeamInfo.shortName || awayTeam}</span>
                 <span className="sb-score">{snap.awayScore}</span>
-              </div>
-            </div>
-
-            {/* ACTION PANEL */}
-            <div className="action-panel glass-ui">
-              <div className="action-header">
-                <span>Timeline & Events</span>
-                <span>⏱️</span>
-              </div>
-
-              <div className="possession-box" style={{ marginBottom: 14, position: 'relative' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 800, color: '#fff', textTransform: 'uppercase', marginBottom: 6 }}>
-                  <span>{snap.homeTeamInfo.name.substring(0,3)} ({p1Pct}%)</span>
-                  <span style={{ color: 'rgba(255,255,255,0.6)' }}>Possession</span>
-                  <span>{snap.awayTeamInfo.name.substring(0,3)} ({p2Pct}%)</span>
-                </div>
-                <div style={{ width: '100%', height: 8, background: 'rgba(0,0,0,0.5)', borderRadius: 4, overflow: 'hidden', display: 'flex' }}>
-                  <div style={{ width: `${p1Pct}%`, background: '#002395', transition: 'width 0.3s' }}></div>
-                  <div style={{ width: `${p2Pct}%`, background: '#00853F', transition: 'width 0.3s' }}></div>
-                </div>
-              </div>
-
-              <div className="action-list">
-                {snap.actionLog.slice(0, 5).map((act, i) => (
-                  <div key={i} className={`action-item ${act.type === 'goal' ? 'goal' : 'yellow-card'}`}>
-                    <span className="act-time">{act.gameMinute}'</span>
-                    <span className="act-icon">{act.type === 'goal' ? '⚽' : '🟨'}</span>
-                    <div className="act-desc">
-                      <span className="act-title">{act.title}</span>
-                      <span className="act-team">{act.teamName}</span>
-                    </div>
+                {snap.awayCards > 0 && (
+                  <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
+                    {Array.from({length: snap.awayCards}).map((_, i) => (
+                      <div key={i} style={{ width: 9, height: 13, background: '#FFD100', borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.5)' }}></div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
             </div>
           </div>

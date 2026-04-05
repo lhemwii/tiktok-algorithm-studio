@@ -30,33 +30,32 @@ function initState(seed, songId) {
   const song = SONGS[songId] || SONGS.twinkle;
   const totalNotes = song.notes.length;
 
-  // Circle arena
-  const cx = W / 2, cy = H * 0.45, radius = 380;
+  // Circle arena — centered vertically
+  const cx = W / 2, cy = H * 0.48, radius = 400;
 
-  // Generate spikes inside the circle (random positions on the inner wall)
-  const numSpikes = 24;
+  // Spikes ALL around the inside of the circle — big, thick, colorful
+  const numSpikes = 40;
   const spikes = [];
   for (let i = 0; i < numSpikes; i++) {
-    const angle = (i / numSpikes) * Math.PI * 2 + rand() * 0.1;
-    const spikeLen = 35 + rand() * 25;
-    // Color cycling
-    const hue = (i * 360 / numSpikes + 30) % 360;
-    spikes.push({ angle, len: spikeLen, color: `hsl(${hue}, 80%, 55%)` });
+    const angle = (i / numSpikes) * Math.PI * 2;
+    const spikeLen = 70; // all same height, wider
+    const hue = (i * 360 / numSpikes) % 360;
+    spikes.push({ angle, len: spikeLen, color: `hsl(${hue}, 85%, 55%)` });
   }
 
-  // Ball colors for each attempt
+  // Ball colors — bright, each attempt different
   const ballColors = [];
   for (let i = 0; i < totalNotes + 5; i++) {
-    const hue = (i * 37 + 10) % 360;
-    ballColors.push(`hsl(${hue}, 85%, 60%)`);
+    const hue = (i * 31 + 10) % 360;
+    ballColors.push(`hsl(${hue}, 90%, 58%)`);
   }
 
   return {
     rand, cx, cy, radius, spikes, song, totalNotes, ballColors,
-    // Simulation state
     currentAttempt: 0,
-    noteIndex: 0, // which note we're on in this attempt
-    ball: { x: cx, y: cy - radius + 60, vx: 0, vy: 0, r: 16, alive: true, color: ballColors[0] },
+    noteIndex: 0,
+    // Ball spawns at CENTER of circle
+    ball: { x: cx, y: cy, vx: (rand() - 0.5) * 4, vy: -3, r: 36, alive: true, color: ballColors[0] },
     deadBalls: [], // { x, y, r, color: 'grey' }
     phase: 'dropping', // 'dropping' | 'playing_notes' | 'dead' | 'respawn'
     phaseTimer: 0,
@@ -75,21 +74,54 @@ function stepSim(s) {
 
   if (s.phase === 'dropping') {
     // Ball falls with gravity
-    ball.vy += 0.4; // gravity
+    ball.vy += 0.8; // strong gravity — falls fast
     ball.vx += (rand() - 0.5) * 0.3; // slight random wobble
     ball.x += ball.vx;
     ball.y += ball.vy;
 
-    // Bounce off circle walls
+    // Bounce off circle walls — BUT check spike zones first
     const dx = ball.x - cx, dy = ball.y - cy;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist + ball.r > radius) {
-      const nx = dx / dist, ny = dy / dist;
-      const dot = ball.vx * nx + ball.vy * ny;
-      ball.vx -= 2 * dot * nx * 0.7;
-      ball.vy -= 2 * dot * ny * 0.7;
-      ball.x = cx + nx * (radius - ball.r - 1);
-      ball.y = cy + ny * (radius - ball.r - 1);
+    const ballAngle = Math.atan2(dy, dx);
+
+    if (dist + ball.r > radius - 5) {
+      // Ball is near the wall — check if it's in a spike zone
+      let hitSpike = false;
+      if (s.phaseTimer > 20) { // immune first 20 frames
+        const spikeAngleWidth = (2 * Math.PI / spikes.length) * 0.7; // angular width of spike zone
+        for (const spike of spikes) {
+          let angleDiff = ballAngle - spike.angle;
+          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+          if (Math.abs(angleDiff) < spikeAngleWidth / 2) {
+            // IN SPIKE ZONE — die!
+            hitSpike = true;
+            s.phase = 'dead';
+            s.phaseTimer = 0;
+            ball.alive = false;
+            const noteIdx = Math.min(s.currentAttempt, song.notes.length - 1);
+            s.events.push({ type: 'note', freq: song.notes[noteIdx] });
+            s.events.push({ type: 'death' });
+            // Place dead ball INSIDE the circle (away from spikes)
+            const deadDist = radius - spike.len - ball.r - 5;
+            const deadX = cx + Math.cos(spike.angle) * deadDist;
+            const deadY = cy + Math.sin(spike.angle) * deadDist;
+            deadBalls.push({ x: deadX, y: deadY, r: ball.r, color: '#555' });
+            break;
+          }
+        }
+      }
+
+      if (!hitSpike) {
+        // Safe wall bounce (between spikes)
+        const nx = dx / dist, ny = dy / dist;
+        const dot = ball.vx * nx + ball.vy * ny;
+        ball.vx -= 2 * dot * nx * 0.75;
+        ball.vy -= 2 * dot * ny * 0.75;
+        ball.x = cx + nx * (radius - ball.r - 2);
+        ball.y = cy + ny * (radius - ball.r - 2);
+        s.events.push({ type: 'bounce' });
+      }
     }
 
     // Bounce off dead balls
@@ -100,47 +132,14 @@ function stepSim(s) {
         const dnx = dbx / dbd, dny = dby / dbd;
         const ddot = ball.vx * dnx + ball.vy * dny;
         if (ddot < 0) {
-          ball.vx -= 2 * ddot * dnx * 0.6;
-          ball.vy -= 2 * ddot * dny * 0.6;
+          ball.vx -= 2 * ddot * dnx * 0.65;
+          ball.vy -= 2 * ddot * dny * 0.65;
           ball.x = db.x + dnx * (ball.r + db.r + 1);
           ball.y = db.y + dny * (ball.r + db.r + 1);
+          s.events.push({ type: 'bounce' });
         }
       }
     });
-
-    // Check spike collision
-    const ballAngle = Math.atan2(ball.y - cy, ball.x - cx);
-    const ballDist = Math.sqrt((ball.x - cx) ** 2 + (ball.y - cy) ** 2);
-
-    for (const spike of spikes) {
-      // Spike tip position
-      const tipX = cx + Math.cos(spike.angle) * (radius - spike.len);
-      const tipY = cy + Math.sin(spike.angle) * (radius - spike.len);
-      const tipDist = Math.sqrt((ball.x - tipX) ** 2 + (ball.y - tipY) ** 2);
-
-      if (tipDist < ball.r + 12) {
-        // HIT SPIKE — play note and die
-        s.phase = 'dead';
-        s.phaseTimer = 0;
-        ball.alive = false;
-
-        // Play note for this attempt
-        const noteIdx = Math.min(s.currentAttempt, song.notes.length - 1);
-        s.events.push({ type: 'note', freq: song.notes[noteIdx] });
-        s.events.push({ type: 'death' });
-
-        // Add dead ball
-        deadBalls.push({ x: ball.x, y: ball.y, r: ball.r, color: '#555' });
-        break;
-      }
-    }
-
-    // Play notes as ball bounces (each bounce = one note of the sequence)
-    // Actually: each ATTEMPT plays all notes from 0 to currentAttempt
-    // The note plays on the first frame of dropping
-    if (s.phaseTimer === 0 && s.notesPlayedThisAttempt < s.currentAttempt) {
-      // Play accumulated notes quickly
-    }
 
     s.phaseTimer++;
 
@@ -165,11 +164,12 @@ function stepSim(s) {
       }
       // New ball from top
       const newColor = ballColors[s.currentAttempt % ballColors.length];
-      ball.x = cx + (rand() - 0.5) * 100;
-      ball.y = cy - radius + 50;
-      ball.vx = (rand() - 0.5) * 3;
-      ball.vy = 2;
-      ball.r = 16;
+      // Respawn at CENTER with random direction
+      ball.x = cx + (rand() - 0.5) * 40;
+      ball.y = cy + (rand() - 0.5) * 40;
+      ball.vx = (rand() - 0.5) * 5;
+      ball.vy = (rand() - 0.5) * 5;
+      ball.r = 36;
       ball.alive = true;
       ball.color = newColor;
       s.phase = 'dropping';
@@ -215,32 +215,36 @@ function drawFrame(ctx, snap) {
   c.fillStyle = '#000';
   c.fillRect(0, 0, W, H);
 
-  // Title
-  c.fillStyle = '#fff';
-  c.textAlign = 'center';
-  c.font = '900 52px Inter, sans-serif';
-  c.fillText('GUESS THE SONG', W / 2, 120);
-
-  c.font = '700 30px Inter, sans-serif';
-  c.fillStyle = '#4ADE80';
-  c.fillText('Commente ta reponse !', W / 2, 170);
-
-  // Attempt counter
-  c.fillStyle = '#fff';
-  c.font = '800 36px Inter, sans-serif';
-  c.fillText(`Essai #${currentAttempt + 1}`, W / 2, 230);
-
-  // Note progress
-  c.fillStyle = '#666';
-  c.font = '600 24px Inter, sans-serif';
-  c.fillText(`${Math.min(currentAttempt + 1, totalNotes)} / ${totalNotes} notes`, W / 2, 270);
+  // Text positioned just above the circle (circle top = cy - radius)
+  const textBase = cy - radius - 20; // 20px gap above circle
 
   // Progress bar
-  const barX = 150, barY = 285, barW = W - 300, barH = 8;
+  const barX = 150, barY = textBase - 15, barW = W - 300, barH = 8;
   c.fillStyle = '#333';
   c.fillRect(barX, barY, barW, barH);
   c.fillStyle = '#4ADE80';
   c.fillRect(barX, barY, barW * Math.min(1, (currentAttempt + 1) / totalNotes), barH);
+
+  // Note progress
+  c.fillStyle = '#666';
+  c.textAlign = 'center';
+  c.font = '600 24px Inter, sans-serif';
+  c.fillText(`${Math.min(currentAttempt + 1, totalNotes)} / ${totalNotes} notes`, W / 2, barY - 12);
+
+  // Attempt counter
+  c.fillStyle = '#fff';
+  c.font = '800 36px Inter, sans-serif';
+  c.fillText(`Essai #${currentAttempt + 1}`, W / 2, barY - 48);
+
+  // Subtitle
+  c.font = '700 30px Inter, sans-serif';
+  c.fillStyle = '#4ADE80';
+  c.fillText('Commente ta reponse !', W / 2, barY - 92);
+
+  // Title
+  c.fillStyle = '#fff';
+  c.font = '900 52px Inter, sans-serif';
+  c.fillText('GUESS THE SONG', W / 2, barY - 132);
 
   // Circle arena — white glow
   c.save();
@@ -260,7 +264,7 @@ function drawFrame(ctx, snap) {
     const tipX = cx + Math.cos(spike.angle) * (radius - spike.len);
     const tipY = cy + Math.sin(spike.angle) * (radius - spike.len);
     const perpAngle = spike.angle + Math.PI / 2;
-    const halfWidth = 10;
+    const halfWidth = 26; // very thick spikes
     const lx = baseX + Math.cos(perpAngle) * halfWidth;
     const ly = baseY + Math.sin(perpAngle) * halfWidth;
     const rx = baseX - Math.cos(perpAngle) * halfWidth;
@@ -300,30 +304,38 @@ function drawFrame(ctx, snap) {
     c.restore();
   }
 
-  // Bottom text
-  c.fillStyle = 'rgba(255,255,255,0.4)';
-  c.textAlign = 'center';
-  c.font = '600 22px Inter, sans-serif';
-  c.fillText('Quelle est cette chanson ?', W / 2, H - 120);
-
-  // Scrolling ticker
-  const tickerY = H - 70;
-  c.fillStyle = '#4ADE80';
-  c.font = '800 26px Inter, sans-serif';
-  c.textAlign = 'left';
-  const tickerText = 'COMMENTE TA REPONSE !     \u{1F3B5}     COMMENTE TA REPONSE !     \u{1F3B5}     ';
-  const tickerW = c.measureText(tickerText).width;
-  const tickerOff = -((snap.frameCount * 4) % tickerW);
-  for (let tx = tickerOff; tx < W; tx += tickerW) {
-    c.fillText(tickerText, tx, tickerY);
-  }
+  // (bottom area left clean)
 
   c.restore();
 }
 
-// ============== AUDIO — pre-generated WAV files ==============
+// ============== AUDIO — static imports for each note ==============
+import note_392 from './audio/notes/note_392.wav';
+import note_415 from './audio/notes/note_415.wav';
+import note_440 from './audio/notes/note_440.wav';
+import note_466 from './audio/notes/note_466.wav';
+import note_554 from './audio/notes/note_554.wav';
+import note_587 from './audio/notes/note_587.wav';
+import note_622 from './audio/notes/note_622.wav';
+import note_659 from './audio/notes/note_659.wav';
+import note_698 from './audio/notes/note_698.wav';
+import note_784 from './audio/notes/note_784.wav';
+import note_831 from './audio/notes/note_831.wav';
+import note_880 from './audio/notes/note_880.wav';
+import note_932 from './audio/notes/note_932.wav';
+import note_1109 from './audio/notes/note_1109.wav';
+import note_1175 from './audio/notes/note_1175.wav';
+import note_1245 from './audio/notes/note_1245.wav';
+
+const NOTE_FILES = {
+  392: note_392, 415: note_415, 440: note_440, 466: note_466,
+  554: note_554, 587: note_587, 622: note_622, 659: note_659,
+  698: note_698, 784: note_784, 831: note_831, 880: note_880,
+  932: note_932, 1109: note_1109, 1175: note_1175, 1245: note_1245,
+};
+
 function getNoteUrl(freq) {
-  return new URL(`./audio/notes/note_${freq}.wav`, import.meta.url).href;
+  return NOTE_FILES[freq] || null;
 }
 
 // ============== COMPONENT ==============
@@ -355,13 +367,20 @@ export const GuessTheSong = ({ songId = 'twinkle', seed = 42 }) => {
   }, [frame, width, height, snapshots]);
 
   const noteEvents = allEvents.filter(e => e.type === 'note' && e.freq && noteAudioMap[e.freq]);
+  const bounceEvents = allEvents.filter(e => e.type === 'bounce');
+  const bounceSrc = new URL('./audio/bounce.wav', import.meta.url).href;
 
   return (
     <>
       <canvas ref={canvasRef} width={width} height={height} style={{ width: '100%', height: '100%' }} />
       {noteEvents.map((e, i) => (
         <Sequence key={`note-${i}`} from={e.frame} durationInFrames={12}>
-          <Audio src={noteAudioMap[e.freq]} volume={0.6} />
+          <Audio src={noteAudioMap[e.freq]} volume={0.7} />
+        </Sequence>
+      ))}
+      {bounceEvents.filter((_, i) => i % 2 === 0).map((e, i) => (
+        <Sequence key={`bnc-${i}`} from={e.frame} durationInFrames={5}>
+          <Audio src={bounceSrc} volume={0.2} />
         </Sequence>
       ))}
     </>

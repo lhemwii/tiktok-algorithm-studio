@@ -37,25 +37,21 @@ const PIANO = {
 };
 
 const W = 1080, H = 1920, SCALE = 2;
-
 const SONGS = { mario: { notes: MARIO_SONG } };
 
-// ============== SIMULATION ==============
-// Key concept: each attempt replays the EXACT same physics from frame 0.
-// The only difference is more dead balls from previous attempts.
-// Each bounce/collision = play next note. When noteCount for this attempt
-// is reached = ball dies on that spike.
+// ============== MUSIC-DRIVEN SIMULATION ==============
+// The music decides everything. Each note = a "hit" (spike or dead ball).
+// The ball animates BETWEEN hits with smooth arcs.
+// Timing is based on the tempo of the song.
 
 function simulateAll(seed, songId, totalFrames) {
   const song = SONGS[songId] || SONGS.mario;
   const totalNotes = song.notes.length;
-
   const cx = W / 2, cy = H * 0.48, radius = 400;
 
-  // Spikes — uniform, all around
+  // Spikes
   const numSpikes = 40;
   const spikeLen = 70;
-  const spikeAngleWidth = (2 * Math.PI / numSpikes) * 0.7;
   const spikes = [];
   for (let i = 0; i < numSpikes; i++) {
     const angle = (i / numSpikes) * Math.PI * 2;
@@ -65,207 +61,119 @@ function simulateAll(seed, songId, totalFrames) {
 
   // Ball colors
   const ballColors = [];
-  for (let i = 0; i < totalNotes + 5; i++) {
-    ballColors.push(`hsl(${(i * 31 + 10) % 360}, 90%, 58%)`);
+  for (let i = 0; i < 100; i++) ballColors.push(`hsl(${(i * 31 + 10) % 360}, 90%, 58%)`);
+
+  const br = 36; // ball radius
+
+  // PRE-PLAN all attempts:
+  // Attempt 0: 1 hit (note 0) → die on spike X
+  // Attempt 1: 2 hits (notes 0,1) → bounce on dead ball 0, die on spike Y
+  // Attempt 2: 3 hits (notes 0,1,2) → bounce dead 0, bounce dead 1, die on spike Z
+  // etc.
+
+  // Choose which spike each attempt dies on (spread around the circle)
+  const deathSpikes = [];
+  let spikeIdx = Math.floor(numSpikes * 0.75); // start at bottom-right
+  for (let i = 0; i < totalNotes; i++) {
+    deathSpikes.push(spikeIdx % numSpikes);
+    spikeIdx += 7; // jump around the circle
   }
 
-  // State
-  const deadBalls = []; // permanent across attempts
+  // Dead ball positions (on spike tips)
+  const deadBalls = [];
+  function spikePos(si) {
+    const s = spikes[si];
+    const tipDist = radius - spikeLen + br;
+    return { x: cx + Math.cos(s.angle) * tipDist, y: cy + Math.sin(s.angle) * tipDist };
+  }
+
+  // Timing: frames per note (tempo)
+  const bpm = 160; // fast tempo for Mario
+  const framesPerBeat = Math.floor(30 * 60 / bpm); // ~11 frames per beat
+  const framesPerNote = framesPerBeat;
+  const framesBetweenAttempts = 12; // short pause between deaths
+
+  // Build timeline: for each frame, what to draw
   const snapshots = [];
   const allEvents = [];
-  let attempt = 0;
-  let globalNoteIndex = 0; // which note of the song we're at globally
-
-  // Drop point — center top, ball falls straight to bottom wall first
-  const dropX = cx;
-  const dropY = cy - 50; // center-ish, slightly above middle
-
   let frame = 0;
+  let attempt = 0;
+  let globalNoteIdx = 0;
 
-  while (frame < totalFrames && attempt < totalNotes) {
+  while (frame < totalFrames && attempt < 50) {
     const notesThisAttempt = attempt + 1;
-    let noteCount = 0;
-    let ballAlive = true;
+    const color = ballColors[attempt % ballColors.length];
 
-    // Ball starts at drop point, falls straight down
-    let bx = dropX, by = dropY, bvx = 0, bvy = 0;
-    const br = 36;
-    let immunity = 12;
-    let physFrames = 0;
+    // Build hit points for this attempt:
+    // Hits 0..N-2 = dead balls from previous attempts (bounces)
+    // Hit N-1 = the spike where this ball dies
+    const hitPoints = [];
+    for (let h = 0; h < notesThisAttempt - 1 && h < deadBalls.length; h++) {
+      hitPoints.push({ x: deadBalls[h].x, y: deadBalls[h].y, type: 'bounce' });
+    }
+    // Last hit = death spike
+    const deathSI = deathSpikes[attempt];
+    const deathPos = spikePos(deathSI);
+    hitPoints.push({ x: deathPos.x, y: deathPos.y, type: 'death' });
 
-    // Spawn pause (8 frames)
-    for (let p = 0; p < 8 && frame < totalFrames; p++) {
+    // Start position
+    const startX = cx, startY = cy - 50;
+
+    // Animate between start → hit0 → hit1 → ... → hitN (death)
+    const allPoints = [{ x: startX, y: startY }, ...hitPoints];
+
+    for (let seg = 0; seg < allPoints.length - 1; seg++) {
+      const from = allPoints[seg];
+      const to = allPoints[seg + 1];
+      const isLast = seg === allPoints.length - 2;
+      const travelFrames = framesPerNote;
+
+      for (let f = 0; f < travelFrames && frame < totalFrames; f++) {
+        const t = f / travelFrames; // 0→1
+
+        // Smooth arc interpolation with gravity curve
+        const arcHeight = -Math.sin(t * Math.PI) * 60; // parabolic arc
+        const bx = from.x + (to.x - from.x) * t;
+        const by = from.y + (to.y - from.y) * t + arcHeight;
+
+        snapshots.push({
+          cx, cy, radius, spikes,
+          ball: { x: bx, y: by, r: br, alive: true, color },
+          deadBalls: deadBalls.map(d => ({ ...d })),
+          attempt, notesThisAttempt, noteCount: seg, totalNotes,
+        });
+        frame++;
+      }
+
+      // At arrival: play note
+      const noteIdx = globalNoteIdx % totalNotes;
+      allEvents.push({ type: 'note', noteFile: song.notes[noteIdx].file, frame: frame - 1 });
+      globalNoteIdx++;
+    }
+
+    // Ball dies — freeze on spike tip
+    const dp = deathPos;
+    deadBalls.push({ x: dp.x, y: dp.y, r: br, color: '#555' });
+
+    // Death freeze frames
+    for (let f = 0; f < framesBetweenAttempts && frame < totalFrames; f++) {
       snapshots.push({
         cx, cy, radius, spikes,
-        ball: { x: bx, y: by, r: br, alive: true, color: ballColors[attempt % ballColors.length] },
+        ball: { x: dp.x, y: dp.y, r: br, alive: false, color: '#555' },
         deadBalls: deadBalls.map(d => ({ ...d })),
-        attempt, notesThisAttempt, noteCount, totalNotes,
+        attempt, notesThisAttempt, noteCount: notesThisAttempt, totalNotes,
       });
       frame++;
     }
 
-    while (ballAlive && frame < totalFrames) {
-      bvy += 0.8; // gravity
-      bx += bvx; by += bvy;
-      if (immunity > 0) immunity--;
-      physFrames++;
-
-      // --- CIRCLE WALL COLLISION ---
-      const dx = bx - cx, dy = by - cy;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist + br > radius - 2 && immunity <= 0) {
-        const ballAngle = Math.atan2(dy, dx);
-
-        // Check if in a spike zone
-        let hitSpike = null;
-        for (const spike of spikes) {
-          let ad = ballAngle - spike.angle;
-          while (ad > Math.PI) ad -= Math.PI * 2;
-          while (ad < -Math.PI) ad += Math.PI * 2;
-          if (Math.abs(ad) < spikeAngleWidth / 2) { hitSpike = spike; break; }
-        }
-
-        if (hitSpike) {
-          // HIT A SPIKE — play note, then die or bounce
-          if (globalNoteIndex < totalNotes) {
-            allEvents.push({ type: 'note', noteFile: song.notes[globalNoteIndex].file, frame });
-            globalNoteIndex++;
-          }
-          noteCount++;
-
-          if (noteCount >= notesThisAttempt) {
-            // *** DIE INSTANTLY on spike TIP — freeze at tip position ***
-            const tipDist = radius - spikeLen + br; // ball center sits right at tip
-            bx = cx + Math.cos(hitSpike.angle) * tipDist;
-            by = cy + Math.sin(hitSpike.angle) * tipDist;
-            bvx = 0; bvy = 0;
-            ballAlive = false;
-            deadBalls.push({ x: bx, y: by, r: br, color: '#555' });
-            // Push snapshot with dead ball immediately
-            snapshots.push({
-              cx, cy, radius, spikes,
-              ball: { x: bx, y: by, r: br, alive: false, color: '#555' },
-              deadBalls: deadBalls.map(d => ({ ...d })),
-              attempt, notesThisAttempt, noteCount, totalNotes,
-            });
-            frame++;
-            break; // exit physics loop immediately
-          } else {
-            // Bounce off spike with velocity — goes sideways
-            const nx = dx / dist, ny = dy / dist;
-            const dot = bvx * nx + bvy * ny;
-            bvx -= 2 * dot * nx * 0.75;
-            bvy -= 2 * dot * ny * 0.75;
-            // Add sideways kick so ball doesn't just go straight
-            const perpX = -ny, perpY = nx;
-            const kick = (ballAngle > hitSpike.angle ? 1 : -1) * 3;
-            bvx += perpX * kick;
-            bvy += perpY * kick;
-            bx = cx + (dx / dist) * (radius - br - 5);
-            by = cy + (dy / dist) * (radius - br - 5);
-          }
-        } else {
-          // Safe wall (between spikes) — just bounce, play note
-          const nx = dx / dist, ny = dy / dist;
-          const dot = bvx * nx + bvy * ny;
-          bvx -= 2 * dot * nx * 0.78;
-          bvy -= 2 * dot * ny * 0.78;
-          bx = cx + (dx / dist) * (radius - br - 3);
-          by = cy + (dy / dist) * (radius - br - 3);
-
-          if (globalNoteIndex < totalNotes) {
-            allEvents.push({ type: 'note', noteFile: song.notes[globalNoteIndex].file, frame });
-            globalNoteIndex++;
-          }
-          noteCount++;
-          // *** NEVER die on safe wall — keep bouncing ***
-        }
-      }
-
-      // --- DEAD BALL COLLISION --- play note, bounce with kick, NEVER die
-      if (ballAlive) {
-        for (const db of deadBalls) {
-          const dbx = bx - db.x, dby = by - db.y;
-          const dbd = Math.sqrt(dbx * dbx + dby * dby);
-          if (dbd < br + db.r && dbd > 0) {
-            // Always bounce off dead balls
-            const dnx = dbx / dbd, dny = dby / dbd;
-            const ddot = bvx * dnx + bvy * dny;
-            // Reflect + strong sideways kick
-            bvx -= 2 * ddot * dnx * 0.7;
-            bvy -= 2 * ddot * dny * 0.7;
-            // Kick sideways so ball goes left or right
-            const perpX = -dny, perpY = dnx;
-            const kickDir = (bx > db.x) ? 1 : -1;
-            bvx += perpX * kickDir * 4;
-            bvy += perpY * kickDir * 4;
-            // Separate
-            bx = db.x + dnx * (br + db.r + 3);
-            by = db.y + dny * (br + db.r + 3);
-
-            if (globalNoteIndex < totalNotes) {
-              allEvents.push({ type: 'note', noteFile: song.notes[globalNoteIndex].file, frame });
-              globalNoteIndex++;
-            }
-            noteCount++;
-            break;
-          }
-        }
-      }
-
-      // Speed limit
-      const spd = Math.sqrt(bvx * bvx + bvy * bvy);
-      if (spd > 18) { bvx = (bvx / spd) * 18; bvy = (bvy / spd) * 18; }
-
-      snapshots.push({
-        cx, cy, radius, spikes,
-        ball: { x: bx, y: by, r: br, alive: ballAlive, color: ballColors[attempt % ballColors.length] },
-        deadBalls: deadBalls.map(d => ({ ...d })),
-        attempt, notesThisAttempt, noteCount, totalNotes,
-      });
-      frame++;
-
-      // Safety: if ball is truly stuck for 3 seconds, force it toward a spike
-      if (ballAlive && spd < 0.5 && physFrames > 90) {
-        // Nudge toward nearest spike
-        let nearestSpike = spikes[0];
-        let nearestDist = Infinity;
-        for (const sp of spikes) {
-          const tipX = cx + Math.cos(sp.angle) * (radius - spikeLen);
-          const tipY = cy + Math.sin(sp.angle) * (radius - spikeLen);
-          const d2 = (bx - tipX) ** 2 + (by - tipY) ** 2;
-          if (d2 < nearestDist) { nearestDist = d2; nearestSpike = sp; }
-        }
-        const tipX = cx + Math.cos(nearestSpike.angle) * (radius - spikeLen);
-        const tipY = cy + Math.sin(nearestSpike.angle) * (radius - spikeLen);
-        bvx = (tipX - bx) * 0.1;
-        bvy = (tipY - by) * 0.1;
-        physFrames = 0;
-      }
-    }
-
-    // Reset note index for next attempt (melody replays)
-    globalNoteIndex = 0;
+    // Reset note index for next attempt (melody replays from start)
+    globalNoteIdx = 0;
     attempt++;
-
-    // Death pause (5 frames)
-    for (let p = 0; p < 5 && frame < totalFrames; p++) {
-      snapshots.push({
-        cx, cy, radius, spikes,
-        ball: { x: bx, y: by, r: br, alive: false, color: '#555' },
-        deadBalls: deadBalls.map(d => ({ ...d })),
-        attempt, notesThisAttempt: attempt + 1, noteCount: 0, totalNotes,
-      });
-      frame++;
-    }
   }
 
   // Fill remaining frames
-  while (frame < totalFrames) {
-    snapshots.push(snapshots[snapshots.length - 1]);
-    frame++;
-  }
+  const lastSnap = snapshots[snapshots.length - 1];
+  while (frame < totalFrames) { snapshots.push(lastSnap); frame++; }
 
   return { snapshots, allEvents };
 }
@@ -277,40 +185,26 @@ function drawFrame(ctx, snap) {
   c.save();
   c.scale(SCALE, SCALE);
 
-  // Black background
   c.fillStyle = '#000';
   c.fillRect(0, 0, W, H);
 
-  // Text just above circle
   const textBase = cy - radius - 20;
-
-  // Progress bar
   const barX = 150, barY = textBase - 12, barW = W - 300, barH = 8;
-  c.fillStyle = '#333';
-  c.fillRect(barX, barY, barW, barH);
-  c.fillStyle = '#4ADE80';
-  c.fillRect(barX, barY, barW * Math.min(1, notesThisAttempt / totalNotes), barH);
+  c.fillStyle = '#333'; c.fillRect(barX, barY, barW, barH);
+  c.fillStyle = '#4ADE80'; c.fillRect(barX, barY, barW * Math.min(1, notesThisAttempt / totalNotes), barH);
 
-  // Note counter
-  c.fillStyle = '#666';
-  c.textAlign = 'center';
-  c.font = '600 24px Inter, sans-serif';
+  c.fillStyle = '#666'; c.textAlign = 'center'; c.font = '600 24px Inter, sans-serif';
   c.fillText(`${notesThisAttempt} / ${totalNotes} notes`, W / 2, barY - 10);
 
-  // Attempt
-  c.fillStyle = '#fff';
-  c.font = '800 40px Inter, sans-serif';
+  c.fillStyle = '#fff'; c.font = '800 40px Inter, sans-serif';
   c.fillText(`Essai #${attempt + 1}`, W / 2, barY - 48);
 
-  // Title
-  c.font = '700 30px Inter, sans-serif';
-  c.fillStyle = '#4ADE80';
+  c.font = '700 30px Inter, sans-serif'; c.fillStyle = '#4ADE80';
   c.fillText('Commente ta reponse !', W / 2, barY - 92);
-  c.fillStyle = '#fff';
-  c.font = '900 52px Inter, sans-serif';
+  c.fillStyle = '#fff'; c.font = '900 52px Inter, sans-serif';
   c.fillText('GUESS THE SONG', W / 2, barY - 130);
 
-  // Circle — white glow
+  // Circle
   c.save();
   c.shadowColor = 'rgba(255,255,255,0.5)'; c.shadowBlur = 20;
   c.strokeStyle = '#fff'; c.lineWidth = 4;
@@ -318,13 +212,13 @@ function drawFrame(ctx, snap) {
   c.restore();
 
   // Spikes
+  const spikeLen = 70, hw = 26;
   spikes.forEach(spike => {
     const baseX = cx + Math.cos(spike.angle) * radius;
     const baseY = cy + Math.sin(spike.angle) * radius;
-    const tipX = cx + Math.cos(spike.angle) * (radius - spike.len);
-    const tipY = cy + Math.sin(spike.angle) * (radius - spike.len);
+    const tipX = cx + Math.cos(spike.angle) * (radius - spikeLen);
+    const tipY = cy + Math.sin(spike.angle) * (radius - spikeLen);
     const perpAngle = spike.angle + Math.PI / 2;
-    const hw = 26;
     c.fillStyle = spike.color;
     c.beginPath();
     c.moveTo(baseX + Math.cos(perpAngle) * hw, baseY + Math.sin(perpAngle) * hw);

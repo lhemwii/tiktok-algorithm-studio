@@ -76,25 +76,25 @@ function simulateAll(seed, songId, totalFrames) {
   let attempt = 0;
   let globalNoteIndex = 0; // which note of the song we're at globally
 
-  // Drop point — always the same
+  // Drop point — top center, always the same
   const dropX = cx;
-  const dropY = cy - 80; // slightly above center
+  const dropY = cy - radius + 100; // near top inside circle
 
-  // Run attempts one after another until we fill totalFrames
   let frame = 0;
 
   while (frame < totalFrames && attempt < totalNotes) {
-    const notesThisAttempt = attempt + 1; // attempt 0 = 1 note, attempt 1 = 2 notes, etc.
-    let noteCount = 0; // notes played so far this attempt
+    const notesThisAttempt = attempt + 1;
+    let noteCount = 0;
     let ballAlive = true;
 
     // Ball starts at drop point, falls straight down
     let bx = dropX, by = dropY, bvx = 0, bvy = 0;
     const br = 36;
-    let immunity = 15; // frames of immunity after spawn
+    let immunity = 12;
+    let physFrames = 0;
 
-    // Short pause at start of each attempt (10 frames = 0.33s)
-    for (let p = 0; p < 10 && frame < totalFrames; p++) {
+    // Spawn pause (8 frames)
+    for (let p = 0; p < 8 && frame < totalFrames; p++) {
       snapshots.push({
         cx, cy, radius, spikes,
         ball: { x: bx, y: by, r: br, alive: true, color: ballColors[attempt % ballColors.length] },
@@ -104,38 +104,30 @@ function simulateAll(seed, songId, totalFrames) {
       frame++;
     }
 
-    // Physics loop for this attempt
     while (ballAlive && frame < totalFrames) {
-      // Gravity
-      bvy += 0.7;
-      bx += bvx;
-      by += bvy;
+      bvy += 0.8; // gravity
+      bx += bvx; by += bvy;
       if (immunity > 0) immunity--;
+      physFrames++;
 
-      let hitSomething = false;
-
-      // Bounce off circle walls — check spike zones
+      // --- CIRCLE WALL COLLISION ---
       const dx = bx - cx, dy = by - cy;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       if (dist + br > radius - 2 && immunity <= 0) {
         const ballAngle = Math.atan2(dy, dx);
-        let inSpikeZone = false;
-        let hitSpikeAngle = 0;
 
+        // Check if in a spike zone
+        let hitSpike = null;
         for (const spike of spikes) {
           let ad = ballAngle - spike.angle;
           while (ad > Math.PI) ad -= Math.PI * 2;
           while (ad < -Math.PI) ad += Math.PI * 2;
-          if (Math.abs(ad) < spikeAngleWidth / 2) {
-            inSpikeZone = true;
-            hitSpikeAngle = spike.angle;
-            break;
-          }
+          if (Math.abs(ad) < spikeAngleWidth / 2) { hitSpike = spike; break; }
         }
 
-        if (inSpikeZone) {
-          // Play note
+        if (hitSpike) {
+          // HIT A SPIKE — play note, then die or bounce
           if (globalNoteIndex < totalNotes) {
             allEvents.push({ type: 'note', noteFile: song.notes[globalNoteIndex].file, frame });
             globalNoteIndex++;
@@ -143,50 +135,46 @@ function simulateAll(seed, songId, totalFrames) {
           noteCount++;
 
           if (noteCount >= notesThisAttempt) {
-            // DIE on spike tip
+            // *** DIE on spike TIP ***
             const tipDist = radius - spikeLen;
-            bx = cx + Math.cos(hitSpikeAngle) * tipDist;
-            by = cy + Math.sin(hitSpikeAngle) * tipDist;
+            bx = cx + Math.cos(hitSpike.angle) * tipDist;
+            by = cy + Math.sin(hitSpike.angle) * tipDist;
             bvx = 0; bvy = 0;
             ballAlive = false;
             deadBalls.push({ x: bx, y: by, r: br, color: '#555' });
           } else {
-            // Bounce off spike — reflect velocity
+            // Bounce off spike with velocity — goes sideways
             const nx = dx / dist, ny = dy / dist;
             const dot = bvx * nx + bvy * ny;
-            bvx -= 2 * dot * nx * 0.7;
-            bvy -= 2 * dot * ny * 0.7;
+            bvx -= 2 * dot * nx * 0.75;
+            bvy -= 2 * dot * ny * 0.75;
+            // Add sideways kick so ball doesn't just go straight
+            const perpX = -ny, perpY = nx;
+            const kick = (ballAngle > hitSpike.angle ? 1 : -1) * 3;
+            bvx += perpX * kick;
+            bvy += perpY * kick;
             bx = cx + (dx / dist) * (radius - br - 5);
             by = cy + (dy / dist) * (radius - br - 5);
-            hitSomething = true;
           }
         } else {
-          // Bounce off safe wall
+          // Safe wall (between spikes) — just bounce, play note
           const nx = dx / dist, ny = dy / dist;
           const dot = bvx * nx + bvy * ny;
-          bvx -= 2 * dot * nx * 0.75;
-          bvy -= 2 * dot * ny * 0.75;
+          bvx -= 2 * dot * nx * 0.78;
+          bvy -= 2 * dot * ny * 0.78;
           bx = cx + (dx / dist) * (radius - br - 3);
           by = cy + (dy / dist) * (radius - br - 3);
 
-          // Wall bounce = note too
           if (globalNoteIndex < totalNotes) {
             allEvents.push({ type: 'note', noteFile: song.notes[globalNoteIndex].file, frame });
             globalNoteIndex++;
           }
           noteCount++;
-          hitSomething = true;
-
-          if (noteCount >= notesThisAttempt) {
-            // Die on wall between spikes — place near wall
-            bvx = 0; bvy = 0;
-            ballAlive = false;
-            deadBalls.push({ x: bx, y: by, r: br, color: '#555' });
-          }
+          // *** NEVER die on safe wall — keep bouncing ***
         }
       }
 
-      // Bounce off dead balls
+      // --- DEAD BALL COLLISION --- play note, bounce, NEVER die
       if (ballAlive) {
         for (const db of deadBalls) {
           const dbx = bx - db.x, dby = by - db.y;
@@ -195,24 +183,17 @@ function simulateAll(seed, songId, totalFrames) {
             const dnx = dbx / dbd, dny = dby / dbd;
             const ddot = bvx * dnx + bvy * dny;
             if (ddot < 0) {
-              bvx -= 2 * ddot * dnx * 0.6;
-              bvy -= 2 * ddot * dny * 0.6;
+              bvx -= 2 * ddot * dnx * 0.65;
+              bvy -= 2 * ddot * dny * 0.65;
               bx = db.x + dnx * (br + db.r + 2);
               by = db.y + dny * (br + db.r + 2);
 
-              // Dead ball bounce = note
               if (globalNoteIndex < totalNotes) {
                 allEvents.push({ type: 'note', noteFile: song.notes[globalNoteIndex].file, frame });
                 globalNoteIndex++;
               }
               noteCount++;
-              hitSomething = true;
-
-              if (noteCount >= notesThisAttempt) {
-                bvx = 0; bvy = 0;
-                ballAlive = false;
-                deadBalls.push({ x: bx, y: by, r: br, color: '#555' });
-              }
+              // *** NEVER die on dead ball — keep going ***
               break;
             }
           }
@@ -221,7 +202,7 @@ function simulateAll(seed, songId, totalFrames) {
 
       // Speed limit
       const spd = Math.sqrt(bvx * bvx + bvy * bvy);
-      if (spd > 20) { bvx = (bvx / spd) * 20; bvy = (bvy / spd) * 20; }
+      if (spd > 18) { bvx = (bvx / spd) * 18; bvy = (bvy / spd) * 18; }
 
       snapshots.push({
         cx, cy, radius, spikes,
@@ -231,18 +212,30 @@ function simulateAll(seed, songId, totalFrames) {
       });
       frame++;
 
-      // If ball is stuck (very slow, been going for a while), force death
-      if (ballAlive && spd < 0.3 && frame > 30) {
-        ballAlive = false;
-        deadBalls.push({ x: bx, y: by, r: br, color: '#555' });
+      // Safety: if ball is truly stuck for 3 seconds, force it toward a spike
+      if (ballAlive && spd < 0.5 && physFrames > 90) {
+        // Nudge toward nearest spike
+        let nearestSpike = spikes[0];
+        let nearestDist = Infinity;
+        for (const sp of spikes) {
+          const tipX = cx + Math.cos(sp.angle) * (radius - spikeLen);
+          const tipY = cy + Math.sin(sp.angle) * (radius - spikeLen);
+          const d2 = (bx - tipX) ** 2 + (by - tipY) ** 2;
+          if (d2 < nearestDist) { nearestDist = d2; nearestSpike = sp; }
+        }
+        const tipX = cx + Math.cos(nearestSpike.angle) * (radius - spikeLen);
+        const tipY = cy + Math.sin(nearestSpike.angle) * (radius - spikeLen);
+        bvx = (tipX - bx) * 0.1;
+        bvy = (tipY - by) * 0.1;
+        physFrames = 0;
       }
     }
 
-    // Reset global note index for next attempt (replay from beginning)
+    // Reset note index for next attempt (melody replays)
     globalNoteIndex = 0;
     attempt++;
 
-    // Short dead pause (5 frames)
+    // Death pause (5 frames)
     for (let p = 0; p < 5 && frame < totalFrames; p++) {
       snapshots.push({
         cx, cy, radius, spikes,

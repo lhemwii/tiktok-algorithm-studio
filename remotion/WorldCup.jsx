@@ -22,7 +22,7 @@ function initState(seed, homeCode, awayCode, matchInfo) {
   const rand = seededRandom(seed);
   // VERTICAL pitch — goals at top and bottom
   // Pitch starts right after scoreboard (sbY+sbH+goalH+12 ≈ 362)
-  const px = 60, py = 420, pw = 880, ph = 1150;
+  const px = 60, py = 420, pw = 880, ph = 1340;
   const midX = px + pw / 2, midY = py + ph / 2;
   // Goals: big visible cages above/below
   const goalW = 280, goalH = 60;
@@ -454,11 +454,14 @@ function drawFrame(ctx, snap) {
   c.fillStyle = '#fff'; c.font = '800 22px Inter, sans-serif';
   c.textAlign = 'center'; c.textBaseline = 'top';
   c.fillText(teams[0].name, lFlagX + lFlagW / 2, flagY + flagH + 4);
-  // Yellow cards under team name
+  // Yellow cards under team name — bigger
   for (let yc = 0; yc < teams[0].fouls; yc++) {
     c.fillStyle = '#f4c845';
-    roundRect(lFlagX + lFlagW / 2 - 8 + yc * 20 - (teams[0].fouls - 1) * 10, flagY + flagH + 30, 14, 20, 3);
+    roundRect(lFlagX + lFlagW / 2 - 11 + yc * 28 - (teams[0].fouls - 1) * 14, flagY + flagH + 32, 22, 32, 5);
     c.fill();
+    c.strokeStyle = 'rgba(255,255,255,0.3)'; c.lineWidth = 1.5;
+    roundRect(lFlagX + lFlagW / 2 - 11 + yc * 28 - (teams[0].fouls - 1) * 14, flagY + flagH + 32, 22, 32, 5);
+    c.stroke();
   }
 
   // Right side: wide flag
@@ -475,11 +478,14 @@ function drawFrame(ctx, snap) {
   c.fillStyle = '#fff'; c.font = '800 22px Inter, sans-serif';
   c.textAlign = 'center'; c.textBaseline = 'top';
   c.fillText(teams[1].name, rFlagX + rFlagW / 2, flagY + flagH + 4);
-  // Yellow cards under team name
+  // Yellow cards under team name — bigger
   for (let yc = 0; yc < teams[1].fouls; yc++) {
     c.fillStyle = '#f4c845';
-    roundRect(rFlagX + rFlagW / 2 - 8 + yc * 20 - (teams[1].fouls - 1) * 10, flagY + flagH + 30, 14, 20, 3);
+    roundRect(rFlagX + rFlagW / 2 - 11 + yc * 28 - (teams[1].fouls - 1) * 14, flagY + flagH + 32, 22, 32, 5);
     c.fill();
+    c.strokeStyle = 'rgba(255,255,255,0.3)'; c.lineWidth = 1.5;
+    roundRect(rFlagX + rFlagW / 2 - 11 + yc * 28 - (teams[1].fouls - 1) * 14, flagY + flagH + 32, 22, 32, 5);
+    c.stroke();
   }
 
   c.textBaseline = 'alphabetic';

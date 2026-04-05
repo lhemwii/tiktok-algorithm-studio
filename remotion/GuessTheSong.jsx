@@ -65,109 +65,114 @@ function simulateAll(seed, songId, totalFrames) {
 
   const br = 36; // ball radius
 
-  // PRE-PLAN all attempts:
-  // Attempt 0: 1 hit (note 0) → die on spike X
-  // Attempt 1: 2 hits (notes 0,1) → bounce on dead ball 0, die on spike Y
-  // Attempt 2: 3 hits (notes 0,1,2) → bounce dead 0, bounce dead 1, die on spike Z
-  // etc.
+  // Seeded random for choosing death spikes
+  let rngSeed = seed || 42;
+  const rand = () => { rngSeed = (rngSeed * 16807) % 2147483647; return (rngSeed - 1) / 2147483646; };
 
-  // Choose which spike each attempt dies on (spread around the circle)
-  const deathSpikes = [];
-  let spikeIdx = Math.floor(numSpikes * 0.75); // start at bottom-right
-  for (let i = 0; i < totalNotes; i++) {
-    deathSpikes.push(spikeIdx % numSpikes);
-    spikeIdx += 7; // jump around the circle
-  }
-
-  // Dead ball positions (on spike tips)
-  const deadBalls = [];
-  function spikePos(si) {
-    const s = spikes[si];
-    const tipDist = radius - spikeLen + br;
+  // Spike tip position (where dead balls sit — ON the tip)
+  function spikeTip(si) {
+    const s = spikes[si % numSpikes];
+    const tipDist = radius - spikeLen + br * 0.3; // ball sits right on the tip
     return { x: cx + Math.cos(s.angle) * tipDist, y: cy + Math.sin(s.angle) * tipDist };
   }
 
-  // Timing: frames per note (tempo)
-  const bpm = 160; // fast tempo for Mario
-  const framesPerBeat = Math.floor(30 * 60 / bpm); // ~11 frames per beat
-  const framesPerNote = framesPerBeat;
-  const framesBetweenAttempts = 12; // short pause between deaths
+  // Choose death spikes — random left/right alternating, never same twice
+  const usedSpikes = new Set();
+  function pickDeathSpike() {
+    // Pick from bottom half (pi/4 to 3pi/4 range = spikes 5-15 roughly)
+    // and alternate left/right randomly
+    for (let tries = 0; tries < 100; tries++) {
+      const idx = Math.floor(rand() * numSpikes);
+      if (!usedSpikes.has(idx)) {
+        usedSpikes.add(idx);
+        return idx;
+      }
+    }
+    // Fallback
+    for (let i = 0; i < numSpikes; i++) if (!usedSpikes.has(i)) { usedSpikes.add(i); return i; }
+    return 0;
+  }
 
-  // Build timeline: for each frame, what to draw
+  const deadBalls = [];
   const snapshots = [];
   const allEvents = [];
   let frame = 0;
   let attempt = 0;
-  let globalNoteIdx = 0;
+
+  // Timing
+  const bpm = 150;
+  const framesPerNote = Math.floor(30 * 60 / bpm); // ~12 frames
+  const deathPause = 10;
+
+  // Start position — center
+  const startX = cx, startY = cy;
 
   while (frame < totalFrames && attempt < 50) {
     const notesThisAttempt = attempt + 1;
     const color = ballColors[attempt % ballColors.length];
+    const deathSpikeIdx = pickDeathSpike();
+    const deathPos = spikeTip(deathSpikeIdx);
 
-    // Build hit points for this attempt:
-    // Hits 0..N-2 = dead balls from previous attempts (bounces)
-    // Hit N-1 = the spike where this ball dies
-    const hitPoints = [];
+    // Build trajectory points:
+    // start → deadBall[0] → deadBall[1] → ... → deathSpike
+    // Each segment is a parabolic arc with gravity feel
+    const waypoints = [{ x: startX, y: startY }];
+
+    // Bounce off each previous dead ball in order
     for (let h = 0; h < notesThisAttempt - 1 && h < deadBalls.length; h++) {
-      hitPoints.push({ x: deadBalls[h].x, y: deadBalls[h].y, type: 'bounce' });
+      waypoints.push({ x: deadBalls[h].x, y: deadBalls[h].y });
     }
-    // Last hit = death spike
-    const deathSI = deathSpikes[attempt];
-    const deathPos = spikePos(deathSI);
-    hitPoints.push({ x: deathPos.x, y: deathPos.y, type: 'death' });
 
-    // Start position
-    const startX = cx, startY = cy - 50;
+    // Final destination: spike tip (death)
+    waypoints.push({ x: deathPos.x, y: deathPos.y });
 
-    // Animate between start → hit0 → hit1 → ... → hitN (death)
-    const allPoints = [{ x: startX, y: startY }, ...hitPoints];
+    // Animate each segment with parabolic arc
+    let noteIdx = 0;
+    for (let seg = 0; seg < waypoints.length - 1; seg++) {
+      const from = waypoints[seg];
+      const to = waypoints[seg + 1];
 
-    for (let seg = 0; seg < allPoints.length - 1; seg++) {
-      const from = allPoints[seg];
-      const to = allPoints[seg + 1];
-      const isLast = seg === allPoints.length - 2;
-      const travelFrames = framesPerNote;
+      for (let f = 0; f < framesPerNote && frame < totalFrames; f++) {
+        const t = f / framesPerNote;
 
-      for (let f = 0; f < travelFrames && frame < totalFrames; f++) {
-        const t = f / travelFrames; // 0→1
+        // Parabolic arc: ball goes UP first then DOWN (gravity feel)
+        // Height of arc depends on distance between points
+        const dx = to.x - from.x, dy = to.y - from.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const arcH = Math.min(150, dist * 0.4 + 40); // bigger arc for longer distances
 
-        // Smooth arc interpolation with gravity curve
-        const arcHeight = -Math.sin(t * Math.PI) * 60; // parabolic arc
-        const bx = from.x + (to.x - from.x) * t;
-        const by = from.y + (to.y - from.y) * t + arcHeight;
+        const bx = from.x + dx * t;
+        // Gravity parabola: y = start + t*dy - arcH * 4*t*(1-t)
+        const by = from.y + dy * t - arcH * 4 * t * (1 - t);
 
         snapshots.push({
           cx, cy, radius, spikes,
           ball: { x: bx, y: by, r: br, alive: true, color },
           deadBalls: deadBalls.map(d => ({ ...d })),
-          attempt, notesThisAttempt, noteCount: seg, totalNotes,
+          attempt, notesThisAttempt, noteCount: seg + 1, totalNotes,
         });
         frame++;
       }
 
-      // At arrival: play note
-      const noteIdx = globalNoteIdx % totalNotes;
-      allEvents.push({ type: 'note', noteFile: song.notes[noteIdx].file, frame: frame - 1 });
-      globalNoteIdx++;
+      // Note plays at arrival
+      const songNoteIdx = noteIdx % totalNotes;
+      allEvents.push({ type: 'note', noteFile: song.notes[songNoteIdx].file, frame: frame - 1 });
+      noteIdx++;
     }
 
-    // Ball dies — freeze on spike tip
-    const dp = deathPos;
-    deadBalls.push({ x: dp.x, y: dp.y, r: br, color: '#555' });
+    // Ball dies on spike tip — freeze
+    deadBalls.push({ x: deathPos.x, y: deathPos.y, r: br, color: '#555' });
 
-    // Death freeze frames
-    for (let f = 0; f < framesBetweenAttempts && frame < totalFrames; f++) {
+    for (let f = 0; f < deathPause && frame < totalFrames; f++) {
       snapshots.push({
         cx, cy, radius, spikes,
-        ball: { x: dp.x, y: dp.y, r: br, alive: false, color: '#555' },
+        ball: { x: deathPos.x, y: deathPos.y, r: br, alive: false, color: '#555' },
         deadBalls: deadBalls.map(d => ({ ...d })),
         attempt, notesThisAttempt, noteCount: notesThisAttempt, totalNotes,
       });
       frame++;
     }
 
-    // Reset note index for next attempt (melody replays from start)
-    globalNoteIdx = 0;
     attempt++;
   }
 

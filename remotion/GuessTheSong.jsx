@@ -92,65 +92,61 @@ function simulateAll(seed, songId, totalFrames) {
       if (immunity > 0) immunity--;
       if (noteCooldown > 0) noteCooldown--;
 
-      // Circle wall collision
+      // Check SPIKE collision first — hitbox at spike TIP level
       const dx = bx - cx, dy = by - cy;
       const dist = Math.sqrt(dx * dx + dy * dy);
+      const tipRadius = radius - spikeLen; // distance from center to spike tips
 
+      if (immunity <= 0) {
+        // Check each spike: is ball touching the spike tip zone?
+        for (const spike of spikes) {
+          if (spike.covered) continue;
+          // Spike tip position
+          const tipX = cx + Math.cos(spike.angle) * tipRadius;
+          const tipY = cy + Math.sin(spike.angle) * tipRadius;
+          const tipDist = Math.sqrt((bx - tipX) ** 2 + (by - tipY) ** 2);
+
+          if (tipDist < br + 10) { // ball touches spike tip area
+            // DIE RIGHT HERE — no teleportation
+            if (noteCooldown <= 0) {
+              const ni = globalNoteIdx % totalNotes;
+              allEvents.push({ type: 'note', noteFile: song.notes[ni].file, frame });
+              globalNoteIdx++;
+              noteCount++;
+            }
+            bvx = 0; bvy = 0;
+            alive = false;
+            spike.covered = true;
+            deadBalls.push({ x: bx, y: by, r: br, color: '#555' });
+            snapshots.push({ cx, cy, radius, spikes: spikes.map(s => ({...s})), ball: { x: bx, y: by, r: br, alive: false, color: '#555' }, deadBalls: deadBalls.map(d => ({ ...d })), attempt, noteCount, totalNotes, globalNoteIdx });
+            frame++;
+            break;
+          }
+        }
+        if (!alive) continue; // skip rest of physics, go to death pause
+      }
+
+      // Circle WALL collision (between spikes = safe bounce)
       if (dist + br > radius - 3) {
         const nx = dx / dist, ny = dy / dist;
-        const ballAngle = Math.atan2(dy, dx);
-
-        // Check spike
-        let hitSpike = null;
-        for (const spike of spikes) {
-          let ad = ballAngle - spike.angle;
-          while (ad > Math.PI) ad -= Math.PI * 2;
-          while (ad < -Math.PI) ad += Math.PI * 2;
-          if (Math.abs(ad) < spikeAngleWidth / 2) { hitSpike = spike; break; }
-        }
-
-        if (hitSpike && immunity <= 0 && !hitSpike.covered) {
-          // HIT UNCOVERED SPIKE — DIE
-          // Play note
-          if (noteCooldown <= 0) {
-            const ni = globalNoteIdx % totalNotes;
-            allEvents.push({ type: 'note', noteFile: song.notes[ni].file, frame });
-            globalNoteIdx++;
-            noteCount++;
-            noteCooldown = 4;
-          }
-          // Ball center on spike TIP
-          // Ball EDGE sits right at spike tip — center is 1 full ball radius INSIDE the tip
-          const tipDist = radius - spikeLen - br - 25; // ball clearly above spike tip
-          bx = cx + Math.cos(hitSpike.angle) * tipDist;
-          by = cy + Math.sin(hitSpike.angle) * tipDist;
-          bvx = 0; bvy = 0;
-          alive = false;
-          hitSpike.covered = true;
-          deadBalls.push({ x: bx, y: by, r: br, color: '#555' });
-          // INSTANT freeze — push dead frame and break
-          snapshots.push({ cx, cy, radius, spikes: spikes.map(s => ({...s})), ball: { x: bx, y: by, r: br, alive: false, color: '#555' }, deadBalls: deadBalls.map(d => ({ ...d })), attempt, noteCount, totalNotes, globalNoteIdx });
-          frame++;
-          break; // exit physics loop NOW
-        } else {
-          // Bounce off wall — STRONG rebound + sideways kick
-          const dot = bvx * nx + bvy * ny;
-          bvx -= 2 * dot * nx * 0.92;
-          bvy -= 2 * dot * ny * 0.92;
-          // Sideways kick for dynamic movement
-          const perpX = -ny, perpY = nx;
-          bvx += perpX * (rand() - 0.5) * 6;
-          bvy += perpY * (rand() - 0.5) * 6;
-          bx = cx + nx * (radius - br - 2);
-          by = cy + ny * (radius - br - 2);
-          // Play note on wall bounce
-          if (noteCooldown <= 0) {
-            const ni = globalNoteIdx % totalNotes;
-            allEvents.push({ type: 'note', noteFile: song.notes[ni].file, frame });
-            globalNoteIdx++;
-            noteCount++;
-            noteCooldown = 4;
-          }
+        // Bounce off wall — strong rebound + sideways kick
+        const dot = bvx * nx + bvy * ny;
+        bvx -= 2 * dot * nx * 0.92;
+        bvy -= 2 * dot * ny * 0.92;
+        // Consistent sideways kick (NOT random — same trajectory each time)
+        const perpX = -ny, perpY = nx;
+        const kickDir = (nx * bvy - ny * bvx) > 0 ? 1 : -1; // deterministic based on velocity
+        bvx += perpX * kickDir * 3;
+        bvy += perpY * kickDir * 3;
+        bx = cx + nx * (radius - br - 2);
+        by = cy + ny * (radius - br - 2);
+        // Play note
+        if (noteCooldown <= 0) {
+          const ni = globalNoteIdx % totalNotes;
+          allEvents.push({ type: 'note', noteFile: song.notes[ni].file, frame });
+          globalNoteIdx++;
+          noteCount++;
+          noteCooldown = 4;
         }
       }
 
@@ -170,10 +166,11 @@ function simulateAll(seed, songId, totalFrames) {
             if (ddot < 0) { // only if approaching
               bvx -= 2 * ddot * dnx * 0.9;
               bvy -= 2 * ddot * dny * 0.9;
-              // Sideways kick
+              // Deterministic sideways kick (same trajectory every time)
               const dperpX = -dny, dperpY = dnx;
-              bvx += dperpX * (rand() - 0.5) * 5;
-              bvy += dperpY * (rand() - 0.5) * 5;
+              const dkickDir = (dnx * bvy - dny * bvx) > 0 ? 1 : -1;
+              bvx += dperpX * dkickDir * 3;
+              bvy += dperpY * dkickDir * 3;
               // Upward boost
               bvy -= 3;
               // Play note

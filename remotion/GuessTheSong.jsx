@@ -79,7 +79,7 @@ function simulateAll(seed, songId, totalFrames) {
 
     // Spawn pause
     for (let p = 0; p < 6 && frame < totalFrames; p++) {
-      snapshots.push({ cx, cy, radius, spikes, ball: { x: bx, y: by, r: br, alive: true, color }, deadBalls: deadBalls.map(d => ({ ...d })), attempt, noteCount, totalNotes, globalNoteIdx });
+      snapshots.push({ cx, cy, radius, spikes: spikes.map(s => ({...s})), ball: { x: bx, y: by, r: br, alive: true, color }, deadBalls: deadBalls.map(d => ({ ...d })), attempt, noteCount, totalNotes, globalNoteIdx });
       frame++;
     }
 
@@ -127,6 +127,10 @@ function simulateAll(seed, songId, totalFrames) {
           alive = false;
           hitSpike.covered = true;
           deadBalls.push({ x: bx, y: by, r: br, color: '#555' });
+          // INSTANT freeze — push dead frame and break
+          snapshots.push({ cx, cy, radius, spikes: spikes.map(s => ({...s})), ball: { x: bx, y: by, r: br, alive: false, color: '#555' }, deadBalls: deadBalls.map(d => ({ ...d })), attempt, noteCount, totalNotes, globalNoteIdx });
+          frame++;
+          break; // exit physics loop NOW
         } else {
           // Bounce off wall — STRONG rebound + sideways kick
           const dot = bvx * nx + bvy * ny;
@@ -149,26 +153,27 @@ function simulateAll(seed, songId, totalFrames) {
         }
       }
 
-      // Dead ball collisions — bounce off the EDGE of the circle
+      // Dead ball collisions — bounce off PERIMETER, no overlap allowed
       if (alive) {
         for (const db of deadBalls) {
           const dbx = bx - db.x, dby = by - db.y;
           const dbd = Math.sqrt(dbx * dbx + dby * dby);
-          if (dbd < br + db.r && dbd > 0) {
+          const minDist = br + db.r;
+          if (dbd < minDist && dbd > 0.1) {
             const dnx = dbx / dbd, dny = dby / dbd;
-            // STRONG rebound off dead ball edge + sideways kick
+            // FORCE separation first — no overlap ever
+            bx = db.x + dnx * (minDist + 1);
+            by = db.y + dny * (minDist + 1);
+            // Strong rebound
             const ddot = bvx * dnx + bvy * dny;
             bvx -= 2 * ddot * dnx * 0.9;
             bvy -= 2 * ddot * dny * 0.9;
-            // Strong sideways kick
+            // Sideways kick
             const dperpX = -dny, dperpY = dnx;
             bvx += dperpX * (rand() - 0.5) * 5;
             bvy += dperpY * (rand() - 0.5) * 5;
-            // Boost upward to counter gravity
+            // Upward boost
             bvy -= 3;
-            // Push ball to EDGE of dead ball circle
-            bx = db.x + dnx * (br + db.r + 2);
-            by = db.y + dny * (br + db.r + 2);
             // Play note
             if (noteCooldown <= 0) {
               const ni = globalNoteIdx % totalNotes;
@@ -191,7 +196,7 @@ function simulateAll(seed, songId, totalFrames) {
         bvy += 1;
       }
 
-      snapshots.push({ cx, cy, radius, spikes, ball: { x: bx, y: by, r: br, alive, color }, deadBalls: deadBalls.map(d => ({ ...d })), attempt, noteCount, totalNotes, globalNoteIdx });
+      snapshots.push({ cx, cy, radius, spikes: spikes.map(s => ({...s})), ball: { x: bx, y: by, r: br, alive, color }, deadBalls: deadBalls.map(d => ({ ...d })), attempt, noteCount, totalNotes, globalNoteIdx });
       frame++;
     }
 
@@ -202,7 +207,7 @@ function simulateAll(seed, songId, totalFrames) {
 
     // Death pause
     for (let p = 0; p < 8 && frame < totalFrames; p++) {
-      snapshots.push({ cx, cy, radius, spikes, ball: { x: bx, y: by, r: br, alive: false, color: '#555' }, deadBalls: deadBalls.map(d => ({ ...d })), attempt, noteCount: 0, totalNotes, globalNoteIdx: 0 });
+      snapshots.push({ cx, cy, radius, spikes: spikes.map(s => ({...s})), ball: { x: bx, y: by, r: br, alive: false, color: '#555' }, deadBalls: deadBalls.map(d => ({ ...d })), attempt, noteCount: 0, totalNotes, globalNoteIdx: 0 });
       frame++;
     }
   }
@@ -243,7 +248,7 @@ function drawFrame(ctx, snap) {
   // Spikes
   const hw = 26;
   spikes.forEach(spike => {
-    if (spike.covered) return; // don't draw covered spikes (dead ball hides them)
+    // Always draw ALL spikes — dead balls sit on top of them
     const baseX = cx + Math.cos(spike.angle) * radius;
     const baseY = cy + Math.sin(spike.angle) * radius;
     const tipX = cx + Math.cos(spike.angle) * (radius - spike.len);

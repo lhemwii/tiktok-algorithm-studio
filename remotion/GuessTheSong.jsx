@@ -69,26 +69,37 @@ function simulateAll(seed, songId, totalFrames) {
   let rngSeed = seed || 42;
   const rand = () => { rngSeed = (rngSeed * 16807) % 2147483647; return (rngSeed - 1) / 2147483646; };
 
-  // Spike tip position (where dead balls sit — ON the tip)
+  // Spike tip position — ball center sits exactly at the TIP of the spike
   function spikeTip(si) {
     const s = spikes[si % numSpikes];
-    const tipDist = radius - spikeLen + br * 0.3; // ball sits right on the tip
+    const tipDist = radius - spikeLen; // exact tip, not offset
     return { x: cx + Math.cos(s.angle) * tipDist, y: cy + Math.sin(s.angle) * tipDist };
   }
 
-  // Choose death spikes — random left/right alternating, never same twice
+  // Choose death spikes — first one at BOTTOM, then random left/right
   const usedSpikes = new Set();
-  function pickDeathSpike() {
-    // Pick from bottom half (pi/4 to 3pi/4 range = spikes 5-15 roughly)
-    // and alternate left/right randomly
+  let lastSide = 0; // alternate left/right
+  function pickDeathSpike(attemptNum) {
+    if (attemptNum === 0) {
+      // First ball dies at BOTTOM (spike index ~20 = angle π/2 = straight down)
+      const bottomIdx = Math.round(numSpikes * 0.25); // 0.25 of 40 = 10 = bottom
+      usedSpikes.add(bottomIdx);
+      return bottomIdx;
+    }
+    // Alternate left/right randomly
     for (let tries = 0; tries < 100; tries++) {
       const idx = Math.floor(rand() * numSpikes);
-      if (!usedSpikes.has(idx)) {
+      if (usedSpikes.has(idx)) continue;
+      // Check it's on the expected side
+      const angle = spikes[idx].angle;
+      const isRight = Math.cos(angle) > 0;
+      const wantRight = lastSide <= 0;
+      if (isRight === wantRight || tries > 50) {
         usedSpikes.add(idx);
+        lastSide = isRight ? 1 : -1;
         return idx;
       }
     }
-    // Fallback
     for (let i = 0; i < numSpikes; i++) if (!usedSpikes.has(i)) { usedSpikes.add(i); return i; }
     return 0;
   }
@@ -99,10 +110,10 @@ function simulateAll(seed, songId, totalFrames) {
   let frame = 0;
   let attempt = 0;
 
-  // Timing
-  const bpm = 150;
-  const framesPerNote = Math.floor(30 * 60 / bpm); // ~12 frames
-  const deathPause = 10;
+  // Timing — slower, more natural feel
+  const bpm = 120;
+  const framesPerNote = Math.floor(30 * 60 / bpm); // ~15 frames per note
+  const deathPause = 12;
 
   // Start position — center
   const startX = cx, startY = cy;
@@ -110,7 +121,7 @@ function simulateAll(seed, songId, totalFrames) {
   while (frame < totalFrames && attempt < 50) {
     const notesThisAttempt = attempt + 1;
     const color = ballColors[attempt % ballColors.length];
-    const deathSpikeIdx = pickDeathSpike();
+    const deathSpikeIdx = pickDeathSpike(attempt);
     const deathPos = spikeTip(deathSpikeIdx);
 
     // Build trajectory points:
@@ -135,14 +146,16 @@ function simulateAll(seed, songId, totalFrames) {
       for (let f = 0; f < framesPerNote && frame < totalFrames; f++) {
         const t = f / framesPerNote;
 
-        // Parabolic arc: ball goes UP first then DOWN (gravity feel)
-        // Height of arc depends on distance between points
+        // Natural gravity arc — ball bounces UP then falls DOWN
         const dx = to.x - from.x, dy = to.y - from.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const arcH = Math.min(150, dist * 0.4 + 40); // bigger arc for longer distances
+        // Arc height: proportional to distance, minimum 80px
+        const arcH = Math.max(80, Math.min(200, dist * 0.5 + 60));
 
+        // Horizontal: linear interpolation
         const bx = from.x + dx * t;
-        // Gravity parabola: y = start + t*dy - arcH * 4*t*(1-t)
+        // Vertical: parabolic — goes UP high then comes DOWN to destination
+        // The 4*t*(1-t) creates a perfect parabola peaking at t=0.5
         const by = from.y + dy * t - arcH * 4 * t * (1 - t);
 
         snapshots.push({

@@ -22,7 +22,7 @@ function initState(seed, homeCode, awayCode, matchInfo) {
   const rand = seededRandom(seed);
   // VERTICAL pitch — goals at top and bottom
   // Pitch starts right after scoreboard (sbY+sbH+goalH+12 ≈ 362)
-  const px = 60, py = 370, pw = 880, ph = 1020;
+  const px = 60, py = 420, pw = 880, ph = 1150;
   const midX = px + pw / 2, midY = py + ph / 2;
   // Goals: big visible cages above/below
   const goalW = 280, goalH = 60;
@@ -32,17 +32,17 @@ function initState(seed, homeCode, awayCode, matchInfo) {
   const players = [
     // Team 0 attacks DOWN, defends TOP goal
     { x: midX, y: py + 70, vx: 0, vy: 0, r: PR, team: 0, role: 'gk' },
-    { x: midX - 160, y: midY - 130, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
-    { x: midX + 160, y: midY - 130, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
+    { x: midX - 160, y: midY - 160, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
+    { x: midX + 160, y: midY - 160, vx: 0, vy: 0, r: PR, team: 0, role: 'field' },
     // Team 1 attacks UP, defends BOTTOM goal
     { x: midX, y: py + ph - 70, vx: 0, vy: 0, r: PR, team: 1, role: 'gk' },
-    { x: midX - 160, y: midY + 130, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
-    { x: midX + 160, y: midY + 130, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
+    { x: midX - 160, y: midY + 160, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
+    { x: midX + 160, y: midY + 160, vx: 0, vy: 0, r: PR, team: 1, role: 'field' },
   ];
   const referee = { x: midX + 80, y: midY, vx: 0, vy: 0, r: PR };
   // Ball 50% bigger (was 18), starts with strong velocity toward a goal for instant action
   const ballDir = rand() > 0.5 ? 1 : -1;
-  const ball = { x: midX + (rand() - 0.5) * 100, y: midY, vx: (rand() - 0.5) * 6, vy: ballDir * 12, r: 27 };
+  const ball = { x: midX + (rand() - 0.5) * 100, y: midY, vx: (rand() - 0.5) * 8, vy: ballDir * 15, r: 27 };
   return {
     rand, px, py, pw, ph, midX, midY, goalW, goalH, gLeft, gRight, teams, players, referee, ball,
     goalLog: [], foulLog: [], stuckTimer: 0, lastBallX: midX, lastBallY: midY,
@@ -85,11 +85,11 @@ function resetPos(s) {
   const { py, ph, midX, midY, players, ball, referee } = s;
   ball.x = midX; ball.y = midY; ball.vx = 0; ball.vy = 0;
   players[0].x = midX; players[0].y = py + 55;
-  players[1].x = midX - 150; players[1].y = midY - 120;
-  players[2].x = midX + 150; players[2].y = midY - 120;
+  players[1].x = midX - 150; players[1].y = midY - 150;
+  players[2].x = midX + 150; players[2].y = midY - 150;
   players[3].x = midX; players[3].y = py + ph - 55;
-  players[4].x = midX - 150; players[4].y = midY + 120;
-  players[5].x = midX + 150; players[5].y = midY + 120;
+  players[4].x = midX - 150; players[4].y = midY + 150;
+  players[5].x = midX + 150; players[5].y = midY + 150;
   players.forEach(p => { p.vx = 0; p.vy = 0; });
   referee.x = midX + 70; referee.y = midY; referee.vx = 0; referee.vy = 0;
 }
@@ -139,11 +139,11 @@ function stepSim(s) {
       }
     }
     const dx = tx - pl.x, dy = ty - pl.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
-    const accel = pl.role === 'gk' ? 1.0 : 1.3; // field players VERY fast
+    const accel = pl.role === 'gk' ? 1.15 : 1.5; // faster for bigger pitch
     pl.vx += (dx / d) * accel; pl.vy += (dy / d) * accel;
     pl.vx += (rand() - 0.5) * 0.4; pl.vy += (rand() - 0.5) * 0.4;
     pl.vx *= 0.90; pl.vy *= 0.90;
-    const ms = pl.role === 'gk' ? 9 : 14; // field players VERY fast
+    const ms = pl.role === 'gk' ? 10 : 16; // faster for bigger pitch
     const sp = Math.sqrt(pl.vx * pl.vx + pl.vy * pl.vy);
     if (sp > ms) { pl.vx = (pl.vx / sp) * ms; pl.vy = (pl.vy / sp) * ms; }
     pl.x += pl.vx; pl.y += pl.vy;
@@ -191,20 +191,20 @@ function stepSim(s) {
     const elapsed = 90 * (s.timerFrames / s.totalFrames);
     foulLog.push({ team: foulTeam, timeStr: `${Math.floor(elapsed / 60)}'${Math.floor(elapsed % 60).toString().padStart(2, '0')}` });
     // STRONG kick toward center
-    ball.vx = (midX - ball.x) * 0.1 + (rand() - 0.5) * 10;
-    ball.vy = (midY - ball.y) * 0.1 + (rand() - 0.5) * 10;
+    ball.vx = (midX - ball.x) * 0.12 + (rand() - 0.5) * 14;
+    ball.vy = (midY - ball.y) * 0.12 + (rand() - 0.5) * 14;
     players.forEach(pl => { if (pl.team !== atk) { pl.y = pl.team === 0 ? py + ph / 4 : py + ph * 3 / 4; pl.x = midX + (rand() - 0.5) * 200; pl.vx = 0; pl.vy = 0; } });
     s.stuckTimer = 0; s.lastBallX = ball.x; s.lastBallY = ball.y;
     s.events.push('whistle');
   }
 
   // Ball — FASTER, less friction, more energy
-  ball.vx *= 0.998; ball.vy *= 0.998; ball.x += ball.vx; ball.y += ball.vy;
+  ball.vx *= 0.999; ball.vy *= 0.999; ball.x += ball.vx; ball.y += ball.vy;
   // Minimum ball speed — if too slow, give it a nudge
   const ballSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-  if (ballSpeed < 1.5 && !s.kickoff) {
-    ball.vx += (rand() - 0.5) * 2;
-    ball.vy += (rand() - 0.5) * 2;
+  if (ballSpeed < 2.5 && !s.kickoff) {
+    ball.vx += (rand() - 0.5) * 3;
+    ball.vy += (rand() - 0.5) * 3;
   }
   if (bounceRect(ball, s)) s.events.push('bounce');
   players.forEach(pl => {
@@ -252,8 +252,8 @@ function stepSim(s) {
     resetPos(s);
     s.stuckTimer = 0;
     // No pause — ball gets strong velocity immediately after goal
-    ball.vx = (rand() - 0.5) * 6;
-    ball.vy = (rand() > 0.5 ? 1 : -1) * (8 + rand() * 4);
+    ball.vx = (rand() - 0.5) * 8;
+    ball.vy = (rand() > 0.5 ? 1 : -1) * (12 + rand() * 5);
     s.events.push('goal');
   }
   if (s.foulFlash > 0) s.foulFlash--;
@@ -399,14 +399,6 @@ function drawFrame(ctx, snap) {
   c.fillStyle = bgGrad;
   c.fillRect(0, 0, W, H);
 
-  const touchSum = teams[0].touches + teams[1].touches;
-  const possession = touchSum === 0
-    ? [50, 50]
-    : [
-        Math.round((teams[0].touches / touchSum) * 100),
-        0,
-      ];
-  possession[1] = 100 - possession[0];
 
   // SCOREBOARD — single row, compact:
   // [FLAG/NAME] [SCORE] [TIMER] [SCORE] [FLAG/NAME]
@@ -416,7 +408,7 @@ function drawFrame(ctx, snap) {
   const sbX = px;
   const sbY = 190;
   const sbW = pw;
-  const sbH = 100;
+  const sbH = 130;
   drawGlassPanel(sbX, sbY, sbW, sbH, 20);
 
   const sbMidY = sbY + sbH / 2;
@@ -458,10 +450,16 @@ function drawFrame(ctx, snap) {
   c.restore();
   c.strokeStyle = 'rgba(255,255,255,0.2)'; c.lineWidth = 1;
   roundRect(lFlagX, flagY, lFlagW, flagH, 8); c.stroke();
-  // Full country name below flag
-  c.fillStyle = '#fff'; c.font = '800 26px Inter, sans-serif';
-  c.textAlign = 'center'; c.textBaseline = 'alphabetic';
-  c.fillText(teams[0].name, lFlagX + lFlagW / 2, sbY + sbH - 12);
+  // Team name glued under flag
+  c.fillStyle = '#fff'; c.font = '800 22px Inter, sans-serif';
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  c.fillText(teams[0].name, lFlagX + lFlagW / 2, flagY + flagH + 4);
+  // Yellow cards under team name
+  for (let yc = 0; yc < teams[0].fouls; yc++) {
+    c.fillStyle = '#f4c845';
+    roundRect(lFlagX + lFlagW / 2 - 8 + yc * 20 - (teams[0].fouls - 1) * 10, flagY + flagH + 30, 14, 20, 3);
+    c.fill();
+  }
 
   // Right side: wide flag
   const scoreEdgeR = centerCX + 140;
@@ -473,9 +471,16 @@ function drawFrame(ctx, snap) {
   c.restore();
   c.strokeStyle = 'rgba(255,255,255,0.2)'; c.lineWidth = 1;
   roundRect(rFlagX, flagY, rFlagW, flagH, 8); c.stroke();
-  c.fillStyle = '#fff'; c.font = '800 26px Inter, sans-serif';
-  c.textAlign = 'center';
-  c.fillText(teams[1].name, rFlagX + rFlagW / 2, sbY + sbH - 12);
+  // Team name glued under flag
+  c.fillStyle = '#fff'; c.font = '800 22px Inter, sans-serif';
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  c.fillText(teams[1].name, rFlagX + rFlagW / 2, flagY + flagH + 4);
+  // Yellow cards under team name
+  for (let yc = 0; yc < teams[1].fouls; yc++) {
+    c.fillStyle = '#f4c845';
+    roundRect(rFlagX + rFlagW / 2 - 8 + yc * 20 - (teams[1].fouls - 1) * 10, flagY + flagH + 30, 14, 20, 3);
+    c.fill();
+  }
 
   c.textBaseline = 'alphabetic';
 
@@ -502,11 +507,11 @@ function drawFrame(ctx, snap) {
   // Center line (horizontal for vertical pitch)
   c.beginPath(); c.moveTo(px, midY); c.lineTo(px + pw, midY); c.stroke();
   // Center circle
-  c.beginPath(); c.arc(midX, midY, 80, 0, Math.PI * 2); c.stroke();
+  c.beginPath(); c.arc(midX, midY, 95, 0, Math.PI * 2); c.stroke();
   c.fillStyle = '#fff';
   c.beginPath(); c.arc(midX, midY, 7, 0, Math.PI * 2); c.fill();
   // Penalty areas (horizontal bars at top and bottom)
-  const penW = 360, penH = 120;
+  const penW = 360, penH = 145;
   c.strokeRect(midX - penW / 2, py, penW, penH);
   c.strokeRect(midX - penW / 2, py + ph - penH, penW, penH);
   c.restore();
@@ -643,114 +648,6 @@ function drawFrame(ctx, snap) {
   c.beginPath(); c.arc(8 * res + Math.cos(rea) * 3.5 * res, -4 * res + Math.sin(rea) * 3.5 * res, 4 * res, 0, Math.PI * 2); c.fill();
   c.restore();
 
-  const teamEvents = [
-    [
-      ...goalLog.filter((g) => g.team === 0).map((g) => ({ timeStr: g.timeStr, label: 'BUT', accent: '#4ade80' })),
-      ...(foulLog || []).filter((foul) => foul.team === 0).map((foul) => ({ timeStr: foul.timeStr, label: 'CARTON JAUNE', accent: '#f4c845' })),
-    ].slice(-5).reverse(),
-    [
-      ...goalLog.filter((g) => g.team === 1).map((g) => ({ timeStr: g.timeStr, label: 'BUT', accent: '#4ade80' })),
-      ...(foulLog || []).filter((foul) => foul.team === 1).map((foul) => ({ timeStr: foul.timeStr, label: 'CARTON JAUNE', accent: '#f4c845' })),
-    ].slice(-5).reverse(),
-  ];
-
-  // INFO PANEL — same left margin as pitch, right margin for TikTok buttons
-  const panelX = px;
-  const panelY = py + ph + goalH + 10;
-  const panelW = pw;
-  const panelH = H - panelY - 16;
-  drawGlassPanel(panelX, panelY, panelW, panelH, 20);
-
-  // FIFA WORLD CUP 2026 — BIGGER
-  c.fillStyle = '#fff';
-  c.font = '900 40px Inter, sans-serif';
-  c.textAlign = 'center';
-  c.fillText('COUPE DU MONDE FIFA 2026', panelX + panelW / 2, panelY + 46);
-
-  // Possession label + percentages — SAME SIZE as FIFA title (40px)
-  const possessionY = panelY + 96;
-  const possessionX = panelX + 24;
-  const possessionW = panelW - 48;
-  c.fillStyle = '#fff'; c.font = '900 40px Inter, sans-serif';
-  c.textAlign = 'left'; c.fillText(`${possession[0]}%`, possessionX, possessionY - 4);
-  c.textAlign = 'right'; c.fillText(`${possession[1]}%`, possessionX + possessionW, possessionY - 4);
-  c.textAlign = 'center'; c.fillStyle = 'rgba(255,255,255,0.8)'; c.font = '800 36px Inter, sans-serif';
-  c.fillText('Possession', panelX + panelW / 2, possessionY - 4);
-
-  // Possession bar — rounded ends, STRAIGHT middle join
-  const barY = possessionY + 8;
-  const barH = 28;
-  const leftPW = Math.max(24, (possessionW * possession[0]) / 100);
-  const rightPW = possessionW - leftPW;
-  // Left portion — rounded left, straight right
-  c.fillStyle = teams[0].color || '#fff';
-  c.beginPath();
-  c.moveTo(possessionX + 14, barY);
-  c.lineTo(possessionX + leftPW, barY);
-  c.lineTo(possessionX + leftPW, barY + barH);
-  c.lineTo(possessionX + 14, barY + barH);
-  c.quadraticCurveTo(possessionX, barY + barH, possessionX, barY + barH - 14);
-  c.lineTo(possessionX, barY + 14);
-  c.quadraticCurveTo(possessionX, barY, possessionX + 14, barY);
-  c.fill();
-  // Right portion — straight left, rounded right
-  c.fillStyle = teams[1].color || '#fff';
-  c.beginPath();
-  c.moveTo(possessionX + leftPW, barY);
-  c.lineTo(possessionX + possessionW - 14, barY);
-  c.quadraticCurveTo(possessionX + possessionW, barY, possessionX + possessionW, barY + 14);
-  c.lineTo(possessionX + possessionW, barY + barH - 14);
-  c.quadraticCurveTo(possessionX + possessionW, barY + barH, possessionX + possessionW - 14, barY + barH);
-  c.lineTo(possessionX + leftPW, barY + barH);
-  c.fill();
-
-  // Two columns: flag + team name + yellow card rectangles
-  const colY = barY + barH + 16;
-
-  // Left column (team 0)
-  drawFlagBadge(teams[0], panelX + 16, colY, 56);
-  c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = '900 40px Inter, sans-serif';
-  c.fillText(teams[0].name, panelX + 86, colY + 40);
-  for (let yc = 0; yc < teams[0].fouls; yc++) {
-    c.fillStyle = '#f4c845';
-    roundRect(panelX + 80 + yc * 30, colY + 48, 22, 32, 5);
-    c.fill();
-  }
-
-  // Right column (team 1)
-  drawFlagBadge(teams[1], panelX + panelW / 2 + 16, colY, 56);
-  c.fillStyle = '#fff'; c.textAlign = 'left'; c.font = '900 40px Inter, sans-serif';
-  c.fillText(teams[1].name, panelX + panelW / 2 + 86, colY + 40);
-  for (let yc = 0; yc < teams[1].fouls; yc++) {
-    c.fillStyle = '#f4c845';
-    roundRect(panelX + panelW / 2 + 80 + yc * 30, colY + 48, 22, 32, 5);
-    c.fill();
-  }
-
-  // Events list — goals and fouls pop up, most recent first
-  const eventsY = colY + 100;
-  const allMatchEvents = [
-    ...goalLog.map(g => ({ type: 'goal', team: g.team, timeStr: g.timeStr, label: 'BUT', accent: '#4ADE80' })),
-    ...foulLog.map(f => ({ type: 'foul', team: f.team, timeStr: f.timeStr, label: 'FAUTE', accent: '#f4c845' })),
-  ].sort((a, b) => {
-    const ta = parseFloat(a.timeStr.replace("'", '.'));
-    const tb = parseFloat(b.timeStr.replace("'", '.'));
-    return tb - ta;
-  }).slice(0, 3);
-
-  allMatchEvents.forEach((evt, i) => {
-    const rowY = eventsY + i * 62;
-    if (rowY + 54 > panelY + panelH - 8) return;
-    c.fillStyle = 'rgba(255,255,255,0.06)';
-    roundRect(panelX + 16, rowY, panelW - 32, 54, 14);
-    c.fill();
-    c.fillStyle = teams[evt.team].color;
-    c.fillRect(panelX + 16, rowY, 8, 54);
-    c.fillStyle = evt.accent; c.font = '900 32px Fira Code, monospace'; c.textAlign = 'left';
-    c.fillText(evt.timeStr, panelX + 40, rowY + 38);
-    c.fillStyle = '#fff'; c.font = '900 36px Inter, sans-serif';
-    c.fillText(`${evt.label} — ${teams[evt.team].shortName || teams[evt.team].name}`, panelX + 170, rowY + 38);
-  });
 
   if (snap.foulFlash > 0) {
     c.fillStyle = `rgba(244,200,69,${(snap.foulFlash / 75) * 0.24})`;
@@ -767,18 +664,6 @@ function drawFrame(ctx, snap) {
   if (snap.goalFlash > 0) {
     c.fillStyle = `rgba(255,255,255,${(snap.goalFlash / 90) * 0.26})`;
     c.fillRect(0, 0, W, H);
-  }
-  // === SCROLLING TICKER above scoreboard — bigger, faster, white ===
-  const tickerY = sbY - 30;
-  const tickerText = 'PROCHAIN MATCH ?  LE TOP COMMENTAIRE CHOISIT LES EQUIPES !     \u26BD     PROCHAIN MATCH ?  LE TOP COMMENTAIRE CHOISIT LES EQUIPES !     \u26BD     ';
-  const tickerSpeed = elapsed * 8;
-  c.fillStyle = '#fff';
-  c.font = '900 30px Inter, sans-serif';
-  c.textAlign = 'left';
-  const textW = c.measureText(tickerText).width;
-  const offsetX = -(tickerSpeed % textW);
-  for (let tx2 = offsetX; tx2 < W; tx2 += textW) {
-    c.fillText(tickerText, tx2, tickerY);
   }
 
   // === HOOK OVERLAY — REMOVED (match starts with instant action) ===

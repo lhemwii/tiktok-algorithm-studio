@@ -24,6 +24,7 @@
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "midi-parser-js": "^4.0.4",
-    "remotion": "^4.0.443"
+    "remotion": "^4.0.443",
+    "tone": "^15.1.22"
   }
 }

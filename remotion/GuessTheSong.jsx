@@ -3,19 +3,13 @@ import { useEffect, useRef, useMemo } from 'react';
 
 const W = 1080, H = 1920, SCALE = 2;
 
-import { MARIO_NOTES } from './mario-notes';
+import { MARIO_SONG } from './mario-song';
 
 // ============== SONG DATA ==============
 const SONGS = {
-  mario64: {
+  mario: {
     name: '???',
-    notes: MARIO_NOTES,
-  },
-  twinkle: {
-    name: '???',
-    notes: [262, 262, 392, 392, 440, 440, 392, 349, 349, 330, 330, 294, 294, 262,
-      392, 392, 349, 349, 330, 330, 294, 392, 392, 349, 349, 330, 330, 294,
-      262, 262, 392, 392, 440, 440, 392, 349, 349, 330, 330, 294, 294, 262],
+    notes: MARIO_SONG, // array of { note, file }
   },
 };
 
@@ -27,7 +21,7 @@ function seededRandom(seed) {
 // ============== SIMULATION ==============
 function initState(seed, songId) {
   const rand = seededRandom(seed);
-  const song = SONGS[songId] || SONGS.twinkle;
+  const song = SONGS[songId] || SONGS.mario;
   const totalNotes = song.notes.length;
 
   // Circle arena — centered vertically
@@ -100,12 +94,15 @@ function stepSim(s) {
             s.phaseTimer = 0;
             ball.alive = false;
             const noteIdx = Math.min(s.currentAttempt, song.notes.length - 1);
-            s.events.push({ type: 'note', freq: song.notes[noteIdx] });
+            s.events.push({ type: 'note', noteFile: song.notes[noteIdx].file });
             s.events.push({ type: 'death' });
-            // Place dead ball INSIDE the circle (away from spikes)
-            const deadDist = radius - spike.len - ball.r - 5;
+            // Place dead ball at the spike base (just inside the spike tips)
+            const deadDist = radius - spike.len + ball.r;
             const deadX = cx + Math.cos(spike.angle) * deadDist;
             const deadY = cy + Math.sin(spike.angle) * deadDist;
+            // Move ball to death position and freeze it
+            ball.x = deadX; ball.y = deadY;
+            ball.vx = 0; ball.vy = 0;
             deadBalls.push({ x: deadX, y: deadY, r: ball.r, color: '#555' });
             break;
           }
@@ -149,7 +146,7 @@ function stepSim(s) {
       s.phase = 'dead';
       ball.alive = false;
       const noteIdx = Math.min(s.currentAttempt, song.notes.length - 1);
-      s.events.push({ type: 'note', freq: song.notes[noteIdx] });
+      s.events.push({ type: 'note', noteFile: song.notes[noteIdx].file });
       s.events.push({ type: 'death' });
       deadBalls.push({ x: ball.x, y: ball.y, r: ball.r, color: '#555' });
     }
@@ -309,34 +306,39 @@ function drawFrame(ctx, snap) {
   c.restore();
 }
 
-// ============== AUDIO — static imports for each note ==============
-import note_392 from './audio/notes/note_392.wav';
-import note_415 from './audio/notes/note_415.wav';
-import note_440 from './audio/notes/note_440.wav';
-import note_466 from './audio/notes/note_466.wav';
-import note_554 from './audio/notes/note_554.wav';
-import note_587 from './audio/notes/note_587.wav';
-import note_622 from './audio/notes/note_622.wav';
-import note_659 from './audio/notes/note_659.wav';
-import note_698 from './audio/notes/note_698.wav';
-import note_784 from './audio/notes/note_784.wav';
-import note_831 from './audio/notes/note_831.wav';
-import note_880 from './audio/notes/note_880.wav';
-import note_932 from './audio/notes/note_932.wav';
-import note_1109 from './audio/notes/note_1109.wav';
-import note_1175 from './audio/notes/note_1175.wav';
-import note_1245 from './audio/notes/note_1245.wav';
+// ============== AUDIO — real piano samples (MIDI note numbers 48-84) ==============
+import p48 from './audio/piano/note_48.wav'; import p49 from './audio/piano/note_49.wav';
+import p50 from './audio/piano/note_50.wav'; import p51 from './audio/piano/note_51.wav';
+import p52 from './audio/piano/note_52.wav'; import p53 from './audio/piano/note_53.wav';
+import p54 from './audio/piano/note_54.wav'; import p55 from './audio/piano/note_55.wav';
+import p56 from './audio/piano/note_56.wav'; import p57 from './audio/piano/note_57.wav';
+import p58 from './audio/piano/note_58.wav'; import p59 from './audio/piano/note_59.wav';
+import p60 from './audio/piano/note_60.wav'; import p61 from './audio/piano/note_61.wav';
+import p62 from './audio/piano/note_62.wav'; import p63 from './audio/piano/note_63.wav';
+import p64 from './audio/piano/note_64.wav'; import p65 from './audio/piano/note_65.wav';
+import p66 from './audio/piano/note_66.wav'; import p67 from './audio/piano/note_67.wav';
+import p68 from './audio/piano/note_68.wav'; import p69 from './audio/piano/note_69.wav';
+import p70 from './audio/piano/note_70.wav'; import p71 from './audio/piano/note_71.wav';
+import p72 from './audio/piano/note_72.wav'; import p73 from './audio/piano/note_73.wav';
+import p74 from './audio/piano/note_74.wav'; import p75 from './audio/piano/note_75.wav';
+import p76 from './audio/piano/note_76.wav'; import p77 from './audio/piano/note_77.wav';
+import p78 from './audio/piano/note_78.wav'; import p79 from './audio/piano/note_79.wav';
+import p80 from './audio/piano/note_80.wav'; import p81 from './audio/piano/note_81.wav';
+import p82 from './audio/piano/note_82.wav'; import p83 from './audio/piano/note_83.wav';
+import p84 from './audio/piano/note_84.wav';
 
-const NOTE_FILES = {
-  392: note_392, 415: note_415, 440: note_440, 466: note_466,
-  554: note_554, 587: note_587, 622: note_622, 659: note_659,
-  698: note_698, 784: note_784, 831: note_831, 880: note_880,
-  932: note_932, 1109: note_1109, 1175: note_1175, 1245: note_1245,
+const PIANO = {
+  'note_48.wav': p48, 'note_49.wav': p49, 'note_50.wav': p50, 'note_51.wav': p51,
+  'note_52.wav': p52, 'note_53.wav': p53, 'note_54.wav': p54, 'note_55.wav': p55,
+  'note_56.wav': p56, 'note_57.wav': p57, 'note_58.wav': p58, 'note_59.wav': p59,
+  'note_60.wav': p60, 'note_61.wav': p61, 'note_62.wav': p62, 'note_63.wav': p63,
+  'note_64.wav': p64, 'note_65.wav': p65, 'note_66.wav': p66, 'note_67.wav': p67,
+  'note_68.wav': p68, 'note_69.wav': p69, 'note_70.wav': p70, 'note_71.wav': p71,
+  'note_72.wav': p72, 'note_73.wav': p73, 'note_74.wav': p74, 'note_75.wav': p75,
+  'note_76.wav': p76, 'note_77.wav': p77, 'note_78.wav': p78, 'note_79.wav': p79,
+  'note_80.wav': p80, 'note_81.wav': p81, 'note_82.wav': p82, 'note_83.wav': p83,
+  'note_84.wav': p84,
 };
-
-function getNoteUrl(freq) {
-  return NOTE_FILES[freq] || null;
-}
 
 // ============== COMPONENT ==============
 export const GuessTheSong = ({ songId = 'twinkle', seed = 42 }) => {
@@ -349,14 +351,7 @@ export const GuessTheSong = ({ songId = 'twinkle', seed = 42 }) => {
     [seed, songId, durationInFrames]
   );
 
-  // Map note frequencies to pre-generated WAV file URLs
-  const noteAudioMap = useMemo(() => {
-    const song = SONGS[songId] || SONGS.twinkle;
-    const uniqueFreqs = [...new Set(song.notes)];
-    const map = {};
-    uniqueFreqs.forEach(freq => { map[freq] = getNoteUrl(freq); });
-    return map;
-  }, [songId]);
+  // Piano audio map — no computation needed, PIANO object is static
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -366,21 +361,14 @@ export const GuessTheSong = ({ songId = 'twinkle', seed = 42 }) => {
     if (snapshots[frame]) drawFrame(ctx, snapshots[frame]);
   }, [frame, width, height, snapshots]);
 
-  const noteEvents = allEvents.filter(e => e.type === 'note' && e.freq && noteAudioMap[e.freq]);
-  const bounceEvents = allEvents.filter(e => e.type === 'bounce');
-  const bounceSrc = new URL('./audio/bounce.wav', import.meta.url).href;
+  const noteEvents = allEvents.filter(e => e.type === 'note' && e.noteFile && PIANO[e.noteFile]);
 
   return (
     <>
       <canvas ref={canvasRef} width={width} height={height} style={{ width: '100%', height: '100%' }} />
       {noteEvents.map((e, i) => (
-        <Sequence key={`note-${i}`} from={e.frame} durationInFrames={12}>
-          <Audio src={noteAudioMap[e.freq]} volume={0.7} />
-        </Sequence>
-      ))}
-      {bounceEvents.filter((_, i) => i % 2 === 0).map((e, i) => (
-        <Sequence key={`bnc-${i}`} from={e.frame} durationInFrames={5}>
-          <Audio src={bounceSrc} volume={0.2} />
+        <Sequence key={`note-${i}`} from={e.frame} durationInFrames={15}>
+          <Audio src={PIANO[e.noteFile]} volume={0.8} />
         </Sequence>
       ))}
     </>

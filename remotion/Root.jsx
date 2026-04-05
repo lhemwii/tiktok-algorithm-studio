@@ -14,10 +14,10 @@ export const RemotionRoot = () => {
         width={2160}
         height={3840}
         defaultProps={{
-          homeTeam: 'FRA',
-          awayTeam: 'SEN',
-          seed: 42,
-          matchInfo: 'Group I | 16 Jun | New York',
+          homeTeam: 'ENG',
+          awayTeam: 'CRO',
+          seed: 77,
+          matchInfo: 'Group L | 17 Jun | Dallas',
         }}
       />
       <Composition
@@ -41,7 +41,7 @@ export const RemotionRoot = () => {
         width={2160}
         height={3840}
         defaultProps={{
-          songId: 'mario64',
+          songId: 'mario',
           seed: 42,
         }}
       />

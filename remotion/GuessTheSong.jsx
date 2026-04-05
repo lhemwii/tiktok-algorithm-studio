@@ -120,7 +120,7 @@ function simulateAll(seed, songId, totalFrames) {
             noteCooldown = 4;
           }
           // Ball center on spike TIP
-          const tipDist = radius - spikeLen;
+          const tipDist = radius - spikeLen - br * 0.5; // ball sits ON TOP of spike tip
           bx = cx + Math.cos(hitSpike.angle) * tipDist;
           by = cy + Math.sin(hitSpike.angle) * tipDist;
           bvx = 0; bvy = 0;
@@ -128,10 +128,14 @@ function simulateAll(seed, songId, totalFrames) {
           hitSpike.covered = true;
           deadBalls.push({ x: bx, y: by, r: br, color: '#555' });
         } else {
-          // Bounce off wall (or covered spike = safe)
+          // Bounce off wall — STRONG rebound + sideways kick
           const dot = bvx * nx + bvy * ny;
-          bvx -= 2 * dot * nx * 0.78;
-          bvy -= 2 * dot * ny * 0.78;
+          bvx -= 2 * dot * nx * 0.92;
+          bvy -= 2 * dot * ny * 0.92;
+          // Sideways kick for dynamic movement
+          const perpX = -ny, perpY = nx;
+          bvx += perpX * (rand() - 0.5) * 6;
+          bvy += perpY * (rand() - 0.5) * 6;
           bx = cx + nx * (radius - br - 2);
           by = cy + ny * (radius - br - 2);
           // Play note on wall bounce
@@ -152,13 +156,19 @@ function simulateAll(seed, songId, totalFrames) {
           const dbd = Math.sqrt(dbx * dbx + dby * dby);
           if (dbd < br + db.r && dbd > 0) {
             const dnx = dbx / dbd, dny = dby / dbd;
-            // Reflect velocity
+            // STRONG rebound off dead ball edge + sideways kick
             const ddot = bvx * dnx + bvy * dny;
-            bvx -= 2 * ddot * dnx * 0.7;
-            bvy -= 2 * ddot * dny * 0.7;
-            // Push ball to EDGE of dead ball (not center)
-            bx = db.x + dnx * (br + db.r + 1);
-            by = db.y + dny * (br + db.r + 1);
+            bvx -= 2 * ddot * dnx * 0.9;
+            bvy -= 2 * ddot * dny * 0.9;
+            // Strong sideways kick
+            const dperpX = -dny, dperpY = dnx;
+            bvx += dperpX * (rand() - 0.5) * 5;
+            bvy += dperpY * (rand() - 0.5) * 5;
+            // Boost upward to counter gravity
+            bvy -= 3;
+            // Push ball to EDGE of dead ball circle
+            bx = db.x + dnx * (br + db.r + 2);
+            by = db.y + dny * (br + db.r + 2);
             // Play note
             if (noteCooldown <= 0) {
               const ni = globalNoteIdx % totalNotes;

@@ -76,9 +76,9 @@ function simulateAll(seed, songId, totalFrames) {
   let attempt = 0;
   let globalNoteIndex = 0; // which note of the song we're at globally
 
-  // Drop point — top center, always the same
+  // Drop point — center top, ball falls straight to bottom wall first
   const dropX = cx;
-  const dropY = cy - radius + 100; // near top inside circle
+  const dropY = cy - 50; // center-ish, slightly above middle
 
   let frame = 0;
 
@@ -135,13 +135,22 @@ function simulateAll(seed, songId, totalFrames) {
           noteCount++;
 
           if (noteCount >= notesThisAttempt) {
-            // *** DIE on spike TIP ***
-            const tipDist = radius - spikeLen;
+            // *** DIE INSTANTLY on spike TIP — freeze at tip position ***
+            const tipDist = radius - spikeLen + br; // ball center sits right at tip
             bx = cx + Math.cos(hitSpike.angle) * tipDist;
             by = cy + Math.sin(hitSpike.angle) * tipDist;
             bvx = 0; bvy = 0;
             ballAlive = false;
             deadBalls.push({ x: bx, y: by, r: br, color: '#555' });
+            // Push snapshot with dead ball immediately
+            snapshots.push({
+              cx, cy, radius, spikes,
+              ball: { x: bx, y: by, r: br, alive: false, color: '#555' },
+              deadBalls: deadBalls.map(d => ({ ...d })),
+              attempt, notesThisAttempt, noteCount, totalNotes,
+            });
+            frame++;
+            break; // exit physics loop immediately
           } else {
             // Bounce off spike with velocity — goes sideways
             const nx = dx / dist, ny = dy / dist;
@@ -174,28 +183,33 @@ function simulateAll(seed, songId, totalFrames) {
         }
       }
 
-      // --- DEAD BALL COLLISION --- play note, bounce, NEVER die
+      // --- DEAD BALL COLLISION --- play note, bounce with kick, NEVER die
       if (ballAlive) {
         for (const db of deadBalls) {
           const dbx = bx - db.x, dby = by - db.y;
           const dbd = Math.sqrt(dbx * dbx + dby * dby);
           if (dbd < br + db.r && dbd > 0) {
+            // Always bounce off dead balls
             const dnx = dbx / dbd, dny = dby / dbd;
             const ddot = bvx * dnx + bvy * dny;
-            if (ddot < 0) {
-              bvx -= 2 * ddot * dnx * 0.65;
-              bvy -= 2 * ddot * dny * 0.65;
-              bx = db.x + dnx * (br + db.r + 2);
-              by = db.y + dny * (br + db.r + 2);
+            // Reflect + strong sideways kick
+            bvx -= 2 * ddot * dnx * 0.7;
+            bvy -= 2 * ddot * dny * 0.7;
+            // Kick sideways so ball goes left or right
+            const perpX = -dny, perpY = dnx;
+            const kickDir = (bx > db.x) ? 1 : -1;
+            bvx += perpX * kickDir * 4;
+            bvy += perpY * kickDir * 4;
+            // Separate
+            bx = db.x + dnx * (br + db.r + 3);
+            by = db.y + dny * (br + db.r + 3);
 
-              if (globalNoteIndex < totalNotes) {
-                allEvents.push({ type: 'note', noteFile: song.notes[globalNoteIndex].file, frame });
-                globalNoteIndex++;
-              }
-              noteCount++;
-              // *** NEVER die on dead ball — keep going ***
-              break;
+            if (globalNoteIndex < totalNotes) {
+              allEvents.push({ type: 'note', noteFile: song.notes[globalNoteIndex].file, frame });
+              globalNoteIndex++;
             }
+            noteCount++;
+            break;
           }
         }
       }

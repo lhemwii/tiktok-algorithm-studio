@@ -2,7 +2,7 @@ import { useCurrentFrame, useVideoConfig, Sequence, Audio } from 'remotion';
 import { useEffect, useRef, useMemo } from 'react';
 import { MARIO_SONG } from './mario-song';
 
-// Piano sample imports
+// Piano imports
 import p48 from './audio/piano/note_48.wav'; import p49 from './audio/piano/note_49.wav';
 import p50 from './audio/piano/note_50.wav'; import p51 from './audio/piano/note_51.wav';
 import p52 from './audio/piano/note_52.wav'; import p53 from './audio/piano/note_53.wav';
@@ -39,211 +39,212 @@ const PIANO = {
 const W = 1080, H = 1920, SCALE = 2;
 const SONGS = { mario: { notes: MARIO_SONG } };
 
-// ============== MUSIC-DRIVEN SIMULATION ==============
-// The music decides everything. Each note = a "hit" (spike or dead ball).
-// The ball animates BETWEEN hits with smooth arcs.
-// Timing is based on the tempo of the song.
-
+// ============== REAL PHYSICS SIMULATION ==============
 function simulateAll(seed, songId, totalFrames) {
   const song = SONGS[songId] || SONGS.mario;
   const totalNotes = song.notes.length;
-  const cx = W / 2, cy = H * 0.48, radius = 400;
+  let rng = seed || 42;
+  const rand = () => { rng = (rng * 16807) % 2147483647; return (rng - 1) / 2147483646; };
 
-  // Spikes
-  const numSpikes = 40;
-  const spikeLen = 70;
+  const cx = W / 2, cy = H * 0.48, radius = 400;
+  const numSpikes = 40, spikeLen = 70;
+  const spikeAngleWidth = (2 * Math.PI / numSpikes) * 0.65;
   const spikes = [];
   for (let i = 0; i < numSpikes; i++) {
     const angle = (i / numSpikes) * Math.PI * 2;
     const hue = (i * 360 / numSpikes) % 360;
-    spikes.push({ angle, len: spikeLen, color: `hsl(${hue}, 85%, 55%)` });
+    spikes.push({ angle, len: spikeLen, color: `hsl(${hue}, 85%, 55%)`, covered: false });
   }
 
-  // Ball colors
   const ballColors = [];
-  for (let i = 0; i < 100; i++) ballColors.push(`hsl(${(i * 31 + 10) % 360}, 90%, 58%)`);
+  for (let i = 0; i < 200; i++) ballColors.push(`hsl(${(i * 31 + 10) % 360}, 90%, 58%)`);
 
-  const br = 36; // ball radius
-
-  // Seeded random for choosing death spikes
-  let rngSeed = seed || 42;
-  const rand = () => { rngSeed = (rngSeed * 16807) % 2147483647; return (rngSeed - 1) / 2147483646; };
-
-  // Spike tip position — ball center sits exactly at the TIP of the spike
-  function spikeTip(si) {
-    const s = spikes[si % numSpikes];
-    const tipDist = radius - spikeLen; // exact tip, not offset
-    return { x: cx + Math.cos(s.angle) * tipDist, y: cy + Math.sin(s.angle) * tipDist };
-  }
-
-  // Choose death spikes — first one at BOTTOM, then random left/right
-  const usedSpikes = new Set();
-  let lastSide = 0; // alternate left/right
-  function pickDeathSpike(attemptNum) {
-    if (attemptNum === 0) {
-      // First ball dies at BOTTOM (spike index ~20 = angle π/2 = straight down)
-      const bottomIdx = Math.round(numSpikes * 0.25); // 0.25 of 40 = 10 = bottom
-      usedSpikes.add(bottomIdx);
-      return bottomIdx;
-    }
-    // Alternate left/right randomly
-    for (let tries = 0; tries < 100; tries++) {
-      const idx = Math.floor(rand() * numSpikes);
-      if (usedSpikes.has(idx)) continue;
-      // Check it's on the expected side
-      const angle = spikes[idx].angle;
-      const isRight = Math.cos(angle) > 0;
-      const wantRight = lastSide <= 0;
-      if (isRight === wantRight || tries > 50) {
-        usedSpikes.add(idx);
-        lastSide = isRight ? 1 : -1;
-        return idx;
-      }
-    }
-    for (let i = 0; i < numSpikes; i++) if (!usedSpikes.has(i)) { usedSpikes.add(i); return i; }
-    return 0;
-  }
-
+  const br = 32;
   const deadBalls = [];
   const snapshots = [];
   const allEvents = [];
   let frame = 0;
   let attempt = 0;
+  let globalNoteIdx = 0;
+  let noteCooldown = 0; // prevent double notes
 
-  // Timing — slower, more natural feel
-  const bpm = 120;
-  const framesPerNote = Math.floor(30 * 60 / bpm); // ~15 frames per note
-  const deathPause = 12;
-
-  // Start position — center
-  const startX = cx, startY = cy;
-
-  while (frame < totalFrames && attempt < 50) {
-    const notesThisAttempt = attempt + 1;
+  while (frame < totalFrames) {
+    // New ball at center
+    let bx = cx, by = cy - 20;
+    let bvx = 0, bvy = 0;
+    let alive = true;
+    let immunity = 10;
+    let noteCount = 0;
     const color = ballColors[attempt % ballColors.length];
-    const deathSpikeIdx = pickDeathSpike(attempt);
-    const deathPos = spikeTip(deathSpikeIdx);
 
-    // Build trajectory points:
-    // start → deadBall[0] → deadBall[1] → ... → deathSpike
-    // Each segment is a parabolic arc with gravity feel
-    const waypoints = [{ x: startX, y: startY }];
-
-    // Bounce off each previous dead ball in order
-    for (let h = 0; h < notesThisAttempt - 1 && h < deadBalls.length; h++) {
-      waypoints.push({ x: deadBalls[h].x, y: deadBalls[h].y });
-    }
-
-    // Final destination: spike tip (death)
-    waypoints.push({ x: deathPos.x, y: deathPos.y });
-
-    // Animate each segment with parabolic arc
-    let noteIdx = 0;
-    for (let seg = 0; seg < waypoints.length - 1; seg++) {
-      const from = waypoints[seg];
-      const to = waypoints[seg + 1];
-
-      for (let f = 0; f < framesPerNote && frame < totalFrames; f++) {
-        const t = f / framesPerNote;
-
-        // Natural gravity arc — ball bounces UP then falls DOWN
-        const dx = to.x - from.x, dy = to.y - from.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        // Arc height: proportional to distance, minimum 80px
-        const arcH = Math.max(80, Math.min(200, dist * 0.5 + 60));
-
-        // Horizontal: linear interpolation
-        const bx = from.x + dx * t;
-        // Vertical: parabolic — goes UP high then comes DOWN to destination
-        // The 4*t*(1-t) creates a perfect parabola peaking at t=0.5
-        const by = from.y + dy * t - arcH * 4 * t * (1 - t);
-
-        snapshots.push({
-          cx, cy, radius, spikes,
-          ball: { x: bx, y: by, r: br, alive: true, color },
-          deadBalls: deadBalls.map(d => ({ ...d })),
-          attempt, notesThisAttempt, noteCount: seg + 1, totalNotes,
-        });
-        frame++;
-      }
-
-      // Note plays at arrival
-      const songNoteIdx = noteIdx % totalNotes;
-      allEvents.push({ type: 'note', noteFile: song.notes[songNoteIdx].file, frame: frame - 1 });
-      noteIdx++;
-    }
-
-    // Ball dies on spike tip — freeze
-    deadBalls.push({ x: deathPos.x, y: deathPos.y, r: br, color: '#555' });
-
-    for (let f = 0; f < deathPause && frame < totalFrames; f++) {
-      snapshots.push({
-        cx, cy, radius, spikes,
-        ball: { x: deathPos.x, y: deathPos.y, r: br, alive: false, color: '#555' },
-        deadBalls: deadBalls.map(d => ({ ...d })),
-        attempt, notesThisAttempt, noteCount: notesThisAttempt, totalNotes,
-      });
+    // Spawn pause
+    for (let p = 0; p < 6 && frame < totalFrames; p++) {
+      snapshots.push({ cx, cy, radius, spikes, ball: { x: bx, y: by, r: br, alive: true, color }, deadBalls: deadBalls.map(d => ({ ...d })), attempt, noteCount, totalNotes, globalNoteIdx });
       frame++;
     }
 
+    // Physics loop
+    while (alive && frame < totalFrames) {
+      // Gravity
+      bvy += 0.6;
+      bx += bvx;
+      by += bvy;
+      if (immunity > 0) immunity--;
+      if (noteCooldown > 0) noteCooldown--;
+
+      // Circle wall collision
+      const dx = bx - cx, dy = by - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist + br > radius - 3) {
+        const nx = dx / dist, ny = dy / dist;
+        const ballAngle = Math.atan2(dy, dx);
+
+        // Check spike
+        let hitSpike = null;
+        for (const spike of spikes) {
+          let ad = ballAngle - spike.angle;
+          while (ad > Math.PI) ad -= Math.PI * 2;
+          while (ad < -Math.PI) ad += Math.PI * 2;
+          if (Math.abs(ad) < spikeAngleWidth / 2) { hitSpike = spike; break; }
+        }
+
+        if (hitSpike && immunity <= 0 && !hitSpike.covered) {
+          // HIT UNCOVERED SPIKE — DIE
+          // Play note
+          if (noteCooldown <= 0) {
+            const ni = globalNoteIdx % totalNotes;
+            allEvents.push({ type: 'note', noteFile: song.notes[ni].file, frame });
+            globalNoteIdx++;
+            noteCount++;
+            noteCooldown = 4;
+          }
+          // Ball center on spike TIP
+          const tipDist = radius - spikeLen;
+          bx = cx + Math.cos(hitSpike.angle) * tipDist;
+          by = cy + Math.sin(hitSpike.angle) * tipDist;
+          bvx = 0; bvy = 0;
+          alive = false;
+          hitSpike.covered = true;
+          deadBalls.push({ x: bx, y: by, r: br, color: '#555' });
+        } else {
+          // Bounce off wall (or covered spike = safe)
+          const dot = bvx * nx + bvy * ny;
+          bvx -= 2 * dot * nx * 0.78;
+          bvy -= 2 * dot * ny * 0.78;
+          bx = cx + nx * (radius - br - 2);
+          by = cy + ny * (radius - br - 2);
+          // Play note on wall bounce
+          if (noteCooldown <= 0) {
+            const ni = globalNoteIdx % totalNotes;
+            allEvents.push({ type: 'note', noteFile: song.notes[ni].file, frame });
+            globalNoteIdx++;
+            noteCount++;
+            noteCooldown = 4;
+          }
+        }
+      }
+
+      // Dead ball collisions — bounce off the EDGE of the circle
+      if (alive) {
+        for (const db of deadBalls) {
+          const dbx = bx - db.x, dby = by - db.y;
+          const dbd = Math.sqrt(dbx * dbx + dby * dby);
+          if (dbd < br + db.r && dbd > 0) {
+            const dnx = dbx / dbd, dny = dby / dbd;
+            // Reflect velocity
+            const ddot = bvx * dnx + bvy * dny;
+            bvx -= 2 * ddot * dnx * 0.7;
+            bvy -= 2 * ddot * dny * 0.7;
+            // Push ball to EDGE of dead ball (not center)
+            bx = db.x + dnx * (br + db.r + 1);
+            by = db.y + dny * (br + db.r + 1);
+            // Play note
+            if (noteCooldown <= 0) {
+              const ni = globalNoteIdx % totalNotes;
+              allEvents.push({ type: 'note', noteFile: song.notes[ni].file, frame });
+              globalNoteIdx++;
+              noteCount++;
+              noteCooldown = 4;
+            }
+            break;
+          }
+        }
+      }
+
+      // Speed limit
+      const spd = Math.sqrt(bvx * bvx + bvy * bvy);
+      if (spd > 18) { bvx = (bvx / spd) * 18; bvy = (bvy / spd) * 18; }
+      // Minimum speed — keep moving
+      if (spd < 1 && alive && immunity <= 0) {
+        bvx += (rand() - 0.5) * 2;
+        bvy += 1;
+      }
+
+      snapshots.push({ cx, cy, radius, spikes, ball: { x: bx, y: by, r: br, alive, color }, deadBalls: deadBalls.map(d => ({ ...d })), attempt, noteCount, totalNotes, globalNoteIdx });
+      frame++;
+    }
+
+    // Reset note index for next attempt
+    globalNoteIdx = 0;
+    noteCount = 0;
     attempt++;
+
+    // Death pause
+    for (let p = 0; p < 8 && frame < totalFrames; p++) {
+      snapshots.push({ cx, cy, radius, spikes, ball: { x: bx, y: by, r: br, alive: false, color: '#555' }, deadBalls: deadBalls.map(d => ({ ...d })), attempt, noteCount: 0, totalNotes, globalNoteIdx: 0 });
+      frame++;
+    }
   }
 
-  // Fill remaining frames
-  const lastSnap = snapshots[snapshots.length - 1];
-  while (frame < totalFrames) { snapshots.push(lastSnap); frame++; }
+  // Fill remaining
+  const last = snapshots[snapshots.length - 1];
+  while (snapshots.length < totalFrames) snapshots.push(last);
 
   return { snapshots, allEvents };
 }
 
 // ============== DRAW ==============
 function drawFrame(ctx, snap) {
-  const { cx, cy, radius, spikes, ball, deadBalls, attempt, notesThisAttempt, noteCount, totalNotes } = snap;
+  const { cx, cy, radius, spikes, ball, deadBalls, attempt, noteCount, totalNotes, globalNoteIdx } = snap;
   const c = ctx;
-  c.save();
-  c.scale(SCALE, SCALE);
+  c.save(); c.scale(SCALE, SCALE);
 
-  c.fillStyle = '#000';
-  c.fillRect(0, 0, W, H);
+  c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
 
   const textBase = cy - radius - 20;
-  const barX = 150, barY = textBase - 12, barW = W - 300, barH = 8;
-  c.fillStyle = '#333'; c.fillRect(barX, barY, barW, barH);
-  c.fillStyle = '#4ADE80'; c.fillRect(barX, barY, barW * Math.min(1, notesThisAttempt / totalNotes), barH);
-
-  c.fillStyle = '#666'; c.textAlign = 'center'; c.font = '600 24px Inter, sans-serif';
-  c.fillText(`${notesThisAttempt} / ${totalNotes} notes`, W / 2, barY - 10);
-
-  c.fillStyle = '#fff'; c.font = '800 40px Inter, sans-serif';
-  c.fillText(`Essai #${attempt + 1}`, W / 2, barY - 48);
-
+  c.fillStyle = '#fff'; c.textAlign = 'center';
+  c.font = '900 52px Inter, sans-serif';
+  c.fillText('GUESS THE SONG', W / 2, textBase - 100);
   c.font = '700 30px Inter, sans-serif'; c.fillStyle = '#4ADE80';
-  c.fillText('Commente ta reponse !', W / 2, barY - 92);
-  c.fillStyle = '#fff'; c.font = '900 52px Inter, sans-serif';
-  c.fillText('GUESS THE SONG', W / 2, barY - 130);
+  c.fillText('Commente ta reponse !', W / 2, textBase - 60);
+  c.fillStyle = '#fff'; c.font = '800 40px Inter, sans-serif';
+  c.fillText(`Essai #${attempt + 1}`, W / 2, textBase - 18);
+  // Real-time note counter
+  c.fillStyle = '#4ADE80'; c.font = '800 28px Fira Code, monospace';
+  c.fillText(`${noteCount} notes`, W / 2, textBase + 14);
 
   // Circle
-  c.save();
-  c.shadowColor = 'rgba(255,255,255,0.5)'; c.shadowBlur = 20;
+  c.save(); c.shadowColor = 'rgba(255,255,255,0.5)'; c.shadowBlur = 20;
   c.strokeStyle = '#fff'; c.lineWidth = 4;
   c.beginPath(); c.arc(cx, cy, radius, 0, Math.PI * 2); c.stroke();
   c.restore();
 
   // Spikes
-  const spikeLen = 70, hw = 26;
+  const hw = 26;
   spikes.forEach(spike => {
+    if (spike.covered) return; // don't draw covered spikes (dead ball hides them)
     const baseX = cx + Math.cos(spike.angle) * radius;
     const baseY = cy + Math.sin(spike.angle) * radius;
-    const tipX = cx + Math.cos(spike.angle) * (radius - spikeLen);
-    const tipY = cy + Math.sin(spike.angle) * (radius - spikeLen);
-    const perpAngle = spike.angle + Math.PI / 2;
+    const tipX = cx + Math.cos(spike.angle) * (radius - spike.len);
+    const tipY = cy + Math.sin(spike.angle) * (radius - spike.len);
+    const pa = spike.angle + Math.PI / 2;
     c.fillStyle = spike.color;
     c.beginPath();
-    c.moveTo(baseX + Math.cos(perpAngle) * hw, baseY + Math.sin(perpAngle) * hw);
+    c.moveTo(baseX + Math.cos(pa) * hw, baseY + Math.sin(pa) * hw);
     c.lineTo(tipX, tipY);
-    c.lineTo(baseX - Math.cos(perpAngle) * hw, baseY - Math.sin(perpAngle) * hw);
-    c.closePath();
-    c.fill();
+    c.lineTo(baseX - Math.cos(pa) * hw, baseY - Math.sin(pa) * hw);
+    c.closePath(); c.fill();
   });
 
   // Dead balls
@@ -254,8 +255,7 @@ function drawFrame(ctx, snap) {
 
   // Active ball
   if (ball.alive) {
-    c.save();
-    c.shadowColor = ball.color; c.shadowBlur = 15;
+    c.save(); c.shadowColor = ball.color; c.shadowBlur = 15;
     c.fillStyle = ball.color;
     c.beginPath(); c.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2); c.fill();
     c.fillStyle = 'rgba(255,255,255,0.3)';
@@ -291,7 +291,7 @@ export const GuessTheSong = ({ songId = 'mario', seed = 42 }) => {
     <>
       <canvas ref={canvasRef} width={width} height={height} style={{ width: '100%', height: '100%' }} />
       {noteEvents.map((e, i) => (
-        <Sequence key={`n${i}`} from={e.frame} durationInFrames={14}>
+        <Sequence key={`n${i}`} from={e.frame} durationInFrames={12}>
           <Audio src={PIANO[e.noteFile]} volume={0.8} />
         </Sequence>
       ))}

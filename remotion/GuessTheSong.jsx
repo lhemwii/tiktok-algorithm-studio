@@ -120,7 +120,8 @@ function simulateAll(seed, songId, totalFrames) {
             noteCooldown = 4;
           }
           // Ball center on spike TIP
-          const tipDist = radius - spikeLen - br * 0.5; // ball sits ON TOP of spike tip
+          // Ball EDGE sits right at spike tip — center is 1 full ball radius INSIDE the tip
+          const tipDist = radius - spikeLen - br - 25; // ball clearly above spike tip
           bx = cx + Math.cos(hitSpike.angle) * tipDist;
           by = cy + Math.sin(hitSpike.angle) * tipDist;
           bvx = 0; bvy = 0;
@@ -153,7 +154,7 @@ function simulateAll(seed, songId, totalFrames) {
         }
       }
 
-      // Dead ball collisions — bounce off PERIMETER, no overlap allowed
+      // Dead ball collisions — check ALL, enforce separation, bounce off EDGE
       if (alive) {
         for (const db of deadBalls) {
           const dbx = bx - db.x, dby = by - db.y;
@@ -161,28 +162,30 @@ function simulateAll(seed, songId, totalFrames) {
           const minDist = br + db.r;
           if (dbd < minDist && dbd > 0.1) {
             const dnx = dbx / dbd, dny = dby / dbd;
-            // FORCE separation first — no overlap ever
-            bx = db.x + dnx * (minDist + 1);
-            by = db.y + dny * (minDist + 1);
+            // FORCE separate — ball edge touches dead ball edge, no overlap
+            bx = db.x + dnx * (minDist + 2);
+            by = db.y + dny * (minDist + 2);
             // Strong rebound
             const ddot = bvx * dnx + bvy * dny;
-            bvx -= 2 * ddot * dnx * 0.9;
-            bvy -= 2 * ddot * dny * 0.9;
-            // Sideways kick
-            const dperpX = -dny, dperpY = dnx;
-            bvx += dperpX * (rand() - 0.5) * 5;
-            bvy += dperpY * (rand() - 0.5) * 5;
-            // Upward boost
-            bvy -= 3;
-            // Play note
-            if (noteCooldown <= 0) {
-              const ni = globalNoteIdx % totalNotes;
-              allEvents.push({ type: 'note', noteFile: song.notes[ni].file, frame });
-              globalNoteIdx++;
-              noteCount++;
-              noteCooldown = 4;
+            if (ddot < 0) { // only if approaching
+              bvx -= 2 * ddot * dnx * 0.9;
+              bvy -= 2 * ddot * dny * 0.9;
+              // Sideways kick
+              const dperpX = -dny, dperpY = dnx;
+              bvx += dperpX * (rand() - 0.5) * 5;
+              bvy += dperpY * (rand() - 0.5) * 5;
+              // Upward boost
+              bvy -= 3;
+              // Play note
+              if (noteCooldown <= 0) {
+                const ni = globalNoteIdx % totalNotes;
+                allEvents.push({ type: 'note', noteFile: song.notes[ni].file, frame });
+                globalNoteIdx++;
+                noteCount++;
+                noteCooldown = 4;
+              }
             }
-            break;
+            // DON'T break — check all dead balls for overlap
           }
         }
       }

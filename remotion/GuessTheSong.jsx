@@ -85,8 +85,8 @@ function simulateAll(seed, songId, totalFrames) {
 
     // Physics loop
     while (alive && frame < totalFrames) {
-      // Gravity
-      bvy += 0.6;
+      // Gravity — faster
+      bvy += 1.0;
       bx += bvx;
       by += bvy;
       if (immunity > 0) immunity--;
@@ -131,13 +131,13 @@ function simulateAll(seed, songId, totalFrames) {
         const nx = dx / dist, ny = dy / dist;
         // Bounce off wall — strong rebound + sideways kick
         const dot = bvx * nx + bvy * ny;
-        bvx -= 2 * dot * nx * 0.92;
-        bvy -= 2 * dot * ny * 0.92;
-        // Consistent sideways kick (NOT random — same trajectory each time)
+        bvx -= 2 * dot * nx * 0.95;
+        bvy -= 2 * dot * ny * 0.95;
+        // Deterministic sideways kick
         const perpX = -ny, perpY = nx;
-        const kickDir = (nx * bvy - ny * bvx) > 0 ? 1 : -1; // deterministic based on velocity
-        bvx += perpX * kickDir * 3;
-        bvy += perpY * kickDir * 3;
+        const kickDir = (nx * bvy - ny * bvx) > 0 ? 1 : -1;
+        bvx += perpX * kickDir * 4;
+        bvy += perpY * kickDir * 4;
         bx = cx + nx * (radius - br - 2);
         by = cy + ny * (radius - br - 2);
         // Play note
@@ -146,7 +146,7 @@ function simulateAll(seed, songId, totalFrames) {
           allEvents.push({ type: 'note', noteFile: song.notes[ni].file, frame });
           globalNoteIdx++;
           noteCount++;
-          noteCooldown = 4;
+          noteCooldown = 3;
         }
       }
 
@@ -179,7 +179,7 @@ function simulateAll(seed, songId, totalFrames) {
                 allEvents.push({ type: 'note', noteFile: song.notes[ni].file, frame });
                 globalNoteIdx++;
                 noteCount++;
-                noteCooldown = 4;
+                noteCooldown = 3;
               }
             }
             // DON'T break — check all dead balls for overlap
@@ -189,7 +189,7 @@ function simulateAll(seed, songId, totalFrames) {
 
       // Speed limit
       const spd = Math.sqrt(bvx * bvx + bvy * bvy);
-      if (spd > 18) { bvx = (bvx / spd) * 18; bvy = (bvy / spd) * 18; }
+      if (spd > 24) { bvx = (bvx / spd) * 24; bvy = (bvy / spd) * 24; }
       // Minimum speed — keep moving
       if (spd < 1 && alive && immunity <= 0) {
         bvx += (rand() - 0.5) * 2;
@@ -234,10 +234,14 @@ function drawFrame(ctx, snap) {
   c.font = '700 30px Inter, sans-serif'; c.fillStyle = '#4ADE80';
   c.fillText('Commente ta reponse !', W / 2, textBase - 60);
   c.fillStyle = '#fff'; c.font = '800 40px Inter, sans-serif';
-  c.fillText(`Essai #${attempt + 1}`, W / 2, textBase - 18);
-  // Real-time note counter
+  c.fillText(`Essai #${attempt + 1}`, W / 2, textBase - 22);
+  // Note counter
   c.fillStyle = '#4ADE80'; c.font = '800 28px Fira Code, monospace';
-  c.fillText(`${noteCount} notes`, W / 2, textBase + 14);
+  c.fillText(`${noteCount} / ${totalNotes} notes`, W / 2, textBase + 8);
+  // Progress bar
+  const barX = 150, barY = textBase + 18, barW = W - 300, barH = 8;
+  c.fillStyle = '#333'; c.fillRect(barX, barY, barW, barH);
+  c.fillStyle = '#4ADE80'; c.fillRect(barX, barY, barW * Math.min(1, noteCount / totalNotes), barH);
 
   // Circle
   c.save(); c.shadowColor = 'rgba(255,255,255,0.5)'; c.shadowBlur = 20;

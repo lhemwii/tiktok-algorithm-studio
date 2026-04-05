@@ -68,17 +68,27 @@ function simulateAll(seed, songId, totalFrames) {
   let globalNoteIdx = 0;
   let noteCooldown = 0; // prevent double notes
 
+  // Reserve last 350 frames (~12s) for the FINAL attempt that plays all 71 notes
+  const finalAttemptStart = totalFrames - 350;
+  let forceFinal = false;
+
   while (frame < totalFrames) {
+    // If we're close to the end, force final attempt (all spikes covered = ball never dies)
+    if (frame >= finalAttemptStart && !forceFinal) {
+      forceFinal = true;
+      spikes.forEach(s => { s.covered = true; }); // cover ALL remaining spikes
+    }
+
     // New ball at center
     let bx = cx, by = cy - 20;
     let bvx = 0, bvy = 0;
     let alive = true;
     let immunity = 10;
     let noteCount = 0;
-    const color = ballColors[attempt % ballColors.length];
+    const color = forceFinal ? '#FFD700' : ballColors[attempt % ballColors.length]; // gold ball for final
 
-    // Spawn pause
-    for (let p = 0; p < 6 && frame < totalFrames; p++) {
+    // Spawn pause (short)
+    for (let p = 0; p < 3 && frame < totalFrames; p++) {
       snapshots.push({ cx, cy, radius, spikes: spikes.map(s => ({...s})), ball: { x: bx, y: by, r: br, alive: true, color }, deadBalls: deadBalls.map(d => ({ ...d })), attempt, noteCount, totalNotes, globalNoteIdx });
       frame++;
     }
@@ -205,8 +215,8 @@ function simulateAll(seed, songId, totalFrames) {
     noteCount = 0;
     attempt++;
 
-    // Death pause
-    for (let p = 0; p < 8 && frame < totalFrames; p++) {
+    // Death pause (short)
+    for (let p = 0; p < 5 && frame < totalFrames; p++) {
       snapshots.push({ cx, cy, radius, spikes: spikes.map(s => ({...s})), ball: { x: bx, y: by, r: br, alive: false, color: '#555' }, deadBalls: deadBalls.map(d => ({ ...d })), attempt, noteCount: 0, totalNotes, globalNoteIdx: 0 });
       frame++;
     }

@@ -68,35 +68,52 @@ function simulateAll(seed, songId, totalFrames) {
   let globalNoteIdx = 0;
   let noteCooldown = 0; // prevent double notes
 
-  // Reserve last 350 frames (~12s) for the FINAL attempt that plays all 71 notes
-  const finalAttemptStart = totalFrames - 350;
-  let forceFinal = false;
+  // === SMART PROGRESSION: auto-fit all notes within 65 seconds ===
+  // Phase 1 (0 to ~45s): progressive attempts with increasing note counts
+  // Phase 2 (~45s to 65s): FINAL attempt plays all notes
+  // Attempt note counts: 1, 2, 4, 7, 11, 16, 22, 30, 40, 55, then ALL
+  const attemptNotes = [1, 2, 4, 7, 11, 16, 22, 30, 40, 55];
+  // Filter to only include values <= totalNotes
+  const progression = attemptNotes.filter(n => n < totalNotes);
+  progression.push(totalNotes); // final attempt = all notes
+  const finalAttemptIdx = progression.length - 1;
 
-  while (frame < totalFrames) {
-    // If we're close to the end, force final attempt (all spikes covered = ball never dies)
-    if (frame >= finalAttemptStart && !forceFinal) {
-      forceFinal = true;
-      spikes.forEach(s => { s.covered = true; }); // cover ALL remaining spikes
+  // Reserve frames for final attempt: ~3 frames per note + margin
+  const finalReserve = Math.min(600, totalNotes * 3 + 60);
+  const finalAttemptStart = totalFrames - finalReserve;
+
+  let progressionIdx = 0;
+
+  while (frame < totalFrames && progressionIdx <= finalAttemptIdx) {
+    // Force final if we're running out of time
+    if (frame >= finalAttemptStart && progressionIdx < finalAttemptIdx) {
+      progressionIdx = finalAttemptIdx;
+      spikes.forEach(s => { s.covered = true; });
     }
 
-    // New ball at center
+    const maxNotesThisAttempt = progression[Math.min(progressionIdx, finalAttemptIdx)];
+    const isFinal = progressionIdx >= finalAttemptIdx;
+
+    // Cover all spikes for final attempt
+    if (isFinal) spikes.forEach(s => { s.covered = true; });
+
     let bx = cx, by = cy - 20;
     let bvx = 0, bvy = 0;
     let alive = true;
-    let immunity = 10;
+    let immunity = 8;
     let noteCount = 0;
-    const color = forceFinal ? '#FFD700' : ballColors[attempt % ballColors.length]; // gold ball for final
+    const color = isFinal ? '#FFD700' : ballColors[attempt % ballColors.length];
 
-    // Spawn pause (short)
-    for (let p = 0; p < 3 && frame < totalFrames; p++) {
+    // Spawn pause (very short)
+    for (let p = 0; p < 2 && frame < totalFrames; p++) {
       snapshots.push({ cx, cy, radius, spikes: spikes.map(s => ({...s})), ball: { x: bx, y: by, r: br, alive: true, color }, deadBalls: deadBalls.map(d => ({ ...d })), attempt, noteCount, totalNotes, globalNoteIdx });
       frame++;
     }
 
     // Physics loop
     while (alive && frame < totalFrames) {
-      // Gravity — faster
-      bvy += 1.0;
+      // Strong gravity — fast drops
+      bvy += 1.4;
       bx += bvx;
       by += bvy;
       if (immunity > 0) immunity--;
@@ -141,8 +158,8 @@ function simulateAll(seed, songId, totalFrames) {
         const nx = dx / dist, ny = dy / dist;
         // Bounce off wall — strong rebound + sideways kick
         const dot = bvx * nx + bvy * ny;
-        bvx -= 2 * dot * nx * 0.95;
-        bvy -= 2 * dot * ny * 0.95;
+        bvx -= 2 * dot * nx * 0.98;
+        bvy -= 2 * dot * ny * 0.98;
         // Deterministic sideways kick
         const perpX = -ny, perpY = nx;
         const kickDir = (nx * bvy - ny * bvx) > 0 ? 1 : -1;
@@ -156,7 +173,7 @@ function simulateAll(seed, songId, totalFrames) {
           allEvents.push({ type: 'note', noteFile: song.notes[ni].file, frame });
           globalNoteIdx++;
           noteCount++;
-          noteCooldown = 3;
+          noteCooldown = 2;
         }
       }
 
@@ -174,8 +191,8 @@ function simulateAll(seed, songId, totalFrames) {
             // Strong rebound
             const ddot = bvx * dnx + bvy * dny;
             if (ddot < 0) { // only if approaching
-              bvx -= 2 * ddot * dnx * 0.9;
-              bvy -= 2 * ddot * dny * 0.9;
+              bvx -= 2 * ddot * dnx * 0.95;
+              bvy -= 2 * ddot * dny * 0.95;
               // Deterministic sideways kick (same trajectory every time)
               const dperpX = -dny, dperpY = dnx;
               const dkickDir = (dnx * bvy - dny * bvx) > 0 ? 1 : -1;
@@ -189,7 +206,7 @@ function simulateAll(seed, songId, totalFrames) {
                 allEvents.push({ type: 'note', noteFile: song.notes[ni].file, frame });
                 globalNoteIdx++;
                 noteCount++;
-                noteCooldown = 3;
+                noteCooldown = 2;
               }
             }
             // DON'T break — check all dead balls for overlap
@@ -199,7 +216,7 @@ function simulateAll(seed, songId, totalFrames) {
 
       // Speed limit
       const spd = Math.sqrt(bvx * bvx + bvy * bvy);
-      if (spd > 24) { bvx = (bvx / spd) * 24; bvy = (bvy / spd) * 24; }
+      if (spd > 30) { bvx = (bvx / spd) * 30; bvy = (bvy / spd) * 30; }
       // Minimum speed — keep moving
       if (spd < 1 && alive && immunity <= 0) {
         bvx += (rand() - 0.5) * 2;
@@ -214,11 +231,14 @@ function simulateAll(seed, songId, totalFrames) {
     globalNoteIdx = 0;
     noteCount = 0;
     attempt++;
+    progressionIdx++;
 
-    // Death pause (short)
-    for (let p = 0; p < 5 && frame < totalFrames; p++) {
-      snapshots.push({ cx, cy, radius, spikes: spikes.map(s => ({...s})), ball: { x: bx, y: by, r: br, alive: false, color: '#555' }, deadBalls: deadBalls.map(d => ({ ...d })), attempt, noteCount: 0, totalNotes, globalNoteIdx: 0 });
-      frame++;
+    // Death pause (very short — 3 frames)
+    if (!isFinal) {
+      for (let p = 0; p < 3 && frame < totalFrames; p++) {
+        snapshots.push({ cx, cy, radius, spikes: spikes.map(s => ({...s})), ball: { x: bx, y: by, r: br, alive: false, color: '#555' }, deadBalls: deadBalls.map(d => ({ ...d })), attempt, noteCount: 0, totalNotes, globalNoteIdx: 0 });
+        frame++;
+      }
     }
   }
 

@@ -68,38 +68,20 @@ function simulateAll(seed, songId, totalFrames) {
   let globalNoteIdx = 0;
   let noteCooldown = 0; // prevent double notes
 
-  // === SMART PROGRESSION ===
-  // Fewer attempts, faster pacing, reserve 50% of time for final
-  const attemptNotes = [1, 3, 6, 12, 20, 35];
-  const progression = attemptNotes.filter(n => n < totalNotes);
-  progression.push(totalNotes);
-  const finalAttemptIdx = progression.length - 1;
+  // === NO TIME LIMIT — run until a ball plays all notes ===
+  // No forced final, no gold ball, no progression skip.
+  // Each ball dies on a spike. The more dead balls, the more bounces
+  // before hitting a spike = more notes. Eventually one ball plays all.
 
-  // Reserve HALF the video for the final attempt (32.5 seconds)
-  const finalReserve = Math.floor(totalFrames * 0.50);
-  const finalAttemptStart = totalFrames - finalReserve;
+  let allNotesPlayed = false;
 
-  let progressionIdx = 0;
-
-  while (frame < totalFrames && progressionIdx <= finalAttemptIdx) {
-    // Force final if we're running out of time
-    if (frame >= finalAttemptStart && progressionIdx < finalAttemptIdx) {
-      progressionIdx = finalAttemptIdx;
-      spikes.forEach(s => { s.covered = true; });
-    }
-
-    const maxNotesThisAttempt = progression[Math.min(progressionIdx, finalAttemptIdx)];
-    const isFinal = progressionIdx >= finalAttemptIdx;
-
-    // Cover all spikes for final attempt
-    if (isFinal) spikes.forEach(s => { s.covered = true; });
-
+  while (frame < totalFrames && !allNotesPlayed) {
     let bx = cx, by = cy - 20;
     let bvx = 0, bvy = 0;
     let alive = true;
     let immunity = 8;
     let noteCount = 0;
-    const color = isFinal ? '#FFD700' : ballColors[attempt % ballColors.length];
+    const color = ballColors[attempt % ballColors.length];
 
     // Spawn pause (very short)
     for (let p = 0; p < 2 && frame < totalFrames; p++) {
@@ -224,14 +206,18 @@ function simulateAll(seed, songId, totalFrames) {
       frame++;
     }
 
+    // Check if this attempt played all notes
+    if (noteCount >= totalNotes) {
+      allNotesPlayed = true;
+    }
+
     // Reset note index for next attempt
     globalNoteIdx = 0;
     noteCount = 0;
     attempt++;
-    progressionIdx++;
 
-    // Death pause (very short — 3 frames)
-    if (!isFinal) {
+    // Death pause (very short)
+    if (!allNotesPlayed) {
       for (let p = 0; p < 3 && frame < totalFrames; p++) {
         snapshots.push({ cx, cy, radius, spikes: spikes.map(s => ({...s})), ball: { x: bx, y: by, r: br, alive: false, color: '#555' }, deadBalls: deadBalls.map(d => ({ ...d })), attempt, noteCount: 0, totalNotes, globalNoteIdx: 0 });
         frame++;

@@ -68,18 +68,15 @@ function simulateAll(seed, songId, totalFrames) {
   let globalNoteIdx = 0;
   let noteCooldown = 0; // prevent double notes
 
-  // === SMART PROGRESSION: auto-fit all notes within 65 seconds ===
-  // Phase 1 (0 to ~45s): progressive attempts with increasing note counts
-  // Phase 2 (~45s to 65s): FINAL attempt plays all notes
-  // Attempt note counts: 1, 2, 4, 7, 11, 16, 22, 30, 40, 55, then ALL
-  const attemptNotes = [1, 2, 4, 7, 11, 16, 22, 30, 40, 55];
-  // Filter to only include values <= totalNotes
+  // === SMART PROGRESSION ===
+  // Fewer attempts, faster pacing, reserve 50% of time for final
+  const attemptNotes = [1, 3, 6, 12, 20, 35];
   const progression = attemptNotes.filter(n => n < totalNotes);
-  progression.push(totalNotes); // final attempt = all notes
+  progression.push(totalNotes);
   const finalAttemptIdx = progression.length - 1;
 
-  // Reserve frames for final attempt: ~3 frames per note + margin
-  const finalReserve = Math.min(600, totalNotes * 3 + 60);
+  // Reserve HALF the video for the final attempt (32.5 seconds)
+  const finalReserve = Math.floor(totalFrames * 0.50);
   const finalAttemptStart = totalFrames - finalReserve;
 
   let progressionIdx = 0;
@@ -112,8 +109,8 @@ function simulateAll(seed, songId, totalFrames) {
 
     // Physics loop
     while (alive && frame < totalFrames) {
-      // Strong gravity — fast drops
-      bvy += 1.4;
+      // Very strong gravity
+      bvy += 1.8;
       bx += bvx;
       by += bvy;
       if (immunity > 0) immunity--;
@@ -257,7 +254,7 @@ function drawFrame(ctx, snap) {
 
   c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
 
-  const textBase = cy - radius - 20;
+  const textBase = cy - radius - 60; // more space between text and circle
   c.fillStyle = '#fff'; c.textAlign = 'center';
   c.font = '900 52px Inter, sans-serif';
   c.fillText('GUESS THE SONG', W / 2, textBase - 100);

@@ -1,6 +1,8 @@
-import { useCurrentFrame, useVideoConfig, Sequence, Audio } from 'remotion';
-import { useEffect, useRef, useMemo } from 'react';
+import { useCurrentFrame, useVideoConfig, Sequence, Audio, delayRender, continueRender } from 'remotion';
+import { useEffect, useRef, useMemo, useState } from 'react';
 import { TEAMS as ALL_TEAMS } from './teams';
+
+const WC_LOGO_SRC = new URL('./assets/wc-logo.webp', import.meta.url).href;
 
 // Logical resolution for all drawing code
 const W = 1080, H = 1920;
@@ -325,7 +327,7 @@ function drawFlag(c, flag, x, y, w, h) {
   });
 }
 
-function drawFrame(ctx, snap) {
+function drawFrame(ctx, snap, logo) {
   const { px, py, pw, ph, midX, midY, goalW, goalH, gLeft, gRight, teams, players, referee, ball, goalLog, foulLog } = snap;
   const c = ctx;
   c.save();
@@ -398,6 +400,28 @@ function drawFrame(ctx, snap) {
   bgGrad.addColorStop(1, 'rgba(0,0,0,0.08)');
   c.fillStyle = bgGrad;
   c.fillRect(0, 0, W, H);
+
+  // === FIFA WORLD CUP 2026 LOGO (header badge) ===
+  if (logo && logo.naturalWidth) {
+    const logoH = 150;
+    const logoW = logoH * (logo.naturalWidth / logo.naturalHeight);
+    const lx = W / 2 - logoW / 2;
+    const ly = 16;
+    const padX = 24, padTop = 10, padBot = 10;
+    c.save();
+    c.shadowColor = 'rgba(0,0,0,0.3)';
+    c.shadowBlur = 18;
+    c.shadowOffsetY = 5;
+    c.fillStyle = 'rgba(255,255,255,0.95)';
+    roundRect(lx - padX, ly - padTop, logoW + padX * 2, logoH + padTop + padBot, 22);
+    c.fill();
+    c.restore();
+    c.strokeStyle = 'rgba(255,255,255,0.5)';
+    c.lineWidth = 2;
+    roundRect(lx - padX, ly - padTop, logoW + padX * 2, logoH + padTop + padBot, 22);
+    c.stroke();
+    c.drawImage(logo, lx, ly, logoW, logoH);
+  }
 
 
   // SCOREBOARD — single row, compact:
@@ -761,6 +785,16 @@ export const WorldCup = ({ homeTeam = 'FRA', awayTeam = 'SEN', seed = 42, matchI
   const { width, height, durationInFrames } = useVideoConfig();
   const canvasRef = useRef(null);
 
+  // Preload the FIFA World Cup logo (transparent webp) for the header
+  const [logo, setLogo] = useState(null);
+  const [logoHandle] = useState(() => delayRender('Loading WC logo'));
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => { setLogo(img); continueRender(logoHandle); };
+    img.onerror = () => continueRender(logoHandle);
+    img.src = WC_LOGO_SRC;
+  }, [logoHandle]);
+
   // Simulate ONCE, cache all snapshots + events
   const { snapshots, allEvents } = useMemo(
     () => simulateAll(seed, homeTeam, awayTeam, matchInfo, durationInFrames),
@@ -772,8 +806,8 @@ export const WorldCup = ({ homeTeam = 'FRA', awayTeam = 'SEN', seed = 42, matchI
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, width, height);
-    if (snapshots[frame]) drawFrame(ctx, snapshots[frame]);
-  }, [frame, width, height, snapshots]);
+    if (snapshots[frame]) drawFrame(ctx, snapshots[frame], logo);
+  }, [frame, width, height, snapshots, logo]);
 
   const crowdSrc = new URL('./audio/clean-stadium-loop.mp3', import.meta.url).href;
   const goalSrc = new URL('./audio/goal-cheer.mp3', import.meta.url).href;

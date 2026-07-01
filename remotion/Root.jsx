@@ -1,7 +1,7 @@
 import { Composition } from 'remotion';
 import { WorldCup } from './WorldCup';
 import { TikTokWorldCup } from './TikTokWorldCup';
-import { GuessTheSong } from './GuessTheSong';
+import { GuessTheSong, getActualDuration } from './GuessTheSong';
 
 export const RemotionRoot = () => {
   return (
@@ -43,6 +43,45 @@ export const RemotionRoot = () => {
         defaultProps={{
           songId: 'mario',
           seed: 42,
+        }}
+        calculateMetadata={async ({ props }) => {
+          const duration = getActualDuration(props.songId, props.seed);
+          console.log(`🎵 ${props.songId}: ${duration} frames (${(duration / 30).toFixed(1)}s)`);
+          return { durationInFrames: duration };
+        }}
+      />
+      <Composition
+        id="GuessTheSongPirates"
+        component={GuessTheSong}
+        durationInFrames={30 * 300}
+        fps={30}
+        width={2160}
+        height={3840}
+        defaultProps={{
+          songId: 'pirates',
+          seed: 42,
+        }}
+        calculateMetadata={async ({ props }) => {
+          const duration = getActualDuration(props.songId, props.seed);
+          console.log(`🎵 ${props.songId}: ${duration} frames (${(duration / 30).toFixed(1)}s)`);
+          return { durationInFrames: duration };
+        }}
+      />
+      <Composition
+        id="GuessTheSongQueen"
+        component={GuessTheSong}
+        durationInFrames={30 * 300}
+        fps={30}
+        width={2160}
+        height={3840}
+        defaultProps={{
+          songId: 'queen',
+          seed: 42,
+        }}
+        calculateMetadata={async ({ props }) => {
+          const duration = getActualDuration(props.songId, props.seed);
+          console.log(`🎵 ${props.songId}: ${duration} frames (${(duration / 30).toFixed(1)}s)`);
+          return { durationInFrames: duration };
         }}
       />
     </>

@@ -1,6 +1,8 @@
 import { useCurrentFrame, useVideoConfig, Sequence, Audio } from 'remotion';
 import { useEffect, useRef, useMemo } from 'react';
 import { MARIO_SONG } from './mario-song';
+import { PIRATES_SONG } from './pirates-song';
+import { QUEEN_SONG } from './queen-song';
 
 // Piano imports
 import p48 from './audio/piano/note_48.wav'; import p49 from './audio/piano/note_49.wav';
@@ -37,12 +39,24 @@ const PIANO = {
 };
 
 const W = 1080, H = 1920, SCALE = 2;
-const SONGS = { mario: { notes: MARIO_SONG } };
+const SONGS = {
+  mario: { notes: MARIO_SONG, title: 'GUESS THE SONG', hint: 'Commente ta reponse !', emoji: '🎵' },
+  pirates: { notes: PIRATES_SONG, title: 'GUESS THE SONG', hint: 'Commente ta reponse !', emoji: '🏴‍☠️' },
+  queen: { notes: QUEEN_SONG, title: 'GUESS THE SONG', hint: 'Commente ta reponse !', emoji: '👑' },
+};
+
+// Pre-compute actual duration for a song (runs simulation to find last note + end screen)
+export function getActualDuration(songId, seed = 42, maxFrames = 30 * 300) {
+  const { actualEndFrame } = simulateAll(seed, songId, maxFrames);
+  // Add 3 seconds of end screen after last note
+  return Math.min(actualEndFrame + 30 * 3, maxFrames);
+}
 
 // ============== REAL PHYSICS SIMULATION ==============
 function simulateAll(seed, songId, totalFrames) {
   const song = SONGS[songId] || SONGS.mario;
   const totalNotes = song.notes.length;
+  const songMeta = { title: song.title, hint: song.hint, emoji: song.emoji };
   let rng = seed || 42;
   const rand = () => { rng = (rng * 16807) % 2147483647; return (rng - 1) / 2147483646; };
 
@@ -91,8 +105,8 @@ function simulateAll(seed, songId, totalFrames) {
 
     // Physics loop
     while (alive && frame < totalFrames) {
-      // Very strong gravity
-      bvy += 1.8;
+      // Very strong gravity — fast bounces
+      bvy += 2.8;
       bx += bvx;
       by += bvy;
       if (immunity > 0) immunity--;
@@ -139,11 +153,11 @@ function simulateAll(seed, songId, totalFrames) {
         const dot = bvx * nx + bvy * ny;
         bvx -= 2 * dot * nx * 0.98;
         bvy -= 2 * dot * ny * 0.98;
-        // Deterministic sideways kick
+        // Deterministic sideways kick — FASTER
         const perpX = -ny, perpY = nx;
         const kickDir = (nx * bvy - ny * bvx) > 0 ? 1 : -1;
-        bvx += perpX * kickDir * 4;
-        bvy += perpY * kickDir * 4;
+        bvx += perpX * kickDir * 6;
+        bvy += perpY * kickDir * 6;
         bx = cx + nx * (radius - br - 2);
         by = cy + ny * (radius - br - 2);
         // Play note
@@ -175,10 +189,10 @@ function simulateAll(seed, songId, totalFrames) {
               // Deterministic sideways kick (same trajectory every time)
               const dperpX = -dny, dperpY = dnx;
               const dkickDir = (dnx * bvy - dny * bvx) > 0 ? 1 : -1;
-              bvx += dperpX * dkickDir * 3;
-              bvy += dperpY * dkickDir * 3;
-              // Upward boost
-              bvy -= 3;
+              bvx += dperpX * dkickDir * 5;
+              bvy += dperpY * dkickDir * 5;
+              // Upward boost — stronger
+              bvy -= 5;
               // Play note
               if (noteCooldown <= 0) {
                 const ni = globalNoteIdx % totalNotes;
@@ -193,26 +207,25 @@ function simulateAll(seed, songId, totalFrames) {
         }
       }
 
-      // Speed limit
+      // Speed limit — faster
       const spd = Math.sqrt(bvx * bvx + bvy * bvy);
-      if (spd > 30) { bvx = (bvx / spd) * 30; bvy = (bvy / spd) * 30; }
-      // Minimum speed — keep moving
-      if (spd < 1 && alive && immunity <= 0) {
-        bvx += (rand() - 0.5) * 2;
-        bvy += 1;
+      if (spd > 40) { bvx = (bvx / spd) * 40; bvy = (bvy / spd) * 40; }
+      // Minimum speed — keep moving faster
+      if (spd < 2 && alive && immunity <= 0) {
+        bvx += (rand() - 0.5) * 3;
+        bvy += 2;
       }
 
       snapshots.push({ cx, cy, radius, spikes: spikes.map(s => ({...s})), ball: { x: bx, y: by, r: br, alive, color }, deadBalls: deadBalls.map(d => ({ ...d })), attempt, noteCount, totalNotes, globalNoteIdx });
       frame++;
     }
 
-    // Check if this attempt played all notes
-    if (noteCount >= totalNotes) {
+    // Check if all notes have been played across all attempts
+    if (globalNoteIdx >= totalNotes) {
       allNotesPlayed = true;
     }
 
-    // Reset note index for next attempt
-    globalNoteIdx = 0;
+    // DON'T reset globalNoteIdx — melody continues from where it stopped!
     noteCount = 0;
     attempt++;
 
@@ -229,11 +242,11 @@ function simulateAll(seed, songId, totalFrames) {
   const last = snapshots[snapshots.length - 1];
   while (snapshots.length < totalFrames) snapshots.push(last);
 
-  return { snapshots, allEvents };
+  return { snapshots, allEvents, songMeta, actualEndFrame: frame };
 }
 
 // ============== DRAW ==============
-function drawFrame(ctx, snap) {
+function drawFrame(ctx, snap, songMeta) {
   const { cx, cy, radius, spikes, ball, deadBalls, attempt, noteCount, totalNotes, globalNoteIdx } = snap;
   const c = ctx;
   c.save(); c.scale(SCALE, SCALE);
@@ -243,18 +256,18 @@ function drawFrame(ctx, snap) {
   const textBase = cy - radius - 60; // more space between text and circle
   c.fillStyle = '#fff'; c.textAlign = 'center';
   c.font = '900 52px Inter, sans-serif';
-  c.fillText('GUESS THE SONG', W / 2, textBase - 100);
+  c.fillText(`${songMeta?.emoji || '🎵'} ${songMeta?.title || 'GUESS THE SONG'}`, W / 2, textBase - 100);
   c.font = '700 30px Inter, sans-serif'; c.fillStyle = '#4ADE80';
-  c.fillText('Commente ta reponse !', W / 2, textBase - 60);
+  c.fillText(songMeta?.hint || 'Commente ta reponse !', W / 2, textBase - 60);
   c.fillStyle = '#fff'; c.font = '800 40px Inter, sans-serif';
   c.fillText(`Essai #${attempt + 1}`, W / 2, textBase - 22);
-  // Note counter
+  // Note counter — show GLOBAL progress (across all attempts)
   c.fillStyle = '#4ADE80'; c.font = '800 28px Fira Code, monospace';
-  c.fillText(`${noteCount} / ${totalNotes} notes`, W / 2, textBase + 8);
+  c.fillText(`${globalNoteIdx} / ${totalNotes} notes`, W / 2, textBase + 8);
   // Progress bar
   const barX = 150, barY = textBase + 18, barW = W - 300, barH = 8;
   c.fillStyle = '#333'; c.fillRect(barX, barY, barW, barH);
-  c.fillStyle = '#4ADE80'; c.fillRect(barX, barY, barW * Math.min(1, noteCount / totalNotes), barH);
+  c.fillStyle = '#4ADE80'; c.fillRect(barX, barY, barW * Math.min(1, globalNoteIdx / totalNotes), barH);
 
   // Circle
   c.save(); c.shadowColor = 'rgba(255,255,255,0.5)'; c.shadowBlur = 20;
@@ -304,7 +317,7 @@ export const GuessTheSong = ({ songId = 'mario', seed = 42 }) => {
   const { width, height, durationInFrames } = useVideoConfig();
   const canvasRef = useRef(null);
 
-  const { snapshots, allEvents } = useMemo(
+  const { snapshots, allEvents, songMeta, actualEndFrame } = useMemo(
     () => simulateAll(seed, songId, durationInFrames),
     [seed, songId, durationInFrames]
   );
@@ -314,10 +327,13 @@ export const GuessTheSong = ({ songId = 'mario', seed = 42 }) => {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, width, height);
-    if (snapshots[frame]) drawFrame(ctx, snapshots[frame]);
-  }, [frame, width, height, snapshots]);
+    if (snapshots[frame]) drawFrame(ctx, snapshots[frame], songMeta);
+  }, [frame, width, height, snapshots, songMeta]);
 
   const noteEvents = allEvents.filter(e => e.type === 'note' && e.noteFile && PIANO[e.noteFile]);
+
+  // Log actual duration for rendering
+  if (frame === 0) console.log(`🎵 Song: ${songId}, actual end frame: ${actualEndFrame} (${(actualEndFrame / 30).toFixed(1)}s)`);
 
   return (
     <>
